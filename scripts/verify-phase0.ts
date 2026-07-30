@@ -94,29 +94,6 @@ for (const r of redirects) {
 }
 check(danglingRedirect === 0, `no redirect points at a missing entry (dangling: ${danglingRedirect})`);
 
-/*
- * 7. Every `audio.src` an entry claims must actually exist.
- *
- * Generated readings live in public/audio, which is gitignored — the masters
- * belong on R2, not in git. So a clone can easily carry frontmatter pointing at
- * a file it does not have, and the page would render a player that 404s. Catch
- * that here rather than in front of a listener.
- */
-let missingAudio = 0;
-const missingList: string[] = [];
-for (const trip of await readdir(entriesDir)) {
-  for (const f of (await readdir(join(entriesDir, trip))).filter((x) => x.endsWith('.mdx'))) {
-    const s = await readFile(join(entriesDir, trip, f), 'utf8');
-    const src = s.match(/^\s+src:\s*"([^"]+)"/m);
-    if (!/^audio:/m.test(s) || !src) continue;
-    if (/^https?:\/\//.test(src[1])) continue;               // hosted elsewhere; not ours to check
-    try { await stat(join(ROOT, 'public', src[1].replace(/^\//, ''))); }
-    catch { missingAudio++; missingList.push(`${trip}/${f} → ${src[1]}`); }
-  }
-}
-check(missingAudio === 0,
-  `every referenced audio file is present (missing: ${missingAudio}${missingList.length ? ' — ' + missingList[0] : ''})`);
-
 console.log('PASS');
 for (const o of ok) console.log('  ✓ ' + o);
 if (fail.length) {

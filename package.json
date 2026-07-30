@@ -22,8 +22,7 @@
     "lighthouse": "lighthouse http://localhost:4330/k2pakistanseasia2024/day-9-gondogoro-la-gg-la/ --view --only-categories=performance,accessibility,best-practices,seo",
     "new:entry": "node --experimental-strip-types scripts/new-entry.ts",
     "inbox": "node --experimental-strip-types scripts/promote-inbox.ts",
-    "import:photos": "node --experimental-strip-types scripts/import-photos.ts",
-    "audio": "node --experimental-strip-types scripts/gen-audio.ts"
+    "import:photos": "node --experimental-strip-types scripts/import-photos.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.14",

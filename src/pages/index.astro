@@ -3,6 +3,7 @@ import { getCollection } from 'astro:content';
 import { Picture, getImage } from 'astro:assets';
 import Base from '../layouts/Base.astro';
 import mosaic from '../assets/home-mosaic.png';
+import mosaicOg from '../assets/home-og.png';
 import { fmtRange, entriesForTrip, entrySlug } from '../lib/entries.ts';
 
 const trips = (await getCollection('trips')).sort((a, b) => +b.data.dateStart - +a.data.dateStart);
@@ -18,10 +19,14 @@ const totalEntries = trips.reduce((n, t) => n + t.data.stats.entries, 0);
 
 /*
  * §7.8 — the mosaic makes a far better share card than the generated one: it is
- * the whole enterprise in a single picture. Rendered once at OG size here so the
- * meta tag points at an optimised file rather than the 9.9 MB original.
+ * the whole enterprise in a single picture.
+ *
+ * The share card uses the 16:9 version, not the banner. OG cards are ~1.91:1;
+ * the banner is 3.59:1, so fitting it to a card either letterboxes it into a
+ * thin strip or crops half the panels away. Same artwork, right shape for the
+ * job.
  */
-const ogMosaic = await getImage({ src: mosaic, width: 1200, height: 670, format: 'jpeg', quality: 82 });
+const ogMosaic = await getImage({ src: mosaicOg, width: 1200, height: 630, format: 'jpeg', quality: 82 });
 
 /*
  * The tagline is voice, and voice is theirs — so it lives here as one obvious
@@ -30,7 +35,7 @@ const ogMosaic = await getImage({ src: mosaic, width: 1200, height: 670, format:
  * "Fifteen years of doing it the hard way" · "28 countries. 295 entries.
  * One of us cries." · "The long way round, every time"
  */
-const TAGLINE = ['We keep picking', 'the hard way'];
+const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
 ---
 
 <Base
@@ -51,7 +56,7 @@ const TAGLINE = ['We keep picking', 'the hard way'];
       formats={['webp']}
       fallbackFormat="jpeg"
       quality={72}
-      widths={[640, 960, 1280, 1600, 2048]}
+      widths={[640, 960, 1280, 1600, 2048, 2560]}
       sizes="(max-width: 78rem) 100vw, 78rem"
       {/* AVIF is deliberately absent: measured on this image it runs ~15% larger
           than WebP at every size (910 KB vs 779 KB at 2048w), and <picture>
@@ -65,11 +70,10 @@ const TAGLINE = ['We keep picking', 'the hard way'];
   </div>
 
   <section class="lede">
-    {/* The explicit space matters: without it the accessible name and any text
-        extraction read "pickingthe hard way". */}
-    <h1 class="display lede__title">
-      {TAGLINE[0]}{' '}<br />{TAGLINE[1]}
-    </h1>
+    {/* Wraps naturally rather than on a hard-coded <br>: the line that reads
+        well at one length breaks badly at another, and this is a line Andy and
+        Beth should be able to change without re-choosing where it folds. */}
+    <h1 class="display lede__title">{TAGLINE}</h1>
     <p class="lede__body">
       Andy and Beth met on a study-abroad trip to Bangalore and have been going
       somewhere difficult ever since. {trips.length} trips, {totalEntries} entries,
@@ -124,7 +128,7 @@ const TAGLINE = ['We keep picking', 'the hard way'];
     /* A little room at the foot for the intro panel to sit into — kept smaller
        than the panel's negative margin, or the panel lands below the image
        instead of across it. */
-    padding: clamp(0.75rem, 2.5vw, 2rem) clamp(0.5rem, 2vw, 2rem) clamp(1rem, 3vw, 2.5rem);
+    padding: clamp(0.75rem, 2.5vw, 2rem) clamp(0.5rem, 2vw, 2rem) clamp(0.75rem, 2vw, 1.5rem);
   }
   .mosaic :global(picture),
   .mosaic :global(img) {
@@ -149,24 +153,64 @@ const TAGLINE = ['We keep picking', 'the hard way'];
     position: relative;
     z-index: 2;
     max-width: 62rem;
-    margin: clamp(-7rem, -7vw, -2.5rem) auto 0;
-    padding: clamp(1.5rem, 4vw, 2.75rem) clamp(1.25rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2rem);
-    background: var(--color-paper);
-    border-top: 3px solid var(--color-headlamp);
-    box-shadow: 0 -18px 40px rgb(18 22 28 / 0.28);
+    /* Deep enough that the heading itself lands on the artwork, not just the
+       panel's padding — at the previous value the overlap was entirely consumed
+       by padding-top and no text ever met the banner. */
+    margin: clamp(-11rem, -11vw, -3rem) auto 0;
+    padding: clamp(1.75rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2rem);
+    isolation: isolate;
   }
+  /*
+   * A glow, not a box. The words sit straight on the banner and carry their own
+   * light: a white bloom that is effectively opaque where the text is and fades
+   * to nothing before it reaches an edge, so nothing rectangular cuts across
+   * the artwork.
+   */
+  .lede::before {
+    content: '';
+    position: absolute;
+    /* Vertical overhang only. Bleeding sideways pushed the document wider than
+       the viewport on phones; the gradient already fades out well inside its
+       own box, so it needs no horizontal overhang to look unbounded. */
+    inset: -14% 0;
+    z-index: -1;
+    pointer-events: none;
+    /*
+     * The plateau is deliberately wide. Automated tooling cannot check contrast
+     * for text over an image, so the glow has to guarantee it: alpha stays above
+     * ~0.96 across the whole area the words occupy, which composites to near
+     * white over even the darkest panel of the mosaic — around 18:1 against the
+     * ink. It only falls away outside the text, where nothing needs to be read.
+     */
+    background: radial-gradient(
+      78% 74% at 50% 42%,
+      rgb(255 255 255 / 0.99) 0%,
+      rgb(255 255 255 / 0.97) 58%,
+      rgb(255 255 255 / 0.72) 80%,
+      rgb(255 255 255 / 0) 100%
+    );
+    filter: blur(16px);
+  }
+  /* The glyphs carry a halo of their own, so thin strokes and descenders stay
+     solid over whichever panel of the mosaic happens to fall behind them. */
   .lede__title {
-    font-size: clamp(2.6rem, 8vw, 5rem);
+    font-size: clamp(1.9rem, 5vw, 3.5rem);
     margin: 0;
+    text-wrap: balance;
+    text-shadow: 0 0 26px #fff, 0 0 14px #fff, 0 0 5px #fff;
   }
   .lede__body {
     max-width: 54ch;
     margin: 1.5rem 0 0;
     font-size: 1.1875rem;
+    text-shadow: 0 0 18px #fff, 0 0 9px #fff, 0 0 4px #fff;
   }
   .lede__links {
     margin-top: 1.25rem;
-    color: var(--color-stone);
+    /* Stone is a mid grey and loses too much against the artwork; the intro's
+       own links go full ink now that there is no panel to sit them on. */
+    color: var(--color-ink);
+    text-shadow: 0 0 18px #fff, 0 0 9px #fff, 0 0 4px #fff;
   }
 
   .feat {

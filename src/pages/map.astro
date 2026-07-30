@@ -20,6 +20,7 @@ import { feature } from 'topojson-client';
 import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo';
 import world from 'world-atlas/countries-110m.json';
 import Base from '../layouts/Base.astro';
+import Timeline from '../components/Timeline.astro';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
 
 const trips = await getCollection('trips');
@@ -127,6 +128,26 @@ const visitedCount = drawn.size + points.length;
       {points.length > 0 && ` ${points.map((p) => p.name).join(' and ')} marked as points; too small to draw at this scale.`}
       {stillMissing.length > 0 && ` Not shown: ${stillMissing.map((c) => COUNTRY_NAMES[c] ?? c).join(', ')}.`}
     </figcaption>
+
+    <!-- The map answers where; this answers when, on the same dark surface. -->
+    <div class="tlwrap">
+      <h2 class="mono tlwrap__head">And when</h2>
+      <Timeline
+        trips={trips.map((t) => ({
+          id: t.id,
+          title: t.data.title,
+          shortTitle: t.data.shortTitle,
+          year: t.data.year,
+          dateStart: t.data.dateStart,
+          dateEnd: t.data.dateEnd,
+          entries: t.data.stats.entries,
+        }))}
+      />
+      <p class="mono tlwrap__caption">
+        Spaced by real time — the gaps are the gaps. Bars are widened to stay
+        clickable, so a nine-day trip looks longer than it was.
+      </p>
+    </div>
   </figure>
 
   <section class="legend">
@@ -200,6 +221,23 @@ const visitedCount = drawn.size + points.length;
     margin: 1rem auto 0;
     color: var(--color-stone-on-dark);
     font-size: 0.625rem;
+  }
+
+  .tlwrap {
+    max-width: 68rem;
+    margin: clamp(2rem, 4vw, 3rem) auto 0;
+    padding-top: clamp(1.5rem, 3vw, 2rem);
+    border-top: 1px solid var(--color-rule-dark);
+  }
+  .tlwrap__head {
+    color: var(--color-stone-on-dark);
+    margin: 0 0 1rem;
+  }
+  .tlwrap__caption {
+    color: var(--color-stone-on-dark);
+    font-size: 0.625rem;
+    margin: 1rem 0 0;
+    max-width: 60ch;
   }
 
   .legend {

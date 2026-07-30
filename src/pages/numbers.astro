@@ -1,0 +1,252 @@
+---
+/**
+ * The overview page — everywhere they've been and everything they've done, in
+ * numbers.
+ *
+ * Every figure comes from `computeMetrics()`, which reads the content itself, so
+ * nothing here can drift from the archive. Where the data only partly answers a
+ * question, the page says so in its own words rather than presenting a
+ * confident wrong number (see the caveats block at the foot).
+ */
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { computeMetrics } from '../lib/metrics.ts';
+import { COUNTRY_NAMES } from '../data/trip-meta.ts';
+
+const m = await computeMetrics();
+const trips = await getCollection('trips');
+
+const n = (x: number) => x.toLocaleString('en-US');
+
+// Headline figures — the four that describe the whole thing.
+const headline = [
+  { value: n(m.entries), label: 'entries written' },
+  { value: n(m.words), label: 'words' },
+  { value: String(m.countries), label: 'countries' },
+  { value: String(m.yearsSpanned), label: 'years' },
+];
+
+const maxYear = Math.max(...m.byYear.map((y) => y.entries), 1);
+const totalCountriesShown = m.continents.reduce((a, c) => a + c.countries.length, 0);
+---
+
+<Base
+  title="By the numbers"
+  description={`${m.entries} entries, ${n(m.words)} words, ${m.countries} countries, ${m.trips} trips and ${m.yearsSpanned} years — everywhere Andy and Beth have been and everything they wrote about it.`}
+  ogImage="/og/site.png"
+>
+  <header class="head">
+    <h1 class="display">By the numbers</h1>
+    <p class="head__note">
+      Fifteen years, counted. Everything on this page is read straight out of the
+      writing — if the archive can't answer it, it isn't here.
+    </p>
+  </header>
+
+  <!-- The instrument panel, the site's dark data surface. -->
+  <section class="headline" aria-label="Headline figures">
+    <dl>
+      {headline.map((h) => (
+        <div>
+          <dd class="mono headline__v">{h.value}</dd>
+          <dt class="mono headline__l">{h.label}</dt>
+        </div>
+      ))}
+    </dl>
+  </section>
+
+  <section class="band" aria-label="On the road">
+    <h2 class="mono band__head">On the road</h2>
+    <ul class="facts">
+      <li><span class="mono facts__v">{n(m.daysOnTheRoad)}</span><span class="facts__l">days travelling, across {m.trips} trips</span></li>
+      <li><span class="mono facts__v">{n(m.trekMiles)}</span><span class="facts__l">miles trekked <em>that were logged</em></span></li>
+      <li><span class="mono facts__v">{n(m.maxElevationFt)} ft</span><span class="facts__l">highest point reached{m.highestEntry && <> — <a href={m.highestEntry.href}>{m.highestEntry.title}</a></>}</span></li>
+      <li><span class="mono facts__v">{n(m.photos)}</span><span class="facts__l">photographs published</span></li>
+      {m.longestTrip && (
+        <li><span class="mono facts__v">{m.longestTrip.days}</span><span class="facts__l">days — longest single trip, <a href={m.longestTrip.href}>{m.longestTrip.title}</a></span></li>
+      )}
+      {m.longestGap && (
+        <li><span class="mono facts__v">{n(m.longestGap.days)}</span><span class="facts__l">days — longest gap between trips, {m.longestGap.from} to {m.longestGap.to}</span></li>
+      )}
+    </ul>
+  </section>
+
+  <section class="band" aria-label="The writing">
+    <h2 class="mono band__head">The writing</h2>
+    <ul class="facts">
+      <li><span class="mono facts__v">{n(Math.round(m.words / Math.max(1, m.entries)))}</span><span class="facts__l">words in an average entry</span></li>
+      {m.longestEntry && (
+        <li><span class="mono facts__v">{n(m.longestEntry.words)}</span><span class="facts__l">words — longest, <a href={m.longestEntry.href}>{m.longestEntry.title}</a></span></li>
+      )}
+      {m.shortestEntry && (
+        <li><span class="mono facts__v">{n(m.shortestEntry.words)}</span><span class="facts__l">words — shortest, <a href={m.shortestEntry.href}>{m.shortestEntry.title}</a></span></li>
+      )}
+      <li><span class="mono facts__v">{m.byAuthor.beth} / {m.byAuthor.andy}</span><span class="facts__l">entries by Beth / by Andy</span></li>
+      {m.busiestMonth && (
+        <li><span class="mono facts__v">{m.busiestMonth.month}</span><span class="facts__l">busiest month, {m.busiestMonth.entries} entries across all years</span></li>
+      )}
+      {m.mostEntries && (
+        <li><span class="mono facts__v">{m.mostEntries.entries}</span><span class="facts__l">entries — most written on one trip, <a href={m.mostEntries.href}>{m.mostEntries.title}</a></span></li>
+      )}
+    </ul>
+  </section>
+
+  <section class="band" aria-label="Entries by year">
+    <h2 class="mono band__head">Entries by year</h2>
+    <ol class="years">
+      {m.byYear.map((y) => (
+        <li>
+          <span class="mono years__y">{y.year}</span>
+          <span class="years__bar" style={`--w:${(y.entries / maxYear) * 100}%`} aria-hidden="true"></span>
+          <span class="mono years__n">{y.entries}</span>
+        </li>
+      ))}
+    </ol>
+    <p class="mono band__note">
+      Entry counts follow publish dates, so a trip that straddles New Year lands
+      in both.
+    </p>
+  </section>
+
+  <section class="band" aria-label="Where">
+    <h2 class="mono band__head">Where — {totalCountriesShown} countries, {m.continents.length} continents</h2>
+    <div class="conts">
+      {m.continents.map((c) => (
+        <div class="cont">
+          <h3 class="mono cont__head">{c.name} <span class="cont__n">{c.countries.length}</span></h3>
+          <ul>{c.countries.map((x) => <li>{x}</li>)}</ul>
+        </div>
+      ))}
+    </div>
+    {m.repeatCountries.length > 0 && (
+      <>
+        <h3 class="mono band__sub">Places they went back to</h3>
+        <ul class="repeat">
+          {m.repeatCountries.map((r) => (
+            <li>
+              <a href={`/places/${r.code.toLowerCase()}/`}>
+                <span class="repeat__name">{r.name}</span>
+                <span class="mono repeat__meta">{r.visits}× · {r.years.join(', ')}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
+  </section>
+
+  <section class="band" aria-label="Still to be counted">
+    <h2 class="mono band__head">Still to be counted</h2>
+    <ul class="facts facts--muted">
+      <li><span class="mono facts__v">{m.bethCried}</span><span class="facts__l">times Beth cried — <a href="/beth-cried-here/">the register</a> is built, the tagging is theirs</span></li>
+      <li><span class="mono facts__v">{m.tagged} / {m.entries}</span><span class="facts__l">entries tagged by theme</span></li>
+      <li><span class="mono facts__v">0</span><span class="facts__l">GPS coordinates — stripped from every archived photograph before we got to them</span></li>
+    </ul>
+  </section>
+
+  {m.caveats.length > 0 && (
+    <section class="band caveats" aria-label="What these numbers do and don't say">
+      <h2 class="mono band__head">What these numbers don't say</h2>
+      <ul>{m.caveats.map((c) => <li>{c}</li>)}</ul>
+    </section>
+  )}
+</Base>
+
+<style>
+  .head {
+    max-width: 60rem; margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; }
+  .head__note { color: var(--color-stone); margin: 0.7rem 0 0; max-width: 54ch; }
+
+  .headline {
+    margin: clamp(1.75rem, 4vw, 2.75rem) 0 0;
+    padding: clamp(1.75rem, 4vw, 2.75rem) clamp(1rem, 4vw, 3rem);
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .headline dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1.75rem 2rem;
+    max-width: 60rem; margin: 0 auto;
+  }
+  .headline__v {
+    margin: 0;
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--color-snow);
+  }
+  .headline__l {
+    margin-top: 0.45rem;
+    font-size: 0.625rem;
+    color: var(--color-stone-on-dark);
+  }
+
+  .band {
+    max-width: 60rem; margin: clamp(2.25rem, 5vw, 3.25rem) auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .band__head { color: var(--color-stone); margin: 0 0 1rem; }
+  .band__sub { color: var(--color-stone); margin: 2rem 0 0.75rem; font-weight: 400; }
+  .band__note { color: var(--color-stone); font-size: 0.625rem; margin-top: 0.9rem; }
+
+  .facts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-rule); }
+  .facts li {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, auto) 1fr;
+    gap: 0.35rem 1.25rem;
+    align-items: baseline;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .facts__v { font-size: 1.25rem; color: var(--color-ink); letter-spacing: 0; }
+  .facts__l { color: var(--color-stone); font-size: 1rem; }
+  .facts__l em { font-style: italic; }
+  .facts--muted .facts__v { color: var(--color-stone); }
+
+  .years { list-style: none; margin: 0; padding: 0; }
+  .years li {
+    display: grid;
+    grid-template-columns: 3rem 1fr 2.5rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.2rem 0;
+  }
+  .years__y { color: var(--color-stone); font-size: 0.6875rem; }
+  .years__bar {
+    height: 0.6rem;
+    width: var(--w);
+    min-width: 2px;
+    background: var(--color-rime-on-light);
+  }
+  .years__n { color: var(--color-stone); font-size: 0.6875rem; text-align: right; }
+
+  .conts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1.5rem;
+  }
+  .cont__head { color: var(--color-ink); margin: 0 0 0.5rem; }
+  .cont__n { color: var(--color-ember); }
+  .cont ul { list-style: none; margin: 0; padding: 0; }
+  .cont li { color: var(--color-stone); padding: 0.15rem 0; font-size: 0.9375rem; }
+
+  .repeat { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-rule); }
+  .repeat li { border-bottom: 1px solid var(--color-rule); }
+  .repeat a {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    gap: 0.5rem 1rem; padding: 0.6rem 0; text-decoration: none;
+  }
+  .repeat a:hover .repeat__name { text-decoration: underline; text-underline-offset: 0.16em; }
+  .repeat__meta { color: var(--color-stone); font-size: 0.625rem; }
+
+  .caveats ul { margin: 0; padding-left: 1.1rem; color: var(--color-stone); max-width: 62ch; }
+  .caveats li { padding: 0.3rem 0; font-size: 0.9375rem; line-height: 1.5; }
+
+  @media (max-width: 560px) {
+    .facts li { grid-template-columns: 1fr; }
+  }
+</style>

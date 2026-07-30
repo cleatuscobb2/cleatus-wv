@@ -119,6 +119,18 @@ export const POINT_MARKERS: Record<string, [number, number]> = {
   HK: [114.1694, 22.3193],
 };
 
+/** Continent per country, for the overview page. */
+export const COUNTRY_CONTINENT: Record<string, string> = {
+  PK: 'Asia', TH: 'Asia', SG: 'Asia', MY: 'Asia', KR: 'Asia', JP: 'Asia',
+  ID: 'Asia', NP: 'Asia', CN: 'Asia', IN: 'Asia', HK: 'Asia',
+  TZ: 'Africa', EG: 'Africa',
+  AT: 'Europe', DE: 'Europe', GR: 'Europe', RU: 'Europe', IS: 'Europe',
+  HR: 'Europe', BA: 'Europe',
+  CL: 'South America', AR: 'South America', CO: 'South America',
+  EC: 'South America', BO: 'South America', PE: 'South America',
+  GT: 'North America', BZ: 'North America',
+};
+
 export const COUNTRY_NAMES: Record<string, string> = {
   PK: 'Pakistan', TH: 'Thailand', SG: 'Singapore', MY: 'Malaysia', KR: 'South Korea',
   JP: 'Japan', TZ: 'Tanzania', EG: 'Egypt', AT: 'Austria', ID: 'Indonesia',

@@ -1,0 +1,196 @@
+---
+/**
+ * A horizontal time axis of every trip, for the map page.
+ *
+ * The map answers "where"; this answers "when", on the same dark surface and in
+ * the same drawn-line language as the route line. Trips sit at their true
+ * position in time, so the gaps — the two years between 2018 and Japan, the long
+ * quiet after 2009 — are visible rather than flattened into even spacing.
+ *
+ * Bars are widened to a legible minimum, so a nine-day trip is still clickable;
+ * position is always true, width is floored. Zero client JS.
+ */
+interface Trip {
+  id: string;
+  title: string;
+  shortTitle: string;
+  year: number;
+  dateStart: Date;
+  dateEnd: Date;
+  entries: number;
+}
+interface Props {
+  trips: Trip[];
+  class?: string;
+}
+const { trips, class: klass = '' } = Astro.props;
+
+const sorted = [...trips].sort((a, b) => +a.dateStart - +b.dateStart);
+const t0 = +sorted[0].dateStart;
+const t1 = +sorted[sorted.length - 1].dateEnd;
+const span = Math.max(1, t1 - t0);
+
+const pct = (t: number) => ((t - t0) / span) * 100;
+/*
+ * Percent. A nine-day trip must still be a clickable target, but this also has
+ * to clear the bar's 0.8rem of horizontal padding: if the percentage resolves
+ * narrower than the padding, the padding wins and the bar renders wider than
+ * the clamp below believes, pushing the last one past the end of the track.
+ * 2.2% of the narrowest padded layout (~700px) is ~15px, comfortably over.
+ */
+const MIN_W = 2.2;
+
+const bars = sorted.map((t) => {
+  const left = pct(+t.dateStart);
+  const raw = pct(+t.dateEnd) - left;
+  const width = Math.max(MIN_W, raw);
+  return { ...t, left: Math.min(left, 100 - width), width };
+});
+
+// Year ticks across the whole span.
+const firstYear = new Date(t0).getUTCFullYear();
+const lastYear = new Date(t1).getUTCFullYear();
+const ticks: { year: number; at: number; flip: boolean }[] = [];
+for (let y = firstYear; y <= lastYear; y++) {
+  const at = pct(Date.UTC(y, 0, 1));
+  if (at >= -2 && at <= 102) {
+    const clamped = Math.max(0, Math.min(100, at));
+    // A label near the right edge would push the page wider than the viewport,
+    // so the last few hang to the left of their tick instead.
+    ticks.push({ year: y, at: clamped, flip: clamped > 88 });
+  }
+}
+
+// Stack overlapping bars so nothing is hidden behind anything else.
+const rows: { end: number }[] = [];
+const placed = bars.map((b) => {
+  let row = rows.findIndex((r) => b.left > r.end + 0.6);
+  if (row === -1) { rows.push({ end: b.left + b.width }); row = rows.length - 1; }
+  else rows[row].end = b.left + b.width;
+  return { ...b, row };
+});
+const rowCount = Math.max(1, rows.length);
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+---
+
+<nav class={`tl ${klass}`} aria-label={`Timeline of ${sorted.length} trips, ${firstYear} to ${lastYear}`}>
+  <div class="tl__axis" aria-hidden="true">
+    {ticks.map((t) => (
+      <span class="tl__tick" style={`left:${t.at}%`}>
+        <span class={t.flip ? 'mono tl__year tl__year--flip' : 'mono tl__year'}>{t.year}</span>
+      </span>
+    ))}
+  </div>
+
+  <div class="tl__track" style={`--rows:${rowCount}`}>
+    {placed.map((b) => (
+      <a
+        class="tl__bar"
+        href={`/${b.id}/`}
+        style={`left:${b.left}%; width:${b.width}%; --row:${b.row}`}
+      >
+        <span class="tl__label mono">{b.shortTitle}</span>
+        <span class="sr-only">
+          {b.title}, {fmt(b.dateStart)} to {fmt(b.dateEnd)}, {b.entries} entries
+        </span>
+      </a>
+    ))}
+  </div>
+</nav>
+
+<style>
+  .tl {
+    max-width: 68rem;
+    margin-inline: auto;
+  }
+  .tl__axis {
+    position: relative;
+    height: 1.4rem;
+    border-bottom: 1px solid var(--color-rule-dark);
+  }
+  .tl__tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--color-rule-dark);
+    transform: translateX(-0.5px);
+  }
+  .tl__year {
+    position: absolute;
+    bottom: 0.2rem;
+    left: 3px;
+    font-size: 0.5625rem;
+    color: var(--color-stone-on-dark);
+    white-space: nowrap;
+  }
+  .tl__year--flip {
+    left: auto;
+    right: 3px;
+  }
+
+  .tl__track {
+    position: relative;
+    height: calc(var(--rows) * 2.05rem);
+    margin-top: 0.5rem;
+  }
+  .tl__bar {
+    position: absolute;
+    top: calc(var(--row) * 2.05rem);
+    height: 1.75rem;
+    background: var(--color-rime);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding-inline: 0.4rem;
+    overflow: hidden;
+    transition: background 150ms ease;
+    /*
+     * Horizontal padding sets a floor on the rendered width that the percentage
+     * clamp in the frontmatter cannot see, which pushed the last bar past the
+     * end of the track. Border-box keeps width honest; the mobile rule below
+     * drops the padding entirely, since the label is hidden there anyway.
+     */
+    box-sizing: border-box;
+  }
+  .tl__bar:hover,
+  .tl__bar:focus-visible {
+    background: var(--color-headlamp);
+    z-index: 2;
+    /* Let a short bar grow enough to read on hover without moving its start. */
+    min-width: max-content;
+  }
+  .tl__label {
+    font-size: 0.625rem;
+    color: var(--color-ink);
+    white-space: nowrap;
+    /* A flex item defaults to min-width:auto, which lets a nowrap label force
+       the bar wider than its slot. */
+    min-width: 0;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 700px) {
+    /* Labels stop fitting; position carries the meaning and the map legend
+       below carries the names. No label means no need for padding, which is
+       what was forcing narrow bars wider than their slot. */
+    .tl__label { display: none; }
+    .tl__bar {
+      height: 1.1rem;
+      top: calc(var(--row) * 1.4rem);
+      padding-inline: 0;
+      min-width: 3px;
+    }
+    .tl__track { height: calc(var(--rows) * 1.4rem); }
+  }
+</style>

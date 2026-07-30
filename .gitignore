@@ -10,3 +10,10 @@ Thumbs.db
 
 # raw/ and assets/photos/ are deliberately NOT ignored.
 # They are the archive — the only copy of this material once Squarespace lapses.
+
+# Generated: link to the archive, recreated by `npm run photos`.
+public/photos
+
+# Fonts are copied from node_modules by `npm run fonts` but committed,
+# so the site builds without a network round-trip.
+!public/fonts

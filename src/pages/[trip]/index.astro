@@ -1,0 +1,327 @@
+---
+/**
+ * §7.2 — the trip page, the "trailhead".
+ */
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import RouteLine from '../../components/RouteLine.astro';
+import {
+  entriesForTrip, entrySlug, routeNodes, fmtRange, fmtDateShort,
+  AUTHOR_NAMES, excerpt, type Entry,
+} from '../../lib/entries.ts';
+
+export async function getStaticPaths() {
+  const trips = await getCollection('trips');
+  return trips.map((trip) => ({ params: { trip: trip.id }, props: { trip } }));
+}
+
+const { trip } = Astro.props;
+const d = trip.data;
+const entries = await entriesForTrip(trip.id);
+const nodes = routeNodes(entries);
+
+const people = (await getCollection('people'))
+  .filter((p) => p.data.trips.some((t) => (typeof t === 'string' ? t : t.id) === trip.id));
+
+const retro = (await getCollection('retrospectives'))
+  .filter((r) => (typeof r.data.trip === 'string' ? r.data.trip : r.data.trip.id) === trip.id);
+
+const startHere = d.startHere
+  ? entries.find((e) => entrySlug(e) === d.startHere)
+  : undefined;
+
+const firstPhoto = (e: Entry) => e.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? null;
+
+const stats = [
+  { label: 'Entries', value: String(d.stats.entries) },
+  ...(d.stats.trekMiles ? [{ label: 'Trek', value: `${d.stats.trekMiles} mi` }] : []),
+  ...(d.stats.maxElevationFt
+    ? [{ label: 'High point', value: `${d.stats.maxElevationFt.toLocaleString('en-US')} ft` }] : []),
+  { label: 'Countries', value: String(d.stats.countriesCount) },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TouristTrip',
+  name: d.title,
+  description: d.summary,
+  startDate: d.dateStart.toISOString().slice(0, 10),
+  endDate: d.dateEnd.toISOString().slice(0, 10),
+  ...(d.hero ? { image: new URL(d.hero, Astro.site).toString() } : {}),
+};
+---
+
+<Base title={d.title} description={d.summary} ogImage={d.hero} jsonLd={jsonLd}>
+  {d.hero && (
+    <div class="hero">
+      <img src={d.hero} alt="" loading="eager" fetchpriority="high" decoding="async" />
+    </div>
+  )}
+
+  <header class="head">
+    <h1 class="display head__title">{d.title}</h1>
+    <p class="mono head__dates">{fmtRange(d.dateStart, d.dateEnd)}</p>
+    <p class="head__summary">{d.summary}</p>
+    {startHere && (
+      <p class="head__start">
+        <a href={`/${trip.id}/${entrySlug(startHere)}/`}>
+          <span class="mono">Start here</span> — {startHere.data.title}
+        </a>
+      </p>
+    )}
+  </header>
+
+  <section class="panel" aria-label="Trip shape">
+    <dl class="panel__stats">
+      {stats.map((s) => (
+        <div>
+          <dt class="mono">{s.label}</dt>
+          <dd class="mono">{s.value}</dd>
+        </div>
+      ))}
+    </dl>
+    {nodes.length > 1 && <RouteLine nodes={nodes} tripSlug={trip.id} />}
+    <p class="mono panel__caption">
+      {d.stats.maxElevationFt
+        ? 'Elevation profile · each node is an entry, spaced by date'
+        : 'Timeline · each node is an entry, spaced by date'}
+    </p>
+  </section>
+
+  <section class="entries" aria-label="Entries">
+    <h2 class="mono entries__head">Day by day</h2>
+    <ol class="entries__list">
+      {entries.map((e) => {
+        const photo = firstPhoto(e);
+        const leg = e.data.leg;
+        const bits = [
+          e.data.day != null ? `Day ${e.data.day}` : null,
+          fmtDateShort(e.data.date),
+          leg?.distanceMi != null ? `${leg.distanceMi} mi` : null,
+          leg?.elevationHighFt != null
+            ? `${leg.elevationHighFt.toLocaleString('en-US')} ft` : null,
+        ].filter(Boolean);
+        return (
+          <li class="card">
+            <a href={`/${trip.id}/${entrySlug(e)}/`} class="card__link">
+              {photo
+                ? <img class="card__thumb" src={photo} alt="" loading="lazy" decoding="async" />
+                : <span class="card__thumb card__thumb--none" aria-hidden="true" />}
+              <span class="card__body">
+                <span class="mono card__meta">{bits.join(' · ')}</span>
+                <span class="card__title">{e.data.title}</span>
+                <span class="mono card__by">
+                  {e.data.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}
+                </span>
+                <span class="card__excerpt">{excerpt(e.body)}</span>
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+  </section>
+
+  {people.length > 0 && (
+    <section class="cast">
+      <h2 class="mono">Cast</h2>
+      <ul>
+        {people.map((p) => (
+          <li><strong>{p.data.name}</strong> <span class="mono">{p.data.role}</span></li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {retro.length > 0 && (
+    <section class="cast">
+      <h2 class="mono">Afterward</h2>
+      <ul>
+        {retro.map((r) => (
+          <li>
+            <a href={`/retrospectives/${r.id}/`}>{r.data.title}</a>
+            <span class="mono"> — {AUTHOR_NAMES[r.data.author]}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</Base>
+
+<style>
+  .hero {
+    height: clamp(220px, 52vh, 560px);
+    overflow: hidden;
+    background: var(--color-rule);
+  }
+  .hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .head {
+    max-width: 68ch;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head__title {
+    font-size: clamp(2.4rem, 6vw, 4.25rem);
+    margin: 0;
+  }
+  .head__dates {
+    color: var(--color-stone);
+    margin: 0.7rem 0 1.4rem;
+  }
+  .head__summary {
+    margin: 0;
+    font-size: 1.1875rem;
+  }
+  .head__start {
+    margin-top: 1.2rem;
+  }
+  .head__start .mono {
+    color: var(--color-stone);
+  }
+
+  /* The dark instrument panel. */
+  .panel {
+    margin: clamp(2rem, 5vw, 3.5rem) 0 0;
+    padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 4vw, 3rem);
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .panel__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem 2.75rem;
+    margin: 0 0 1.5rem;
+    max-width: 68rem;
+    margin-inline: auto;
+  }
+  .panel__stats dt {
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+    margin-bottom: 0.15rem;
+  }
+  .panel__stats dd {
+    margin: 0;
+    font-size: 1.0625rem;
+    letter-spacing: 0.02em;
+  }
+  .panel :global(.route-line) {
+    max-width: 68rem;
+    margin-inline: auto;
+  }
+  .panel__caption {
+    max-width: 68rem;
+    margin: 1rem auto 0;
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+  }
+
+  .entries {
+    max-width: 60rem;
+    margin: clamp(2.5rem, 6vw, 4rem) auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .entries__head {
+    color: var(--color-stone);
+    margin: 0 0 1.25rem;
+  }
+  .entries__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .card {
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .card__link {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 1.25rem;
+    padding: 1.1rem 0;
+    text-decoration: none;
+    transition: background 150ms ease;
+  }
+  .card__link:hover {
+    background: var(--color-paper);
+  }
+  .card__thumb {
+    width: 96px;
+    height: 72px;
+    object-fit: cover;
+    background: var(--color-rule);
+    align-self: start;
+  }
+  /* Two trips have no photographs at all; the cell becomes a rule, not a hole. */
+  .card__thumb--none {
+    display: block;
+    height: 72px;
+    background: none;
+    border-top: 2px solid var(--color-rule);
+  }
+  .card__body {
+    display: block;
+  }
+  .card__meta {
+    display: block;
+    color: var(--color-stone);
+    font-size: 0.6875rem;
+  }
+  .card__title {
+    display: block;
+    font-family: var(--font-display);
+    font-stretch: 108%;
+    font-weight: 600;
+    font-size: 1.2rem;
+    line-height: 1.25;
+    margin: 0.25rem 0 0.15rem;
+  }
+  .card__by {
+    display: block;
+    color: var(--color-stone);
+    font-size: 0.625rem;
+  }
+  .card__excerpt {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--color-stone);
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .cast {
+    max-width: 60rem;
+    margin: 3rem auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .cast h2 {
+    color: var(--color-stone);
+    margin: 0 0 0.75rem;
+  }
+  .cast ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .cast li {
+    padding: 0.35rem 0;
+  }
+  .cast .mono {
+    color: var(--color-stone);
+    font-size: 0.6875rem;
+  }
+
+  @media (max-width: 560px) {
+    .card__link {
+      grid-template-columns: 64px 1fr;
+      gap: 0.9rem;
+    }
+    .card__thumb { width: 64px; height: 52px; }
+    .card__thumb--none { height: 52px; }
+  }
+</style>

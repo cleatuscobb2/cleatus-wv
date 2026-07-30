@@ -1,0 +1,107 @@
+---
+/**
+ * §7.6. From the About page: "it's not a trip for the books unless Beth cries
+ * (hopefully only once)." The plumbing is built; the tagging is Andy and Beth's.
+ *
+ * Played entirely straight. The deadpan is the joke.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { chronological, tripIdOf, entrySlug, fmtDate } from '../lib/entries.ts';
+
+const all = await getCollection('entries', ({ data }) => !data.draft && data.bethCried);
+const cried = chronological(all);
+const trips = await getCollection('trips');
+const tripTitle = (id: string) => trips.find((t) => t.id === id)?.data.shortTitle ?? id;
+---
+
+<Base
+  title="Beth cried here"
+  description="A complete register of every occasion on which Beth cried, by trip and date."
+>
+  <header class="head">
+    <p class="mono head__count">{cried.length}</p>
+    <h1 class="display">Beth cried here</h1>
+    <p class="head__note">
+      It's not a trip for the books unless Beth cries. Hopefully only once.
+    </p>
+  </header>
+
+  {cried.length > 0 ? (
+    <ol class="list">
+      {cried.map((e) => (
+        <li>
+          <a href={`/${tripIdOf(e)}/${entrySlug(e)}/`}>
+            <span class="mono list__meta">
+              {tripTitle(tripIdOf(e))} · {fmtDate(e.data.date)}
+            </span>
+            <span class="list__title">{e.data.title}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  ) : (
+    <p class="empty">
+      No occasions recorded yet. Set <code class="mono">bethCried: true</code> on an entry
+      and it will appear here, on the trip page, and on the map.
+    </p>
+  )}
+</Base>
+
+<style>
+  .head {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vw, 4rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head__count {
+    font-size: clamp(3rem, 12vw, 6rem);
+    line-height: 1;
+    color: var(--color-headlamp);
+    margin: 0;
+    letter-spacing: 0;
+  }
+  .head h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    margin: 0.4rem 0 0;
+  }
+  .head__note {
+    color: var(--color-stone);
+    margin: 0.75rem 0 0;
+    max-width: 44ch;
+  }
+  .list {
+    list-style: none;
+    max-width: 52rem;
+    margin: 2rem auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+    border-top: 1px solid var(--color-rule);
+  }
+  .list li {
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .list a {
+    display: block;
+    padding: 0.8rem 0;
+    text-decoration: none;
+  }
+  .list__meta {
+    display: block;
+    color: var(--color-stone);
+    font-size: 0.625rem;
+  }
+  .list__title {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 1.0625rem;
+  }
+  .list a:hover .list__title {
+    text-decoration: underline;
+  }
+  .empty {
+    max-width: 52rem;
+    margin: 2rem auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+    color: var(--color-stone);
+  }
+</style>

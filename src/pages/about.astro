@@ -1,0 +1,61 @@
+---
+/**
+ * The who-we-are page, rendered from the archived original rather than rewritten.
+ * Their words, not mine.
+ */
+import { readFile } from 'node:fs/promises';
+import Base from '../layouts/Base.astro';
+import { convert } from '../../scripts/html-to-mdx.ts';
+
+const raw = JSON.parse(await readFile(new URL('../../raw/pages/who-we-are.json', import.meta.url), 'utf8'));
+const item = raw.item ?? raw.mainContent ?? raw.collection ?? {};
+const html: string = item.body ?? raw.item?.body ?? '';
+const { mdx } = convert(html);
+
+// The converter emits markdown; for this one static page a paragraph split is enough.
+const paras = mdx.split('\n\n').filter(Boolean);
+---
+
+<Base
+  title="About"
+  description="Andy from Fremont, California and Beth from South Charleston, West Virginia. They met in 2009 on an MBA trip to Bangalore and have been taking long, hard trips ever since."
+>
+  <article class="about">
+    <h1 class="display">Who we are</h1>
+    {paras.length > 0 ? (
+      <div class="prose-entry">
+        {paras.map((p) => <p>{p.replace(/\\([{}<])/g, '$1').replace(/[*_]/g, '')}</p>)}
+      </div>
+    ) : (
+      <div class="prose-entry">
+        <p>
+          Andy — byline <strong>cleatus cobb</strong> — is from Fremont, California.
+          Beth is from South Charleston, West Virginia. They met in 2009 on an MBA
+          study-abroad trip to Bangalore and have been taking long, hard trips ever since.
+        </p>
+        <p>
+          It's not a trip for the books unless Beth cries — hopefully only once.
+        </p>
+      </div>
+    )}
+    <p class="mono about__foot">
+      <a href="/beth-cried-here/">Beth cried here →</a>
+    </p>
+  </article>
+</Base>
+
+<style>
+  .about {
+    max-width: calc(var(--measure) + 6rem);
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .about h1 {
+    font-size: clamp(2.2rem, 5vw, 3.25rem);
+    margin: 0 0 1.5rem;
+  }
+  .about__foot {
+    margin-top: 2.5rem;
+    color: var(--color-stone);
+  }
+</style>

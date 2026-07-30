@@ -1,0 +1,49 @@
+---
+/**
+ * A run of photographs from one stretch of a day (§7.3). Horizontally
+ * scrollable rather than a grid, so a sequence stays a sequence.
+ */
+interface Shot { src: string; alt?: string }
+const { shots, caption } = Astro.props as { shots: Shot[]; caption?: string };
+---
+
+<figure class="strip">
+  <div class="strip__scroll" tabindex="0" role="group" aria-label={caption ?? 'Photographs'}>
+    {shots.map((s) => <img src={s.src} alt={s.alt ?? ''} loading="lazy" decoding="async" />)}
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .strip {
+    margin-block: 2rem;
+    width: min(100%, calc(var(--measure) + 12rem));
+    margin-inline: calc(-1 * min(6rem, 6vw));
+  }
+  .strip__scroll {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 0.5rem;
+  }
+  .strip__scroll img {
+    flex: 0 0 auto;
+    height: clamp(200px, 34vw, 340px);
+    width: auto;
+    scroll-snap-align: start;
+    background: var(--color-rule);
+  }
+  figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.9375rem;
+    font-style: italic;
+    color: var(--color-stone);
+  }
+  @media (max-width: 900px) {
+    .strip {
+      width: 100%;
+      margin-inline: 0;
+    }
+  }
+</style>

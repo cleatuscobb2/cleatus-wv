@@ -1,0 +1,177 @@
+---
+/**
+ * The signature element (§6.1, DESIGN.md §2).
+ *
+ * One drawn line in three orientations, always bound to real data:
+ *   X — elapsed days across the trip, so rest days and travel gaps show as gaps.
+ *   Y — elevation where the trip has it, a flat baseline where it does not.
+ *
+ * Inline SVG built at render time. No client JS, works with JavaScript off, and
+ * renders complete under prefers-reduced-motion.
+ */
+interface Node {
+  slug: string;
+  title: string;
+  day: number | null;
+  date: Date;
+  elevationFt: number | null;
+}
+
+interface Props {
+  nodes: Node[];
+  tripSlug: string;
+  /** Highlight the entry currently being read. */
+  current?: string;
+  orientation?: 'horizontal' | 'vertical';
+  class?: string;
+}
+
+const { nodes, tripSlug, current, orientation = 'horizontal', class: klass = '' } = Astro.props;
+
+const sorted = [...nodes].sort((a, b) => +a.date - +b.date);
+const hasElevation = sorted.some((n) => n.elevationFt);
+
+// X: elapsed days, so the spacing carries information rather than being uniform.
+const t0 = +sorted[0]?.date || 0;
+const span = Math.max(1, (+sorted[sorted.length - 1]?.date || 0) - t0);
+
+const W = 1000;
+const H = orientation === 'horizontal' ? 150 : 1000;
+const PAD = 26;
+
+const elevations = sorted.map((n) => n.elevationFt ?? 0).filter(Boolean);
+const eMin = elevations.length ? Math.min(...elevations) : 0;
+const eMax = elevations.length ? Math.max(...elevations) : 1;
+const eSpan = Math.max(1, eMax - eMin);
+
+const points = sorted.map((n) => {
+  const along = PAD + ((+n.date - t0) / span) * ((orientation === 'horizontal' ? W : H) - PAD * 2);
+  // Without elevation the line sits on a baseline; the node spacing is the data.
+  const across = hasElevation && n.elevationFt
+    ? (orientation === 'horizontal' ? H : W) - PAD - ((n.elevationFt - eMin) / eSpan) * ((orientation === 'horizontal' ? H : W) - PAD * 2)
+    : (orientation === 'horizontal' ? H : W) / 2;
+  return orientation === 'horizontal' ? { x: along, y: across, n } : { x: across, y: along, n };
+});
+
+/** Catmull-Rom → cubic Bézier, so the ridge reads as terrain rather than a zigzag. */
+function path(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+const d = path(points);
+const fmtEl = (ft: number) => `${(ft / 1000).toFixed(1)}k`;
+const uid = `rl-${tripSlug}-${orientation}`;
+---
+
+<div class={`route-line ${klass}`} data-orientation={orientation}>
+  <svg
+    viewBox={`0 0 ${orientation === 'horizontal' ? W : W} ${H}`}
+    preserveAspectRatio={orientation === 'horizontal' ? 'none' : 'xMidYMid meet'}
+    role="img"
+    aria-label={hasElevation
+      ? `Elevation profile: ${sorted.length} entries from ${fmtEl(eMin)} to ${fmtEl(eMax)} feet`
+      : `Timeline of ${sorted.length} entries`}
+  >
+    <!-- pathLength="1" normalises the dash maths so the draw animation takes the
+         full duration whatever the real path length turns out to be. -->
+    <path d={d} class="rl-path" id={uid} pathLength="1" />
+
+    {points.map(({ x, y, n }) => {
+      const isCurrent = current === n.slug;
+      return (
+        <a href={`/${tripSlug}/${n.slug}/`} class="rl-node-link">
+          <title>{n.day ? `Day ${n.day} — ` : ''}{n.title}{n.elevationFt ? ` (${fmtEl(n.elevationFt)} ft)` : ''}</title>
+          <circle
+            cx={x}
+            cy={y}
+            r={isCurrent ? 9 : 5}
+            class={isCurrent ? 'rl-node rl-node--current' : 'rl-node'}
+          />
+        </a>
+      );
+    })}
+  </svg>
+</div>
+
+<style>
+  .route-line {
+    width: 100%;
+  }
+  .route-line[data-orientation='horizontal'] svg {
+    width: 100%;
+    height: clamp(90px, 14vw, 150px);
+    overflow: visible;
+  }
+  .route-line[data-orientation='vertical'] svg {
+    width: 46px;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .rl-path {
+    fill: none;
+    stroke: var(--color-rime);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    /* §6.5 — one orchestrated moment: the line draws itself, once. */
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: rl-draw 1200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .rl-node {
+    fill: var(--color-ink);
+    stroke: var(--color-rime);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    opacity: 0;
+    animation: rl-appear 320ms ease-out forwards;
+    /* Nodes land as the line reaches them. */
+    animation-delay: 900ms;
+    transition: r 150ms ease;
+  }
+  .rl-node--current {
+    fill: var(--color-headlamp);
+    stroke: var(--color-headlamp);
+  }
+  .rl-node-link:hover .rl-node,
+  .rl-node-link:focus-visible .rl-node {
+    fill: var(--color-headlamp);
+    stroke: var(--color-headlamp);
+  }
+
+  @keyframes rl-draw {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes rl-appear {
+    to { opacity: 1; }
+  }
+
+  /* Rendered complete, immediately. */
+  @media (prefers-reduced-motion: reduce) {
+    .rl-path {
+      stroke-dasharray: none;
+      stroke-dashoffset: 0;
+      animation: none;
+    }
+    .rl-node {
+      opacity: 1;
+      animation: none;
+    }
+  }
+</style>

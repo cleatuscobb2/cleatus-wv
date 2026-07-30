@@ -1,0 +1,31 @@
+{
+  "name": "cleatus-wv",
+  "version": "1.0.0",
+  "description": "cleatusandthewestvirginian.com — Andy and Beth's travel journal, 2009–present",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "npm run photos && astro dev",
+    "build": "npm run photos && astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "photos": "node --experimental-strip-types scripts/link-photos.ts",
+    "scrape": "node --experimental-strip-types scripts/scrape.ts",
+    "convert": "node --experimental-strip-types scripts/convert.ts",
+    "gen:trips": "node --experimental-strip-types scripts/gen-trips.ts",
+    "verify": "node --experimental-strip-types scripts/verify-phase0.ts",
+    "new:entry": "node --experimental-strip-types scripts/new-entry.ts"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^4.3.14",
+    "@astrojs/sitemap": "^3.7.3",
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^5.18.2",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

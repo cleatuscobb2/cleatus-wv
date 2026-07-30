@@ -1,0 +1,128 @@
+---
+/**
+ * §7.1 — the fourteen-item nav moved here, where it can grow.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { fmtRange } from '../../lib/entries.ts';
+
+const trips = (await getCollection('trips')).sort((a, b) => +b.data.dateStart - +a.data.dateStart);
+---
+
+<Base
+  title="Trips"
+  description="Fifteen years of long, hard trips — Pakistan's Karakoram, Patagonia, the Himalaya, Borneo, the Galápagos and more, 2009 to now."
+>
+  <header class="head">
+    <h1 class="display">Trips</h1>
+    <p class="head__note">
+      {trips.length} trips, newest first. Each one reads forward from day one.
+    </p>
+  </header>
+
+  <ol class="grid">
+    {trips.map((t) => (
+      <li class="trip">
+        <a href={`/${t.id}/`} class="trip__link">
+          <span class="trip__media">
+            {t.data.hero
+              ? <img src={t.data.hero} alt="" loading="lazy" decoding="async" />
+              : <span class="trip__media--none mono">No photographs</span>}
+          </span>
+          <span class="trip__body">
+            <span class="mono trip__dates">{fmtRange(t.data.dateStart, t.data.dateEnd)}</span>
+            <span class="display trip__title">{t.data.title}</span>
+            <span class="mono trip__stats">
+              {[
+                `${t.data.stats.entries} entries`,
+                t.data.stats.trekMiles ? `${t.data.stats.trekMiles} mi trek` : null,
+                t.data.stats.maxElevationFt
+                  ? `${t.data.stats.maxElevationFt.toLocaleString('en-US')} ft` : null,
+                `${t.data.stats.countriesCount} countries`,
+              ].filter(Boolean).join(' · ')}
+            </span>
+          </span>
+        </a>
+      </li>
+    ))}
+  </ol>
+</Base>
+
+<style>
+  .head {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head h1 {
+    font-size: clamp(2.4rem, 6vw, 3.75rem);
+    margin: 0;
+  }
+  .head__note {
+    color: var(--color-stone);
+    margin: 0.6rem 0 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+    gap: clamp(1.25rem, 3vw, 2rem);
+    list-style: none;
+    max-width: 68rem;
+    margin: clamp(1.75rem, 4vw, 2.75rem) auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+  }
+  .trip__link {
+    display: block;
+    text-decoration: none;
+  }
+  .trip__media {
+    display: block;
+    aspect-ratio: 3 / 2;
+    background: var(--color-rule);
+    overflow: hidden;
+  }
+  .trip__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 150ms ease;
+  }
+  .trip__link:hover .trip__media img {
+    transform: scale(1.02);
+  }
+  /* Honest about the two trips that have none. */
+  .trip__media--none {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-stone);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    font-size: 0.6875rem;
+  }
+  .trip__dates {
+    display: block;
+    color: var(--color-stone);
+    margin-top: 0.7rem;
+    font-size: 0.6875rem;
+  }
+  .trip__title {
+    display: block;
+    font-size: 1.35rem;
+    font-stretch: 112%;
+    margin: 0.3rem 0 0.35rem;
+    line-height: 1.15;
+  }
+  .trip__link:hover .trip__title {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+  .trip__stats {
+    display: block;
+    color: var(--color-stone);
+    font-size: 0.625rem;
+  }
+</style>

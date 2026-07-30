@@ -1,0 +1,59 @@
+---
+/**
+ * A photograph in the narrative (§7.3). Placed inline between paragraphs.
+ *
+ * Images come from the committed archive via /photos. They are already at the
+ * maximum resolution the source CDNs will give up, so this does not upscale;
+ * it constrains, lazy-loads, and keeps the caption with the picture.
+ */
+interface Props {
+  src: string;
+  alt?: string;
+  caption?: string;
+  /** `wide` breaks out past the text measure; `full` bleeds to the container. */
+  size?: 'text' | 'wide' | 'full';
+}
+const { src, alt = '', caption, size = 'wide' } = Astro.props;
+---
+
+<figure class={`photo photo--${size}`}>
+  <img src={src} alt={alt} loading="lazy" decoding="async" />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .photo {
+    margin-block: 2rem;
+  }
+  .photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--color-rule);
+  }
+  .photo--text {
+    max-width: var(--measure);
+  }
+  .photo--wide {
+    /* Breaks the measure without leaving the column. */
+    width: min(100%, calc(var(--measure) + 12rem));
+    margin-inline: calc(-1 * min(6rem, 6vw));
+  }
+  .photo--full {
+    width: 100%;
+  }
+  figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.9375rem;
+    font-style: italic;
+    color: var(--color-stone);
+    max-width: var(--measure);
+  }
+
+  @media (max-width: 900px) {
+    .photo--wide {
+      width: 100%;
+      margin-inline: 0;
+    }
+  }
+</style>

@@ -1,0 +1,126 @@
+---
+/**
+ * §7.5 — the archive spine. The third role of the signature line: 2009 at one
+ * end, now at the other, every trip a node on it.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { fmtRange } from '../lib/entries.ts';
+
+const trips = (await getCollection('trips')).sort((a, b) => +a.data.dateStart - +b.data.dateStart);
+const totalEntries = trips.reduce((n, t) => n + t.data.stats.entries, 0);
+
+const first = +trips[0].data.dateStart;
+const last = +trips[trips.length - 1].data.dateEnd;
+const span = Math.max(1, last - first);
+/** Position down the spine, as a percentage — real time, not even spacing. */
+const posOf = (t: (typeof trips)[number]) => ((+t.data.dateStart - first) / span) * 100;
+---
+
+<Base
+  title="Archive"
+  description={`Every trip from 2009 to now — ${trips.length} trips and ${totalEntries} entries on one timeline.`}
+>
+  <header class="head">
+    <h1 class="display">Archive</h1>
+    <p class="head__note">
+      {trips.length} trips · {totalEntries} entries · {trips[0].data.year}–{trips[trips.length - 1].data.year}.
+      Spaced by real time, so the gaps are the gaps.
+    </p>
+  </header>
+
+  <ol class="spine">
+    {trips.map((t) => (
+      <li class="node" style={`--pos:${posOf(t)}%`}>
+        <a href={`/${t.id}/`} class="node__link">
+          <span class="mono node__year">{t.data.year}</span>
+          <span class="node__dot" aria-hidden="true"></span>
+          <span class="node__body">
+            <span class="display node__title">{t.data.title}</span>
+            <span class="mono node__meta">
+              {fmtRange(t.data.dateStart, t.data.dateEnd)} · {t.data.stats.entries} entries
+            </span>
+          </span>
+        </a>
+      </li>
+    ))}
+  </ol>
+</Base>
+
+<style>
+  .head {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head h1 {
+    font-size: clamp(2.4rem, 6vw, 3.75rem);
+    margin: 0;
+  }
+  .head__note {
+    color: var(--color-stone);
+    margin: 0.6rem 0 0;
+    max-width: 52ch;
+  }
+
+  .spine {
+    position: relative;
+    list-style: none;
+    max-width: 52rem;
+    margin: clamp(2rem, 5vw, 3rem) auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+  }
+  /* The line itself. */
+  .spine::before {
+    content: '';
+    position: absolute;
+    left: calc(clamp(1rem, 4vw, 3rem) + 4.25rem);
+    top: 0.75rem;
+    bottom: 0.75rem;
+    width: 2px;
+    background: var(--color-rule);
+  }
+  .node__link {
+    display: grid;
+    grid-template-columns: 3.75rem 1rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0 0.75rem;
+    padding: 0.85rem 0;
+    text-decoration: none;
+  }
+  .node__year {
+    color: var(--color-stone);
+    text-align: right;
+  }
+  .node__dot {
+    position: relative;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--color-snow);
+    border: 2px solid var(--color-stone);
+    justify-self: center;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .node__link:hover .node__dot,
+  .node__link:focus-visible .node__dot {
+    background: var(--color-headlamp);
+    border-color: var(--color-headlamp);
+  }
+  .node__title {
+    display: block;
+    font-size: 1.2rem;
+    font-stretch: 110%;
+    line-height: 1.2;
+  }
+  .node__link:hover .node__title {
+    text-decoration: underline;
+    text-underline-offset: 0.16em;
+  }
+  .node__meta {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--color-stone);
+    font-size: 0.625rem;
+  }
+</style>

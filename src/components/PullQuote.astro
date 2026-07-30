@@ -1,0 +1,36 @@
+---
+/**
+ * A line lifted out of the prose. §7.3: once or twice per entry, never more —
+ * the effect dies instantly if it is used as decoration.
+ */
+const { attribution } = Astro.props as { attribution?: string };
+---
+
+<blockquote class="pull">
+  <p class="pull__text"><slot /></p>
+  {attribution && <cite class="pull__cite mono">{attribution}</cite>}
+</blockquote>
+
+<style>
+  .pull {
+    max-width: calc(var(--measure) + 4rem);
+    margin-block: 2.5rem;
+    padding-left: 1.25rem;
+    border-left: 3px solid var(--color-headlamp);
+  }
+  .pull__text {
+    margin: 0;
+    font-family: var(--font-display);
+    font-stretch: 105%;
+    font-weight: 500;
+    font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+    line-height: 1.28;
+    letter-spacing: -0.01em;
+  }
+  .pull__cite {
+    display: block;
+    margin-top: 0.7rem;
+    color: var(--color-stone);
+    font-style: normal;
+  }
+</style>

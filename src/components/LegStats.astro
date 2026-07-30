@@ -1,0 +1,90 @@
+---
+/**
+ * The leg stat block (§7.3, problem 4).
+ *
+ * On the old site this was a line of italic serif at the top of the post:
+ *   "Ali Camp to Khuispang, 6 miles (total 67 miles), 18.5k elevation @ GG La down to 15.1k"
+ * It is a database row, and it now renders as one.
+ */
+interface Props {
+  leg: {
+    from: string | null;
+    to: string | null;
+    distanceMi: number | null;
+    cumulativeMi: number | null;
+    elevationHighFt: number | null;
+    elevationLowFt: number | null;
+    sourceLine?: string;
+  };
+}
+const { leg } = Astro.props;
+
+const ft = (n: number) => n.toLocaleString('en-US');
+const cells: { label: string; value: string }[] = [];
+if (leg.distanceMi != null) cells.push({ label: 'Distance', value: `${leg.distanceMi} mi` });
+if (leg.cumulativeMi != null) cells.push({ label: 'Cumulative', value: `${leg.cumulativeMi} mi` });
+if (leg.elevationHighFt != null) cells.push({ label: 'High', value: `${ft(leg.elevationHighFt)} ft` });
+if (leg.elevationLowFt != null) cells.push({ label: 'Descends to', value: `${ft(leg.elevationLowFt)} ft` });
+const isRest = !leg.from && !leg.to;
+const routeLabel = isRest ? 'Rest day' : `From ${leg.from} to ${leg.to}`;
+---
+
+<aside class="leg" aria-label="Leg statistics">
+  <p class="leg__route mono">
+    <span class="sr-only">{routeLabel}</span>
+    <span aria-hidden="true">{isRest ? 'Rest day' : `${leg.from} → ${leg.to}`}</span>
+  </p>
+  {cells.length > 0 && (
+    <dl class="leg__grid">
+      {cells.map((c) => (
+        <div class="leg__cell">
+          <dt class="mono">{c.label}</dt>
+          <dd class="mono leg__value">{c.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )}
+</aside>
+
+<style>
+  .leg {
+    max-width: var(--measure);
+    margin-block: 1.75rem 2.25rem;
+    padding: 1rem 1.15rem 1.1rem;
+    background: var(--color-ink);
+    color: var(--color-snow);
+    border-left: 3px solid var(--color-headlamp);
+  }
+  .leg__route {
+    margin: 0 0 0.85rem;
+    color: var(--color-rime);
+    font-size: 0.875rem;
+    letter-spacing: 0.08em;
+  }
+  .leg__grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem 2.25rem;
+    margin: 0;
+  }
+  .leg__cell dt {
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+    margin-bottom: 0.2rem;
+  }
+  .leg__value {
+    margin: 0;
+    font-size: 1.0625rem;
+    letter-spacing: 0.02em;
+    color: var(--color-snow);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

@@ -1,0 +1,56 @@
+---
+/**
+ * Two photographs side by side, collapsing to stacked on narrow screens (§7.3).
+ * Takes the same shape as <Photo /> so batch import can emit either.
+ */
+interface Shot { src: string; alt?: string }
+interface Props {
+  shots: Shot[];
+  caption?: string;
+}
+const { shots, caption } = Astro.props;
+---
+
+<figure class="pair">
+  <div class="pair__grid">
+    {shots.slice(0, 2).map((s) => (
+      <img src={s.src} alt={s.alt ?? ''} loading="lazy" decoding="async" />
+    ))}
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .pair {
+    margin-block: 2rem;
+    width: min(100%, calc(var(--measure) + 12rem));
+    margin-inline: calc(-1 * min(6rem, 6vw));
+  }
+  .pair__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .pair__grid img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: var(--color-rule);
+  }
+  figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.9375rem;
+    font-style: italic;
+    color: var(--color-stone);
+  }
+  @media (max-width: 900px) {
+    .pair {
+      width: 100%;
+      margin-inline: 0;
+    }
+    .pair__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

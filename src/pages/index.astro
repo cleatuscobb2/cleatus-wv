@@ -1,0 +1,168 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { fmtRange, entriesForTrip, entrySlug } from '../lib/entries.ts';
+
+const trips = (await getCollection('trips')).sort((a, b) => +b.data.dateStart - +a.data.dateStart);
+const featured = trips.find((t) => t.data.featured) ?? trips[0];
+const rest = trips.filter((t) => t.id !== featured?.id).slice(0, 6);
+
+const featuredEntries = featured ? await entriesForTrip(featured.id) : [];
+const start = featured?.data.startHere
+  ? featuredEntries.find((e) => entrySlug(e) === featured.data.startHere)
+  : featuredEntries[0];
+
+const totalEntries = trips.reduce((n, t) => n + t.data.stats.entries, 0);
+---
+
+<Base
+  title="Cleatus and the West Virginian"
+  description={`Andy and Beth have been taking long, hard trips since 2009 — ${trips.length} of them, ${totalEntries} entries, from the Karakoram to Patagonia. Written mostly by Beth, mostly while exhausted.`}
+  ogImage={featured?.data.hero}
+>
+  <section class="lede">
+    <h1 class="display lede__title">
+      Long, hard trips<br />since 2009
+    </h1>
+    <p class="lede__body">
+      Andy and Beth met on a study-abroad trip to Bangalore and have been going
+      somewhere difficult ever since. {trips.length} trips, {totalEntries} entries,
+      written mostly by Beth — usually the same night, usually exhausted.
+    </p>
+    <p class="mono lede__links">
+      <a href="/trips/">All trips</a> · <a href="/archive/">Archive</a>
+    </p>
+  </section>
+
+  {featured && (
+    <section class="feat">
+      <a href={`/${featured.id}/`} class="feat__link">
+        {featured.data.hero && (
+          <img class="feat__img" src={featured.data.hero} alt="" loading="eager" fetchpriority="high" />
+        )}
+        <span class="feat__meta mono">
+          Most recent · {fmtRange(featured.data.dateStart, featured.data.dateEnd)}
+        </span>
+        <span class="display feat__title">{featured.data.title}</span>
+      </a>
+      <p class="feat__sum">{featured.data.summary}</p>
+      {start && (
+        <p><a href={`/${featured.id}/${entrySlug(start)}/`} class="feat__start">
+          <span class="mono">Start here</span> — {start.data.title}
+        </a></p>
+      )}
+    </section>
+  )}
+
+  <section class="more">
+    <h2 class="mono more__head">Further back</h2>
+    <ul>
+      {rest.map((t) => (
+        <li>
+          <a href={`/${t.id}/`}>
+            <span class="mono more__year">{t.data.year}</span>
+            <span class="more__title">{t.data.title}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+    <p><a href="/trips/" class="mono">All {trips.length} trips →</a></p>
+  </section>
+</Base>
+
+<style>
+  .lede {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 7vw, 5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .lede__title {
+    font-size: clamp(2.6rem, 8vw, 5rem);
+    margin: 0;
+  }
+  .lede__body {
+    max-width: 54ch;
+    margin: 1.5rem 0 0;
+    font-size: 1.1875rem;
+  }
+  .lede__links {
+    margin-top: 1.25rem;
+    color: var(--color-stone);
+  }
+
+  .feat {
+    max-width: 68rem;
+    margin: clamp(2.5rem, 6vw, 4rem) auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .feat__link {
+    display: block;
+    text-decoration: none;
+  }
+  .feat__img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+    background: var(--color-rule);
+  }
+  .feat__meta {
+    display: block;
+    color: var(--color-stone);
+    margin-top: 0.85rem;
+    font-size: 0.6875rem;
+  }
+  .feat__title {
+    display: block;
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    margin-top: 0.3rem;
+  }
+  .feat__link:hover .feat__title {
+    text-decoration: underline;
+    text-underline-offset: 0.14em;
+  }
+  .feat__sum {
+    max-width: 60ch;
+    margin: 0.9rem 0 0;
+    color: var(--color-stone);
+  }
+  .feat__start .mono {
+    color: var(--color-stone);
+  }
+
+  .more {
+    max-width: 68rem;
+    margin: clamp(2.5rem, 6vw, 4rem) auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .more__head {
+    color: var(--color-stone);
+    margin: 0 0 0.75rem;
+  }
+  .more ul {
+    list-style: none;
+    margin: 0 0 1.25rem;
+    padding: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .more li {
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .more li a {
+    display: flex;
+    gap: 1.25rem;
+    align-items: baseline;
+    padding: 0.75rem 0;
+    text-decoration: none;
+  }
+  .more li a:hover .more__title {
+    text-decoration: underline;
+  }
+  .more__year {
+    color: var(--color-stone);
+    flex: 0 0 3.5rem;
+  }
+  .more__title {
+    font-size: 1.0625rem;
+  }
+</style>

@@ -1,0 +1,268 @@
+---
+/**
+ * §7.3 — the entry page. The reading surface.
+ */
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import RouteLine from '../../components/RouteLine.astro';
+import LegStats from '../../components/LegStats.astro';
+import Photo from '../../components/Photo.astro';
+import PhotoPair from '../../components/PhotoPair.astro';
+import PhotoStrip from '../../components/PhotoStrip.astro';
+import Aside from '../../components/Aside.astro';
+import PullQuote from '../../components/PullQuote.astro';
+import {
+  chronological, tripIdOf, entrySlug, routeNodes, fmtDate,
+  AUTHOR_NAMES, excerpt,
+} from '../../lib/entries.ts';
+
+export async function getStaticPaths() {
+  const all = await getCollection('entries', ({ data }) => !data.draft);
+  const trips = await getCollection('trips');
+  const byTrip = new Map<string, typeof all>();
+  for (const e of all) {
+    const t = tripIdOf(e);
+    byTrip.set(t, [...(byTrip.get(t) ?? []), e]);
+  }
+
+  return all.map((entry) => {
+    const tripId = tripIdOf(entry);
+    const siblings = chronological(byTrip.get(tripId) ?? []);
+    const i = siblings.findIndex((s) => s.id === entry.id);
+    return {
+      params: { trip: tripId, entry: entrySlug(entry) },
+      props: {
+        entry,
+        trip: trips.find((t) => t.id === tripId),
+        siblings,
+        prev: i > 0 ? siblings[i - 1] : null,
+        next: i < siblings.length - 1 ? siblings[i + 1] : null,
+      },
+    };
+  });
+}
+
+const { entry, trip, siblings, prev, next } = Astro.props;
+const d = entry.data;
+const { Content } = await render(entry);
+
+const nodes = routeNodes(siblings);
+const me = entrySlug(entry);
+const position = siblings.findIndex((s) => s.id === entry.id) + 1;
+const description = excerpt(entry.body, 155);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: d.title,
+  datePublished: d.date.toISOString(),
+  author: d.authors.map((a) => ({ '@type': 'Person', name: AUTHOR_NAMES[a] })),
+  isPartOf: trip ? { '@type': 'CreativeWorkSeries', name: trip.data.title } : undefined,
+};
+
+const heroPhoto = entry.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? trip?.data.hero ?? null;
+---
+
+<Base title={d.title} description={description} ogImage={heroPhoto} jsonLd={jsonLd}>
+  <!-- Mobile: the rail collapses to a progress bar. -->
+  <div class="progress" aria-hidden="true">
+    <span style={`width: ${(position / Math.max(1, siblings.length)) * 100}%`}></span>
+  </div>
+
+  <div class="wrap">
+    <aside class="rail" aria-label="Position in this trip">
+      {nodes.length > 1 && trip && (
+        <RouteLine nodes={nodes} tripSlug={trip.id} current={me} orientation="vertical" />
+      )}
+    </aside>
+
+    <article class="entry">
+      <nav class="crumb mono" aria-label="Breadcrumb">
+        <a href={`/${trip?.id}/`}>{trip?.data.shortTitle ?? trip?.data.title}</a>
+        <span aria-hidden="true"> › </span>
+        <span>{position} of {siblings.length}</span>
+      </nav>
+
+      <h1 class="display entry__title">{d.title}</h1>
+
+      <p class={`byline byline--${d.authors[0] ?? 'beth'}`}>
+        <span class="mono byline__who">{d.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}</span>
+        <span class="mono byline__when">{fmtDate(d.date)}</span>
+        {d.bethCried && (
+          <a href="/beth-cried-here/" class="mono byline__cried">Beth cried here</a>
+        )}
+      </p>
+
+      {d.leg && <LegStats leg={d.leg} />}
+
+      <div class="prose-entry">
+        <Content components={{ Photo, PhotoPair, PhotoStrip, Aside, PullQuote }} />
+      </div>
+
+      {d.tags.length > 0 && (
+        <ul class="tags">
+          {d.tags.map((t) => (
+            <li><a href={`/tags/${t}/`} class="mono">{t}</a></li>
+          ))}
+        </ul>
+      )}
+
+      <nav class="pager" aria-label="Entries">
+        {prev ? (
+          <a href={`/${tripIdOf(prev)}/${entrySlug(prev)}/`} class="pager__link">
+            <span class="mono">‹ Previous</span>
+            <span class="pager__title">{prev.data.title}</span>
+          </a>
+        ) : <span />}
+        {next ? (
+          <a href={`/${tripIdOf(next)}/${entrySlug(next)}/`} class="pager__link pager__link--next">
+            <span class="mono">Next ›</span>
+            <span class="pager__title">{next.data.title}</span>
+          </a>
+        ) : <span />}
+      </nav>
+    </article>
+  </div>
+</Base>
+
+<style>
+  .progress {
+    display: none;
+    height: 3px;
+    background: var(--color-rule);
+  }
+  .progress span {
+    display: block;
+    height: 100%;
+    background: var(--color-headlamp);
+  }
+
+  .wrap {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr);
+    gap: clamp(1rem, 4vw, 3rem);
+    max-width: 74rem;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+
+  .rail {
+    position: sticky;
+    top: 1.5rem;
+    align-self: start;
+    height: min(72vh, 720px);
+    display: flex;
+    justify-content: center;
+  }
+
+  .entry {
+    min-width: 0;
+  }
+
+  .crumb {
+    color: var(--color-stone);
+  }
+  .crumb a {
+    color: var(--color-stone);
+    text-decoration: none;
+  }
+  .crumb a:hover {
+    color: var(--color-ink);
+  }
+
+  .entry__title {
+    font-size: clamp(1.9rem, 4.2vw, 2.85rem);
+    margin: 0.6rem 0 0.9rem;
+    max-width: 22ch;
+  }
+
+  /* §7.3 — Beth and Andy are marked differently. Beth's is the house voice. */
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin: 0 0 1.75rem;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--color-stone);
+  }
+  .byline--beth {
+    border-left-color: var(--color-rime);
+  }
+  .byline--andy {
+    border-left-color: var(--color-headlamp);
+  }
+  .byline__who {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .byline__when {
+    color: var(--color-stone);
+  }
+  .byline__cried {
+    color: var(--color-stone);
+    text-decoration-style: dotted;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 2.5rem 0 0;
+    padding: 0;
+    max-width: var(--measure);
+  }
+  .tags a {
+    display: inline-block;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--color-rule);
+    text-decoration: none;
+    color: var(--color-stone);
+  }
+  .tags a:hover {
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-rule);
+    max-width: calc(var(--measure) + 4rem);
+  }
+  .pager__link {
+    text-decoration: none;
+  }
+  .pager__link--next {
+    text-align: right;
+  }
+  .pager__link .mono {
+    color: var(--color-stone);
+    display: block;
+  }
+  .pager__title {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 1.0625rem;
+    line-height: 1.3;
+  }
+  .pager__link:hover .pager__title {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 900px) {
+    .progress {
+      display: block;
+    }
+    .wrap {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .rail {
+      display: none;
+    }
+  }
+</style>

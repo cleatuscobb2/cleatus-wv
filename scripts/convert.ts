@@ -152,8 +152,11 @@ for (const trip of report) {
         note('IMAGE UNRESOLVED', `${trip.trip}/${p.slug}`, `no archived file for ${img.src.slice(0, 90)}`);
         continue;
       }
+      // assets/photos is linked to public/photos at build time, so the served
+      // path drops the assets/ prefix.
+      const served = rec.local.replace(/^assets\/photos\//, '/photos/');
       const alt = img.alt ? ` alt=${yaml(img.alt)}` : '';
-      photoBlocks.push(`<Photo src="/${rec.local}"${alt} />`);
+      photoBlocks.push(`<Photo src="${served}"${alt} />`);
     }
 
     const tripRef = trip.trip === CANONICAL_2015 ? CANONICAL_2015 : trip.trip;

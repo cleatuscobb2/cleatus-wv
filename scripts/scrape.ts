@@ -131,11 +131,40 @@ const liveUrl = (trip: string, it: SqsItem) =>
 
 const CDN_RE = /https:\/\/images\.squarespace-cdn\.com\/content\/[^"'\s\\?)]+/g;
 
-function imageUrls(it: SqsItem): string[] {
-  const out = new Set<string>();
-  for (const u of (it.body ?? '').match(CDN_RE) ?? []) out.add(u);
-  for (const sub of it.items ?? []) if (sub.assetUrl) out.add(sub.assetUrl.split('?')[0]);
-  return [...out];
+/**
+ * Everything before 2018 was written on Blogger and the posts still point at
+ * Google's image host. Those files outlive Squarespace, but they are embedded at
+ * whatever thumbnail size the 2009-era editor inserted — often /s320/.
+ */
+const BLOGGER_IMG_RE =
+  /<img\b[^>]*\bsrc="(https:\/\/(?:blogger\.googleusercontent\.com|\d\.bp\.blogspot\.com)\/[^"]+)"/gi;
+
+/**
+ * Blogger's path segment `/sNNN/` is a resize directive. `/s0/` returns the
+ * largest stored copy — verified to jump a 320x240 embed to 1600x1200, with EXIF
+ * intact. Anything without a size token is fetched as-is.
+ */
+function maxResUrl(u: string): string {
+  if (!/blogger\.googleusercontent\.com|bp\.blogspot\.com/.test(u)) return u;
+  return u.replace(/\/(s\d+(?:-[a-z])?|w\d+-h\d+[^/]*)\//, '/s0/');
+}
+
+interface ImageRef { src: string; fetch: string }
+
+function imageUrls(it: SqsItem): ImageRef[] {
+  const out = new Map<string, ImageRef>();
+  const body = it.body ?? '';
+  for (const u of body.match(CDN_RE) ?? []) out.set(u, { src: u, fetch: u });
+  for (const m of body.matchAll(BLOGGER_IMG_RE)) {
+    const src = m[1];
+    if (!out.has(src)) out.set(src, { src, fetch: maxResUrl(src) });
+  }
+  for (const sub of it.items ?? []) {
+    if (!sub.assetUrl) continue;
+    const u = sub.assetUrl.split('?')[0];
+    if (!out.has(u)) out.set(u, { src: u, fetch: u });
+  }
+  return [...out.values()];
 }
 
 /** Read intrinsic dimensions and container format from the file header. */
@@ -176,6 +205,8 @@ const hasExif = (buf: Buffer) =>
 
 interface PhotoRecord {
   cdnUrl: string;
+  fetchedUrl: string;
+  host: 'squarespace' | 'blogger';
   local: string;
   trip: string;
   postSlug: string;
@@ -199,9 +230,11 @@ async function save(rel: string, data: string | Buffer) {
 }
 
 async function downloadImage(
-  cdnUrl: string, trip: string, postSlug: string, order: number,
+  ref: ImageRef, trip: string, postSlug: string, order: number,
   declared: Map<string, [number, number]>,
 ): Promise<void> {
+  const { src: cdnUrl, fetch: fetchUrl } = ref;
+  const isBlogger = fetchUrl !== cdnUrl || /blogger|blogspot/.test(cdnUrl);
   const name = decodeURIComponent(cdnUrl.split('/').pop() ?? 'image.jpg')
     .replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80);
   const rel = join('assets', 'photos', trip, postSlug, `${String(order).padStart(2, '0')}-${name}`)
@@ -216,9 +249,10 @@ async function downloadImage(
     if (dimensions(existing)?.fmt === 'jpeg' || dimensions(existing)?.fmt === 'png') buf = existing;
   }
   if (!buf) {
-    // The bare URL is the largest the CDN will serve. Verified: ?format=original
+    // Squarespace: the bare URL is the largest it will serve — ?format=original
     // and ?format=4000w return the identical 2500px-capped file.
-    const res = await req(cdnUrl, 5, IMAGE_ACCEPT);
+    // Blogger: fetchUrl has already been rewritten to /s0/ for the full copy.
+    const res = await req(fetchUrl, 5, IMAGE_ACCEPT);
     buf = Buffer.from(await res.arrayBuffer());
     await save(rel, buf);
     await sleep(120);
@@ -226,7 +260,8 @@ async function downloadImage(
 
   const dim = dimensions(buf);
   manifest.push({
-    cdnUrl, local: rel, trip, postSlug, order,
+    cdnUrl, fetchedUrl: fetchUrl, host: isBlogger ? 'blogger' : 'squarespace',
+    local: rel, trip, postSlug, order,
     bytes: buf.length,
     format: dim?.fmt ?? null,
     width: dim?.w ?? null, height: dim?.h ?? null,
@@ -278,11 +313,11 @@ for (const trip of TRIPS as TripSource[]) {
     const urls = imageUrls(it);
     imgCount += urls.length;
     if (!SKIP_IMAGES) {
-      for (const [i, u] of urls.entries()) {
+      for (const [i, ref] of urls.entries()) {
         try {
-          await downloadImage(u, trip.slug, slug, i + 1, declared);
+          await downloadImage(ref, trip.slug, slug, i + 1, declared);
         } catch (e) {
-          notes.push(`IMAGE FAILED  ${trip.slug}/${slug}  ${u} — ${(e as Error).message}`);
+          notes.push(`IMAGE FAILED  ${trip.slug}/${slug}  ${ref.src} — ${(e as Error).message}`);
         }
       }
     }
@@ -300,7 +335,7 @@ for (const trip of TRIPS as TripSource[]) {
       categories: it.categories ?? [],
       excerpt: it.excerpt ?? null,
       bodyChars: (it.body ?? '').length,
-      images: urls,
+      images: urls.map((u) => u.src),
     };
     await save(`raw/${trip.slug}/${slug}.meta.json`, JSON.stringify(meta, null, 2));
     posts.push(meta);
@@ -360,10 +395,16 @@ const downsized = manifest.filter(
 ).length;
 const fmts = manifest.reduce<Record<string, number>>(
   (a, m) => ((a[m.format ?? 'unknown'] = (a[m.format ?? 'unknown'] ?? 0) + 1), a), {});
+const byHost = manifest.reduce<Record<string, number>>(
+  (a, m) => ((a[m.host] = (a[m.host] ?? 0) + 1), a), {});
+const exifByHost = manifest.filter((m) => m.exif)
+  .reduce<Record<string, number>>((a, m) => ((a[m.host] = (a[m.host] ?? 0) + 1), a), {});
 
 console.log(`\nposts archived : ${totals.posts}`);
 console.log(`image slots    : ${totals.imgs}  (unique files written: ${manifest.length})`);
+console.log(`by host        : ${Object.entries(byHost).map(([k, v]) => `${k}=${v}`).join(' ')}`);
 console.log(`formats        : ${Object.entries(fmts).map(([k, v]) => `${k}=${v}`).join(' ')}`);
+console.log(`EXIF retained  : ${Object.entries(exifByHost).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'}`);
 console.log(`EXIF stripped  : ${stripped}/${manifest.length}`);
 console.log(`downsized byCDN: ${downsized}/${manifest.length}`);
 console.log(`notes          : ${notes.length}  -> raw/scrape-notes.md`);

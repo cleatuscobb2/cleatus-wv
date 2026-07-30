@@ -158,59 +158,44 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
        by padding-top and no text ever met the banner. */
     margin: clamp(-11rem, -11vw, -3rem) auto 0;
     padding: clamp(1.75rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2rem);
-    isolation: isolate;
   }
   /*
-   * A glow, not a box. The words sit straight on the banner and carry their own
-   * light: a white bloom that is effectively opaque where the text is and fades
-   * to nothing before it reaches an edge, so nothing rectangular cuts across
-   * the artwork.
+   * The glow follows the letters, not a block.
+   *
+   * There is no backing plate at all now — no gradient, no box. Legibility comes
+   * entirely from a halo built into the glyphs: the radii are stacked tightly so
+   * the first few build to near-solid white within two or three pixels of every
+   * stroke, then taper. The result hugs the shapes of the words instead of
+   * describing an invisible rectangle over the artwork.
    */
-  .lede::before {
-    content: '';
-    position: absolute;
-    /* Vertical overhang only. Bleeding sideways pushed the document wider than
-       the viewport on phones; the gradient already fades out well inside its
-       own box, so it needs no horizontal overhang to look unbounded. */
-    inset: -14% 0;
-    z-index: -1;
-    pointer-events: none;
-    /*
-     * The plateau is deliberately wide. Automated tooling cannot check contrast
-     * for text over an image, so the glow has to guarantee it: alpha stays above
-     * ~0.96 across the whole area the words occupy, which composites to near
-     * white over even the darkest panel of the mosaic — around 18:1 against the
-     * ink. It only falls away outside the text, where nothing needs to be read.
-     */
-    background: radial-gradient(
-      78% 74% at 50% 42%,
-      rgb(255 255 255 / 0.99) 0%,
-      rgb(255 255 255 / 0.97) 58%,
-      rgb(255 255 255 / 0.72) 80%,
-      rgb(255 255 255 / 0) 100%
-    );
-    filter: blur(16px);
-  }
-  /* The glyphs carry a halo of their own, so thin strokes and descenders stay
-     solid over whichever panel of the mosaic happens to fall behind them. */
   .lede__title {
     font-size: clamp(1.9rem, 5vw, 3.5rem);
     margin: 0;
+    text-align: center;
     text-wrap: balance;
-    text-shadow: 0 0 26px #fff, 0 0 14px #fff, 0 0 5px #fff;
+    text-shadow:
+      0 0 1px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 4px #fff,
+      0 0 6px #fff, 0 0 9px #fff, 0 0 14px #fff, 0 0 22px #fff;
   }
   .lede__body {
-    max-width: 54ch;
+    /* Full width of the tagline — no reading measure here. This is a two-line
+       standfirst under a centred title, not running prose; the 68ch rule is for
+       entry pages, where it matters. */
+    max-width: none;
     margin: 1.5rem 0 0;
     font-size: 1.1875rem;
-    text-shadow: 0 0 18px #fff, 0 0 9px #fff, 0 0 4px #fff;
+    text-shadow:
+      0 0 1px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 5px #fff,
+      0 0 8px #fff, 0 0 13px #fff;
   }
   .lede__links {
     margin-top: 1.25rem;
     /* Stone is a mid grey and loses too much against the artwork; the intro's
        own links go full ink now that there is no panel to sit them on. */
     color: var(--color-ink);
-    text-shadow: 0 0 18px #fff, 0 0 9px #fff, 0 0 4px #fff;
+    text-shadow:
+      0 0 1px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 5px #fff,
+      0 0 8px #fff, 0 0 13px #fff;
   }
 
   .feat {

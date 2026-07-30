@@ -1,0 +1,12 @@
+# The archive is evidence. Git must not rewrite a byte of it — no line-ending
+# normalization, no diffing, no merge attempts.
+raw/**            -text -diff
+assets/photos/**  binary
+
+# Everything else is ordinary source.
+*.ts    text eol=lf
+*.astro text eol=lf
+*.mdx   text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf

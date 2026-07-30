@@ -75,11 +75,13 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
   </div>
 
   <div class="wrap">
-    <aside class="rail" aria-label="Position in this trip">
+    {/* A plain div: RouteLine is itself a labelled <nav>, so wrapping it in a
+        complementary landmark would announce the same thing twice. */}
+    <div class="rail">
       {nodes.length > 1 && trip && (
         <RouteLine nodes={nodes} tripSlug={trip.id} current={me} orientation="vertical" />
       )}
-    </aside>
+    </div>
 
     <!--
       Pagefind indexes what is inside data-pagefind-body and nothing else, so the
@@ -201,11 +203,13 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
     padding-left: 0.75rem;
     border-left: 3px solid var(--color-stone);
   }
+  /* Light-surface forms: --rime and --headlamp are both under 1.5:1 on --snow,
+     so the bar that distinguishes the two voices was all but invisible. */
   .byline--beth {
-    border-left-color: var(--color-rime);
+    border-left-color: var(--color-rime-on-light);
   }
   .byline--andy {
-    border-left-color: var(--color-headlamp);
+    border-left-color: var(--color-ember);
   }
   .byline__who {
     color: var(--color-ink);

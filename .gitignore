@@ -26,3 +26,6 @@ content/inbox/promoted
 
 # Generated share cards, rebuilt by `npm run og` during the build.
 public/og
+
+# Copied in on demand by `npm run a11y:prep` for local axe audits; never shipped.
+public/_axe.js

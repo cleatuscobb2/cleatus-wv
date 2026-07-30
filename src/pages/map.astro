@@ -90,7 +90,10 @@ const visitedCount = drawn.size + points.length;
   </header>
 
   <figure class="mapwrap">
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`World map with ${visitedCount} countries marked`}>
+    {/* Labelled <nav>, not role="img": the countries are links, and declaring the
+        whole map a single graphic conflicts with that (axe: nested-interactive). */}
+    <nav aria-label={`World map with ${visitedCount} countries marked, each linking to its entries`}>
+    <svg viewBox={`0 0 ${W} ${H}`} focusable="false">
       <path d={sphere} class="m-sphere" />
       <path d={graticule} class="m-grat" />
       {shapes.map((s) => (
@@ -118,6 +121,7 @@ const visitedCount = drawn.size + points.length;
         </a>
       ))}
     </svg>
+    </nav>
     <figcaption class="mono">
       Country level, not route level — there is no GPS in the archive to plot.
       {points.length > 0 && ` ${points.map((p) => p.name).join(' and ')} marked as points; too small to draw at this scale.`}
@@ -220,5 +224,5 @@ const visitedCount = drawn.size + points.length;
     color: var(--color-stone);
   }
   .legend a:hover { border-color: var(--color-ink); color: var(--color-ink); }
-  .legend__n { color: var(--color-headlamp); }
+  .legend__n { color: var(--color-ember); }
 </style>

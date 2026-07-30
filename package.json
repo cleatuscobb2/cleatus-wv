@@ -18,6 +18,8 @@
     "gen:trips": "node --experimental-strip-types scripts/gen-trips.ts",
     "verify": "node --experimental-strip-types scripts/verify-phase0.ts",
     "fonts": "node --experimental-strip-types scripts/copy-fonts.ts",
+    "a11y:prep": "node -e \"require('fs').copyFileSync('node_modules/axe-core/axe.min.js','public/_axe.js')\"",
+    "lighthouse": "lighthouse http://localhost:4330/k2pakistanseasia2024/day-9-gondogoro-la-gg-la/ --view --only-categories=performance,accessibility,best-practices,seo",
     "new:entry": "node --experimental-strip-types scripts/new-entry.ts",
     "inbox": "node --experimental-strip-types scripts/promote-inbox.ts",
     "import:photos": "node --experimental-strip-types scripts/import-photos.ts"
@@ -35,7 +37,9 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "axe-core": "^4.12.1",
     "d3-geo": "^3.1.1",
+    "lighthouse": "^13.4.1",
     "pagefind": "^1.5.2",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"

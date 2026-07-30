@@ -23,6 +23,19 @@
    */
   --color-stone-on-dark: #7b8592;
 
+  /*
+   * The beam is a light source: --headlamp reads at 11.29:1 against --ink but
+   * collapses to 1.41:1 on --snow, so it must never carry text on pale ground.
+   * This is the same hue burnt down until it passes there — 4.81:1 on --snow,
+   * 5.22:1 on --paper. Not a third accent; the same warm accent, banked.
+   *
+   * Rule: --headlamp on dark surfaces, --ember on light ones.
+   */
+  --color-ember: #8f6000;
+
+  /* Same problem, cold side: --rime is 1.43:1 on --snow. This is 5.17:1. */
+  --color-rime-on-light: #186e7f;
+
   --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
   --font-body: 'Source Serif 4', ui-serif, Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;

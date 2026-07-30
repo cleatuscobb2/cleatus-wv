@@ -77,14 +77,23 @@ const fmtEl = (ft: number) => `${(ft / 1000).toFixed(1)}k`;
 const uid = `rl-${tripSlug}-${orientation}`;
 ---
 
-<div class={`route-line ${klass}`} data-orientation={orientation}>
+{/*
+  This is navigation drawn as a line, not a picture. It previously carried
+  role="img" on the <svg>, which declares "one indivisible graphic" and so
+  conflicted with the day links inside it (axe: nested-interactive, serious).
+  The label now sits on a <nav> wrapper and the links stay ordinary links.
+*/}
+<nav
+  class={`route-line ${klass}`}
+  data-orientation={orientation}
+  aria-label={hasElevation
+    ? `Elevation profile: ${sorted.length} entries from ${fmtEl(eMin)} to ${fmtEl(eMax)} feet`
+    : `Timeline of ${sorted.length} entries`}
+>
   <svg
     viewBox={`0 0 ${orientation === 'horizontal' ? W : W} ${H}`}
     preserveAspectRatio={orientation === 'horizontal' ? 'none' : 'xMidYMid meet'}
-    role="img"
-    aria-label={hasElevation
-      ? `Elevation profile: ${sorted.length} entries from ${fmtEl(eMin)} to ${fmtEl(eMax)} feet`
-      : `Timeline of ${sorted.length} entries`}
+    focusable="false"
   >
     <!-- pathLength="1" normalises the dash maths so the draw animation takes the
          full duration whatever the real path length turns out to be. -->
@@ -105,7 +114,7 @@ const uid = `rl-${tripSlug}-${orientation}`;
       );
     })}
   </svg>
-</div>
+</nav>
 
 <style>
   .route-line {

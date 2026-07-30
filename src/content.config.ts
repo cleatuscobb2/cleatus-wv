@@ -60,6 +60,26 @@ const entries = defineCollection({
         sourceLine: z.string().optional(),
       })
       .optional(),
+    /**
+     * A spoken reading of this entry. Optional throughout: an entry without one
+     * simply shows no player, so the archive can fill in gradually rather than
+     * looking broken while it does.
+     *
+     * `src` is deliberately a plain string, not an asset import, so the same
+     * field works whether the file sits in public/, on R2, or anywhere else —
+     * the hosting decision stays open.
+     */
+    audio: z
+      .object({
+        src: z.string(),
+        durationSec: z.number().optional(),
+        bytes: z.number().optional(),
+        type: z.string().default('audio/mpeg'),
+        /** Who is speaking. `synthetic` is marked as such on the page. */
+        voice: z.enum(['andy', 'beth', 'synthetic']).default('synthetic'),
+        recordedAt: z.date().optional(),
+      })
+      .optional(),
     tags: z.array(tag).default([]),
     people: z.array(reference('people')).default([]),
     bethCried: z.boolean().default(false),

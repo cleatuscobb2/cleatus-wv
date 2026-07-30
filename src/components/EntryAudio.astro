@@ -1,0 +1,122 @@
+---
+/**
+ * A spoken reading of an entry, offered quietly.
+ *
+ * Discreet by construction: collapsed to a single mono line under the byline,
+ * opening to the browser's own audio controls. A <details> element does the
+ * whole job — no JavaScript, keyboard-operable for free, and it degrades to a
+ * plain expanded player in anything that does not support it.
+ *
+ * Renders nothing at all when an entry has no reading, so the archive can fill
+ * in one recording at a time without every other page looking unfinished.
+ */
+interface Props {
+  audio?: {
+    src: string;
+    durationSec?: number;
+    bytes?: number;
+    type: string;
+    voice: 'andy' | 'beth' | 'synthetic';
+    recordedAt?: Date;
+  };
+  title: string;
+}
+const { audio, title } = Astro.props;
+
+const clock = (s?: number) => {
+  if (!s || !Number.isFinite(s)) return null;
+  const m = Math.floor(s / 60);
+  const r = Math.round(s % 60);
+  return `${m}:${String(r).padStart(2, '0')}`;
+};
+
+const length = clock(audio?.durationSec);
+const readerName = { andy: 'Andy', beth: 'Beth', synthetic: 'Read aloud' } as const;
+const reader = audio ? readerName[audio.voice] : null;
+const label = audio?.voice === 'synthetic' ? 'Listen' : `Listen — read by ${reader}`;
+
+/*
+ * The visible label is three separate boxes ("▶", "Listen", "3:18"), which a
+ * screen reader concatenates into "Listen3:18". Spell the duration out instead.
+ */
+const spoken = (() => {
+  if (!audio?.durationSec) return label;
+  const m = Math.floor(audio.durationSec / 60);
+  const s = Math.round(audio.durationSec % 60);
+  const mm = m ? `${m} minute${m === 1 ? '' : 's'}` : '';
+  const ss = s ? `${s} second${s === 1 ? '' : 's'}` : '';
+  return `${label}, ${[mm, ss].filter(Boolean).join(' ')}`;
+})();
+---
+
+{audio && (
+  <details class="reading">
+    <summary class="mono reading__toggle" aria-label={spoken}>
+      <span class="reading__icon" aria-hidden="true">▶</span>
+      <span>{label}</span>
+      {length && <span class="reading__len">{length}</span>}
+    </summary>
+    <div class="reading__body">
+      <audio
+        controls
+        preload="none"
+        src={audio.src}
+        aria-label={`Spoken reading of ${title}`}
+      >
+        {/* Fallback for anything that cannot play the file at all. */}
+        <a href={audio.src} download>Download the audio</a>
+      </audio>
+      {audio.voice === 'synthetic' && (
+        <p class="mono reading__note">Synthetic narration, not their voices.</p>
+      )}
+    </div>
+  </details>
+)}
+
+<style>
+  .reading {
+    max-width: var(--measure);
+    margin: -0.5rem 0 1.75rem;
+  }
+  .reading__toggle {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    cursor: pointer;
+    color: var(--color-stone);
+    font-size: 0.6875rem;
+    list-style: none;
+    padding: 0.2rem 0;
+    transition: color 150ms ease;
+  }
+  /* Suppress the default disclosure triangle; the ▶ is doing that job. */
+  .reading__toggle::-webkit-details-marker { display: none; }
+  .reading__toggle::marker { content: ''; }
+
+  .reading__toggle:hover { color: var(--color-ink); }
+  .reading__icon {
+    font-size: 0.5625rem;
+    color: var(--color-ember);
+    transition: transform 150ms ease;
+    display: inline-block;
+  }
+  .reading[open] .reading__icon { transform: rotate(90deg); }
+  .reading__len {
+    color: var(--color-stone);
+    font-variant-numeric: tabular-nums;
+  }
+  .reading[open] .reading__toggle { color: var(--color-ink); }
+
+  .reading__body { padding-top: 0.6rem; }
+  .reading__body audio {
+    width: 100%;
+    max-width: 32rem;
+    height: 2.25rem;
+    display: block;
+  }
+  .reading__note {
+    margin: 0.4rem 0 0;
+    color: var(--color-stone);
+    font-size: 0.5625rem;
+  }
+</style>

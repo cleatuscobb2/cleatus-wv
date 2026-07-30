@@ -29,3 +29,7 @@ public/og
 
 # Copied in on demand by `npm run a11y:prep` for local axe audits; never shipped.
 public/_axe.js
+
+# Generated readings. Regenerate with `npm run audio`; masters belong on R2,
+# not in git - 19.7 hours of narration is 550 MB as mp3.
+public/audio

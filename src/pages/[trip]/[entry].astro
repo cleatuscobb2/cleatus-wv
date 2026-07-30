@@ -6,6 +6,7 @@ import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import RouteLine from '../../components/RouteLine.astro';
 import LegStats from '../../components/LegStats.astro';
+import EntryAudio from '../../components/EntryAudio.astro';
 import Photo from '../../components/Photo.astro';
 import PhotoPair from '../../components/PhotoPair.astro';
 import PhotoStrip from '../../components/PhotoStrip.astro';
@@ -109,6 +110,8 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
           <a href="/beth-cried-here/" class="mono byline__cried">Beth cried here</a>
         )}
       </p>
+
+      <EntryAudio audio={d.audio} title={d.title} />
 
       {d.leg && <LegStats leg={d.leg} />}
 

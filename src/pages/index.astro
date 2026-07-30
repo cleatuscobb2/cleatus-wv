@@ -1,6 +1,8 @@
 ---
 import { getCollection } from 'astro:content';
+import { Picture, getImage } from 'astro:assets';
 import Base from '../layouts/Base.astro';
+import mosaic from '../assets/home-mosaic.png';
 import { fmtRange, entriesForTrip, entrySlug } from '../lib/entries.ts';
 
 const trips = (await getCollection('trips')).sort((a, b) => +b.data.dateStart - +a.data.dateStart);
@@ -13,13 +15,46 @@ const start = featured?.data.startHere
   : featuredEntries[0];
 
 const totalEntries = trips.reduce((n, t) => n + t.data.stats.entries, 0);
+
+/*
+ * §7.8 — the mosaic makes a far better share card than the generated one: it is
+ * the whole enterprise in a single picture. Rendered once at OG size here so the
+ * meta tag points at an optimised file rather than the 9.9 MB original.
+ */
+const ogMosaic = await getImage({ src: mosaic, width: 1200, height: 670, format: 'jpeg', quality: 82 });
 ---
 
 <Base
   title="Cleatus and the West Virginian"
   description={`Andy and Beth have been taking long, hard trips since 2009 — ${trips.length} of them, ${totalEntries} entries, from the Karakoram to Patagonia. Written mostly by Beth, mostly while exhausted.`}
-  ogImage="/og/site.png"
+  ogImage={ogMosaic.src}
 >
+  {/*
+    The mosaic opens the site. Deliberately not a full-viewport hero with the
+    title floated over it (§6.4) — it sits in its own dark band, complete and
+    uncropped, with the words below it. It is a panelled illustration; cropping
+    it to fit a viewport would cut panels off, which is the one thing it cannot
+    survive.
+  */}
+  <div class="mosaic">
+    <Picture
+      src={mosaic}
+      formats={['webp']}
+      fallbackFormat="jpeg"
+      quality={72}
+      widths={[640, 960, 1280, 1600, 2048]}
+      sizes="(max-width: 78rem) 100vw, 78rem"
+      {/* AVIF is deliberately absent: measured on this image it runs ~15% larger
+          than WebP at every size (910 KB vs 779 KB at 2048w), and <picture>
+          serves the first supported source, so offering it would hand the
+          heavier file to the browsers best able to avoid it. */}
+      loading="eager"
+      fetchpriority="high"
+      decoding="sync"
+      alt="An illustrated mosaic of Andy and Beth across fifteen years of trips: hiking a forest trail with packs, scuba diving over a reef, snowboarding, ice climbing roped together, on safari beside a lion, driving a speedboat, dressed up over dinner and champagne, reading a map in front of a city skyline, and mountain biking past a sign reading Biking Death Road."
+    />
+  </div>
+
   <section class="lede">
     <h1 class="display lede__title">
       Long, hard trips<br />since 2009
@@ -71,10 +106,26 @@ const totalEntries = trips.reduce((n, t) => n + t.data.stats.entries, 0);
 </Base>
 
 <style>
+  /* The mosaic's own stone-tile border is its frame; the dark band gives that
+     frame somewhere to sit rather than butting it against the page edge. */
+  .mosaic {
+    background: var(--color-ink);
+    padding: clamp(0.75rem, 2.5vw, 2rem) clamp(0.5rem, 2vw, 2rem);
+  }
+  .mosaic :global(picture),
+  .mosaic :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 78rem;
+    margin-inline: auto;
+  }
+
   .lede {
     max-width: 68rem;
     margin: 0 auto;
-    padding: clamp(2.5rem, 7vw, 5rem) clamp(1rem, 4vw, 3rem) 0;
+    /* Tighter above, because the mosaic already opened the page. */
+    padding: clamp(1.75rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
   }
   .lede__title {
     font-size: clamp(2.6rem, 8vw, 5rem);

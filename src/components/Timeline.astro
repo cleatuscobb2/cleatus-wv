@@ -18,6 +18,8 @@ interface Trip {
   dateStart: Date;
   dateEnd: Date;
   entries: number;
+  /** ISO alpha-2 codes, so the map can draw leader lines to them on hover. */
+  countries?: string[];
 }
 interface Props {
   trips: Trip[];
@@ -90,6 +92,9 @@ const fmt = (d: Date) =>
         class="tl__bar"
         href={`/${b.id}/`}
         style={`left:${b.left}%; width:${b.width}%; --row:${b.row}`}
+        data-countries={(b.countries ?? []).join(',')}
+        data-title={b.shortTitle}
+        data-when={`${fmt(b.dateStart)} – ${fmt(b.dateEnd)}`}
       >
         <span class="tl__label mono">{b.shortTitle}</span>
         <span class="sr-only">
@@ -156,11 +161,19 @@ const fmt = (d: Date) =>
     box-sizing: border-box;
   }
   .tl__bar:hover,
-  .tl__bar:focus-visible {
+  .tl__bar:focus-visible,
+  .tl__bar[data-linked] {
     background: var(--color-headlamp);
     z-index: 2;
-    /* Let a short bar grow enough to read on hover without moving its start. */
-    min-width: max-content;
+  }
+  /* When the connectors are drawn the name moves onto the leader line, so the
+     in-bar label would only duplicate it. */
+  .tl__bar[data-linked] .tl__label {
+    visibility: hidden;
+  }
+  /* Everything else recedes while one trip is being traced. */
+  [data-tracing] .tl__bar:not([data-linked]) {
+    opacity: 0.35;
   }
   .tl__label {
     font-size: 0.625rem;

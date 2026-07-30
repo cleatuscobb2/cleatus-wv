@@ -9,11 +9,12 @@
  *     there are no GPX tracks. Country-level is the finest granularity the data
  *     honestly supports, and a slippy map would imply precision we do not have.
  *  2. It needs no tile provider, no API key, and no third-party request.
- *  3. It ships zero JavaScript and works with JS disabled, which a MapLibre
- *     island cannot.
+ *  3. It renders and reads with JavaScript disabled.
  *
- * When GPX tracks or entry coordinates arrive, per-trip route maps become worth
- * a real MapLibre island. This page is the honest version of what exists today.
+ * The one piece of JavaScript on this page draws leader lines from a timeline
+ * bar to the countries that trip visited. It is pure enhancement — with it off,
+ * the map and the timeline are both still complete and clickable. §3 excepts the
+ * maps from the no-JS rule, and this is the whole of what that exception buys.
  */
 import { getCollection } from 'astro:content';
 import { feature } from 'topojson-client';
@@ -47,12 +48,15 @@ const path = geoPath(projection);
 const shapes = fc.features.map((f) => {
   const id = String(f.id ?? '');
   const ts = visited.get(id);
+  const c = path.centroid(f as never);
   return {
     id,
     d: path(f as never) ?? '',
     name: f.properties?.name ?? '',
     trips: ts ?? [],
     alpha: alphaOf.get(id) ?? null,
+    cx: Number.isFinite(c[0]) ? c[0] : null,
+    cy: Number.isFinite(c[1]) ? c[1] : null,
   };
 }).filter((s) => s.d);
 
@@ -62,9 +66,8 @@ const sphere = path({ type: 'Sphere' } as never) ?? '';
 const allCodes = [...new Set(trips.flatMap((t) => t.data.countries))];
 
 /*
- * Which countries actually produced a polygon. Singapore is below the 110m
- * dataset's size threshold and Hong Kong is folded into China, so both would
- * silently vanish. They get point markers instead.
+ * Singapore is below the 110m dataset's size threshold and Hong Kong is folded
+ * into China, so both would silently vanish. They get point markers instead.
  */
 const drawn = new Set(shapes.filter((s) => s.trips.length > 0 && s.alpha).map((s) => s.alpha as string));
 const points = allCodes
@@ -76,6 +79,14 @@ const points = allCodes
 
 const stillMissing = allCodes.filter((c) => !drawn.has(c) && !POINT_MARKERS[c]);
 const visitedCount = drawn.size + points.length;
+
+/** Anchor points the connector lines aim at, keyed by country code. */
+const anchors = [
+  ...shapes
+    .filter((s) => s.trips.length > 0 && s.alpha && s.cx != null && s.cy != null)
+    .map((s) => ({ code: s.alpha as string, x: s.cx as number, y: s.cy as number })),
+  ...points.map((p) => ({ code: p.code, x: p.x, y: p.y })),
+];
 ---
 
 <Base
@@ -85,21 +96,25 @@ const visitedCount = drawn.size + points.length;
   <header class="head">
     <h1 class="display">Map</h1>
     <p class="head__note">
-      {allCodes.length} countries, {trips.length} trips. Hover or tap a country to
-      see when they were there; it links through to everything written from it.
+      {allCodes.length} countries, {trips.length} trips. Hover a country to see when
+      they were there, or hover a trip on the timeline to see everywhere it went.
     </p>
   </header>
 
-  <figure class="mapwrap">
+  <figure class="mapwrap" data-map-wrap>
+    {/* Sized to the wrapper in pixels by the script; empty and invisible without it. */}
+    <svg class="mapwrap__overlay" data-map-overlay aria-hidden="true"></svg>
+    <span class="mapwrap__callout mono" data-map-callout hidden></span>
+
     {/* Labelled <nav>, not role="img": the countries are links, and declaring the
         whole map a single graphic conflicts with that (axe: nested-interactive). */}
     <nav aria-label={`World map with ${visitedCount} countries marked, each linking to its entries`}>
-    <svg viewBox={`0 0 ${W} ${H}`} focusable="false">
+    <svg viewBox={`0 0 ${W} ${H}`} focusable="false" class="worldmap">
       <path d={sphere} class="m-sphere" />
       <path d={graticule} class="m-grat" />
       {shapes.map((s) => (
         s.trips.length > 0 && s.alpha ? (
-          <a href={`/places/${s.alpha.toLowerCase()}/`} class="m-link">
+          <a href={`/places/${s.alpha.toLowerCase()}/`} class="m-link" data-cc-link={s.alpha}>
             <title>
               {COUNTRY_NAMES[s.alpha] ?? s.name} — {s.trips.length}{' '}
               {s.trips.length === 1 ? 'trip' : 'trips'}:{' '}
@@ -113,7 +128,7 @@ const visitedCount = drawn.size + points.length;
       ))}
 
       {points.map((p) => (
-        <a href={`/places/${p.code.toLowerCase()}/`} class="m-link">
+        <a href={`/places/${p.code.toLowerCase()}/`} class="m-link" data-cc-link={p.code}>
           <title>
             {p.name} — {p.trips.length} {p.trips.length === 1 ? 'trip' : 'trips'}:{' '}
             {p.trips.map((t) => t.data.year).join(', ')}
@@ -121,8 +136,16 @@ const visitedCount = drawn.size + points.length;
           <circle cx={p.x} cy={p.y} r="4" class="m-point" />
         </a>
       ))}
+
+      {/* Invisible targets the leader lines aim at. Kept inside the map's own
+          coordinate space so the script can read their screen position directly
+          instead of re-implementing the projection. */}
+      {anchors.map((a) => (
+        <circle class="m-anchor" data-cc={a.code} cx={a.x} cy={a.y} r="0.5" />
+      ))}
     </svg>
     </nav>
+
     <figcaption class="mono">
       Country level, not route level — there is no GPS in the archive to plot.
       {points.length > 0 && ` ${points.map((p) => p.name).join(' and ')} marked as points; too small to draw at this scale.`}
@@ -141,6 +164,7 @@ const visitedCount = drawn.size + points.length;
           dateStart: t.data.dateStart,
           dateEnd: t.data.dateEnd,
           entries: t.data.stats.entries,
+          countries: t.data.countries,
         }))}
       />
       <p class="mono tlwrap__caption">
@@ -167,6 +191,131 @@ const visitedCount = drawn.size + points.length;
   </section>
 </Base>
 
+<script is:inline>
+  /*
+   * Leader lines from a timeline bar to the countries that trip visited.
+   * Progressive enhancement: everything here is additive, and the page is fully
+   * usable if it never runs.
+   */
+  (function () {
+    var wrap = document.querySelector('[data-map-wrap]');
+    if (!wrap) return;
+    var overlay = wrap.querySelector('[data-map-overlay]');
+    var callout = wrap.querySelector('[data-map-callout]');
+    var bars = [].slice.call(wrap.querySelectorAll('.tl__bar'));
+    if (!overlay || !callout || !bars.length) return;
+
+    var NS = 'http://www.w3.org/2000/svg';
+    var anchors = {};
+    [].forEach.call(wrap.querySelectorAll('[data-cc]'), function (el) {
+      anchors[el.getAttribute('data-cc')] = el;
+    });
+    var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var active = null;
+
+    function clear() {
+      active = null;
+      while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+      callout.hidden = true;
+      wrap.removeAttribute('data-tracing');
+      bars.forEach(function (b) { b.removeAttribute('data-linked'); });
+      [].forEach.call(wrap.querySelectorAll('[data-cc-link]'), function (el) {
+        el.removeAttribute('data-lit');
+      });
+    }
+
+    function draw(bar) {
+      if (active === bar) return;
+      clear();
+      active = bar;
+
+      var codes = (bar.getAttribute('data-countries') || '').split(',').filter(Boolean);
+      if (!codes.length) return;
+
+      var wr = wrap.getBoundingClientRect();
+      var br = bar.getBoundingClientRect();
+      var x0 = br.left - wr.left + br.width / 2;
+      var y0 = br.top - wr.top;
+
+      overlay.setAttribute('width', wr.width);
+      overlay.setAttribute('height', wr.height);
+      overlay.setAttribute('viewBox', '0 0 ' + wr.width + ' ' + wr.height);
+
+      var drew = 0;
+      codes.forEach(function (cc) {
+        var a = anchors[cc];
+        if (!a) return;
+        var ar = a.getBoundingClientRect();
+        var x1 = ar.left - wr.left + ar.width / 2;
+        var y1 = ar.top - wr.top + ar.height / 2;
+
+        var line = document.createElementNS(NS, 'path');
+        // A gentle curve rather than a straight rule, so lines crossing the
+        // map stay distinguishable from the graticule.
+        var my = y0 + (y1 - y0) * 0.55;
+        line.setAttribute('d', 'M' + x0 + ',' + y0 + ' C' + x0 + ',' + my + ' ' + x1 + ',' + my + ' ' + x1 + ',' + y1);
+        line.setAttribute('class', 'lead');
+        overlay.appendChild(line);
+
+        var dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', x1);
+        dot.setAttribute('cy', y1);
+        dot.setAttribute('r', '4.5');
+        dot.setAttribute('class', 'lead__dot');
+        overlay.appendChild(dot);
+
+        var lit = wrap.querySelector('[data-cc-link="' + cc + '"]');
+        if (lit) lit.setAttribute('data-lit', '');
+        drew++;
+      });
+      if (!drew) return;
+
+      if (!reduce) {
+        [].forEach.call(overlay.querySelectorAll('.lead'), function (p) {
+          var len = p.getTotalLength();
+          p.style.strokeDasharray = len;
+          p.style.strokeDashoffset = len;
+          p.getBoundingClientRect();
+          p.style.transition = 'stroke-dashoffset 340ms cubic-bezier(.22,1,.36,1)';
+          p.style.strokeDashoffset = '0';
+        });
+      }
+
+      // The trip name moves out of the bar and onto the line.
+      callout.textContent = bar.getAttribute('data-title') + ' · ' + bar.getAttribute('data-when');
+      callout.hidden = false;
+      var cw = callout.offsetWidth;
+      var ch = callout.offsetHeight;
+      callout.style.left = Math.max(4, Math.min(wr.width - cw - 4, x0 - cw / 2)) + 'px';
+      callout.style.top = Math.max(4, y0 - ch - 8) + 'px';
+
+      bar.setAttribute('data-linked', '');
+      wrap.setAttribute('data-tracing', '');
+    }
+
+    bars.forEach(function (bar) {
+      bar.addEventListener('pointerenter', function () { draw(bar); });
+    });
+    /*
+     * Keyboard parity. Delegated `focusin` rather than a `focus` listener per
+     * bar: `focus` does not bubble, and attaching it per element proved
+     * unreliable here — tabbing to a bar drew nothing while hovering it worked.
+     */
+    wrap.addEventListener('focusin', function (e) {
+      var bar = e.target && e.target.closest ? e.target.closest('.tl__bar') : null;
+      if (bar) draw(bar);
+      else clear();
+    });
+    wrap.addEventListener('pointerleave', clear);
+    wrap.addEventListener('focusout', function (e) {
+      if (!wrap.contains(e.relatedTarget)) clear();
+    });
+    addEventListener('keydown', function (e) { if (e.key === 'Escape') clear(); });
+    addEventListener('resize', clear, { passive: true });
+    addEventListener('scroll', function () { if (active) draw(active); }, { passive: true });
+  })();
+</script>
+
 <style>
   .head {
     max-width: 68rem;
@@ -177,45 +326,106 @@ const visitedCount = drawn.size + points.length;
   .head__note { color: var(--color-stone); margin: 0.6rem 0 0; max-width: 56ch; }
 
   .mapwrap {
+    position: relative;
     margin: clamp(1.5rem, 4vw, 2.5rem) 0 0;
     padding: clamp(1rem, 3vw, 2rem) clamp(0.5rem, 2vw, 2rem);
     background: var(--color-ink);
   }
-  .mapwrap svg {
+  .worldmap {
     display: block;
     width: 100%;
     height: auto;
     max-width: 68rem;
     margin-inline: auto;
   }
-  .m-sphere { fill: #0d1116; stroke: none; }
-  .m-grat { fill: none; stroke: var(--color-rule-dark); stroke-width: 0.5; }
+
+  /*
+   * Legibility. The first pass put near-black land (#1d242d) on near-black ocean
+   * (#0d1116) — 1.21:1, so the continents barely separated from the sea and the
+   * borders were invisible.
+   *
+   * Land vs ocean is now 2.81:1. It could go higher, but every step brighter
+   * costs contrast on the distinction that actually carries meaning — visited
+   * against not-visited — so this stops where rime still reads at 4.31:1 on
+   * land. Country edges are lifted to stay visible at 2.05:1.
+   */
+  .m-sphere { fill: #080b0f; stroke: #38424e; stroke-width: 0.75; }
+  .m-grat { fill: none; stroke: #1b232c; stroke-width: 0.5; }
   .m-country {
-    fill: #1d242d;
-    stroke: #0d1116;
+    fill: #4e5a69;
+    stroke: #7e8c9c;
     stroke-width: 0.4;
+    vector-effect: non-scaling-stroke;
   }
-  /* The beam: only the places they actually went. */
   .m-country--visited {
     fill: var(--color-rime);
+    stroke: #0a0e13;
+    stroke-width: 0.5;
     transition: fill 150ms ease;
   }
   .m-link:hover .m-country--visited,
-  .m-link:focus-visible .m-country--visited {
+  .m-link:focus-visible .m-country--visited,
+  .m-link[data-lit] .m-country--visited {
     fill: var(--color-headlamp);
   }
-  /* Countries too small to draw as polygons at this scale. */
   .m-point {
     fill: var(--color-rime);
-    stroke: #0d1116;
+    stroke: #0a0e13;
     stroke-width: 1;
     transition: fill 150ms ease, r 150ms ease;
   }
   .m-link:hover .m-point,
-  .m-link:focus-visible .m-point {
+  .m-link:focus-visible .m-point,
+  .m-link[data-lit] .m-point {
     fill: var(--color-headlamp);
     r: 6;
   }
+  .m-anchor { fill: none; stroke: none; pointer-events: none; }
+
+  /* While one trip is traced the other countries stand down, but stay clearly
+     "visited" — muted teal against land, not merged into it. */
+  .mapwrap[data-tracing] .m-country--visited,
+  .mapwrap[data-tracing] .m-point {
+    fill: #57909e;
+  }
+  .mapwrap[data-tracing] .m-link[data-lit] .m-country--visited,
+  .mapwrap[data-tracing] .m-link[data-lit] .m-point {
+    fill: var(--color-headlamp);
+  }
+
+  .mapwrap__overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+    overflow: visible;
+  }
+  .mapwrap__overlay :global(.lead) {
+    fill: none;
+    stroke: var(--color-headlamp);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0.9;
+  }
+  .mapwrap__overlay :global(.lead__dot) {
+    fill: var(--color-headlamp);
+  }
+
+  .mapwrap__callout {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    background: var(--color-headlamp);
+    color: var(--color-ink);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.625rem;
+    white-space: nowrap;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.45);
+  }
+  .mapwrap__callout[hidden] { display: none; }
+
   .mapwrap figcaption {
     max-width: 68rem;
     margin: 1rem auto 0;

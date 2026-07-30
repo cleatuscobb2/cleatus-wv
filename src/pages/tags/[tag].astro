@@ -1,0 +1,94 @@
+---
+/**
+ * §7.5 — cross-trip theme pages.
+ *
+ * Every tag in src/data/tags.ts gets a page, whether or not anything carries it
+ * yet. An empty one says so plainly rather than 404ing, because tagging the 295
+ * entries is Andy and Beth's call, not something to guess at.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { TAGS, TAG_LABELS, type Tag } from '../../data/tags.ts';
+import { chronological, tripIdOf, entrySlug, fmtDate, excerpt } from '../../lib/entries.ts';
+
+export async function getStaticPaths() {
+  const all = await getCollection('entries', ({ data }) => !data.draft);
+  return TAGS.map((tag) => ({
+    params: { tag },
+    props: { tag, entries: chronological(all.filter((e) => e.data.tags.includes(tag))) },
+  }));
+}
+
+const { tag, entries } = Astro.props as { tag: Tag; entries: Awaited<ReturnType<typeof getCollection<'entries'>>> };
+const trips = await getCollection('trips');
+const tripTitle = (id: string) => trips.find((t) => t.id === id)?.data.shortTitle ?? id;
+const label = TAG_LABELS[tag];
+const spanned = new Set(entries.map((e) => tripIdOf(e))).size;
+---
+
+<Base
+  title={label}
+  description={entries.length
+    ? `${entries.length} entries tagged ${label}, across ${spanned} trips.`
+    : `Entries tagged ${label} — nothing tagged yet.`}
+  noIndex={entries.length === 0}
+>
+  <header class="head">
+    <p class="mono head__kicker"><a href="/tags/">Tags</a></p>
+    <h1 class="display">{label}</h1>
+    {entries.length > 0 && (
+      <p class="mono head__meta">{entries.length} entries · {spanned} trips</p>
+    )}
+  </header>
+
+  {entries.length > 0 ? (
+    <ol class="list">
+      {entries.map((e) => (
+        <li>
+          <a href={`/${tripIdOf(e)}/${entrySlug(e)}/`}>
+            <span class="mono list__meta">{tripTitle(tripIdOf(e))} · {fmtDate(e.data.date)}</span>
+            <span class="list__title">{e.data.title}</span>
+            <span class="list__excerpt">{excerpt(e.body, 130)}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  ) : (
+    <p class="empty">
+      Nothing carries this tag yet. Add <code class="mono">tags: ["{tag}"]</code> to an
+      entry's frontmatter and it will appear here.
+    </p>
+  )}
+</Base>
+
+<style>
+  .head {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head__kicker { color: var(--color-stone); margin: 0 0 0.5rem; }
+  .head__kicker a { color: inherit; text-decoration: none; }
+  .head h1 { font-size: clamp(2.2rem, 5vw, 3.25rem); margin: 0; }
+  .head__meta { color: var(--color-stone); margin: 0.6rem 0 0; }
+  .list {
+    list-style: none;
+    max-width: 52rem;
+    margin: 1.75rem auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+    border-top: 1px solid var(--color-rule);
+  }
+  .list li { border-bottom: 1px solid var(--color-rule); }
+  .list a { display: block; padding: 0.8rem 0; text-decoration: none; }
+  .list__meta { display: block; color: var(--color-stone); font-size: 0.625rem; }
+  .list__title { display: block; margin-top: 0.15rem; font-size: 1.0625rem; }
+  .list a:hover .list__title { text-decoration: underline; }
+  .list__excerpt {
+    display: block; margin-top: 0.2rem; color: var(--color-stone);
+    font-size: 0.9375rem; line-height: 1.45;
+  }
+  .empty {
+    max-width: 52rem; margin: 1.75rem auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem); color: var(--color-stone);
+  }
+</style>

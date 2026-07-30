@@ -51,7 +51,7 @@ const jsonLd = {
 };
 ---
 
-<Base title={d.title} description={d.summary} ogImage={d.hero} jsonLd={jsonLd}>
+<Base title={d.title} description={d.summary} ogImage={`/og/trip-${trip.id}.png`} jsonLd={jsonLd}>
   {d.hero && (
     <div class="hero">
       <img src={d.hero} alt="" loading="eager" fetchpriority="high" decoding="async" />

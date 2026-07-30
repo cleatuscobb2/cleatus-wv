@@ -1,0 +1,122 @@
+---
+/**
+ * §7.5 — one country, every trip that touched it, in order.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
+import { entriesForTrip, entrySlug, fmtRange, fmtDateShort, excerpt } from '../../lib/entries.ts';
+
+export async function getStaticPaths() {
+  const trips = await getCollection('trips');
+  const byCountry = new Map<string, typeof trips>();
+  for (const t of trips) {
+    for (const c of t.data.countries) {
+      byCountry.set(c, [...(byCountry.get(c) ?? []), t]);
+    }
+  }
+  return [...byCountry.entries()].map(([code, ts]) => ({
+    params: { country: code.toLowerCase() },
+    props: { code, trips: ts.sort((a, b) => +a.data.dateStart - +b.data.dateStart) },
+  }));
+}
+
+const { code, trips } = Astro.props;
+const name = COUNTRY_NAMES[code] ?? code;
+
+// Pull the entries for each trip so a country page is browsable, not just a stub.
+const groups = await Promise.all(
+  trips.map(async (t) => ({ trip: t, entries: await entriesForTrip(t.id) })),
+);
+const totalEntries = groups.reduce((n, g) => n + g.entries.length, 0);
+const years = [...new Set(trips.map((t) => t.data.year))];
+---
+
+<Base
+  title={name}
+  description={`Everything Andy and Beth wrote from ${name} — ${totalEntries} entries across ${trips.length} ${trips.length === 1 ? 'trip' : 'trips'} (${years.join(', ')}).`}
+  ogImage={trips.find((t) => t.data.hero)?.data.hero ?? null}
+>
+  <header class="head">
+    <p class="mono head__kicker"><a href="/places/">Places</a></p>
+    <h1 class="display">{name}</h1>
+    <p class="mono head__meta">
+      {trips.length} {trips.length === 1 ? 'trip' : 'trips'} · {totalEntries} entries · {years.join(', ')}
+    </p>
+  </header>
+
+  {groups.map(({ trip, entries }) => (
+    <section class="group">
+      <h2 class="group__head">
+        <a href={`/${trip.id}/`}>{trip.data.title}</a>
+        <span class="mono group__dates">{fmtRange(trip.data.dateStart, trip.data.dateEnd)}</span>
+      </h2>
+      <ol class="list">
+        {entries.map((e) => (
+          <li>
+            <a href={`/${trip.id}/${entrySlug(e)}/`}>
+              <span class="mono list__meta">
+                {[e.data.day != null ? `Day ${e.data.day}` : null, fmtDateShort(e.data.date)]
+                  .filter(Boolean).join(' · ')}
+              </span>
+              <span class="list__title">{e.data.title}</span>
+              <span class="list__excerpt">{excerpt(e.body, 120)}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+  ))}
+</Base>
+
+<style>
+  .head {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head__kicker { color: var(--color-stone); margin: 0 0 0.5rem; }
+  .head__kicker a { color: inherit; text-decoration: none; }
+  .head__kicker a:hover { color: var(--color-ink); }
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; }
+  .head__meta { color: var(--color-stone); margin: 0.6rem 0 0; }
+
+  .group {
+    max-width: 60rem;
+    margin: clamp(2rem, 4vw, 3rem) auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .group__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1rem;
+    font-family: var(--font-display);
+    font-stretch: 110%;
+    font-weight: 600;
+    font-size: 1.35rem;
+    margin: 0 0 0.75rem;
+  }
+  .group__head a { text-decoration: none; }
+  .group__head a:hover { text-decoration: underline; text-underline-offset: 0.16em; }
+  .group__dates { color: var(--color-stone); font-weight: 400; font-size: 0.625rem; }
+
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-rule);
+  }
+  .list li { border-bottom: 1px solid var(--color-rule); }
+  .list a { display: block; padding: 0.7rem 0; text-decoration: none; }
+  .list__meta { display: block; color: var(--color-stone); font-size: 0.625rem; }
+  .list__title { display: block; margin-top: 0.15rem; font-size: 1.0625rem; }
+  .list a:hover .list__title { text-decoration: underline; }
+  .list__excerpt {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--color-stone);
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+</style>

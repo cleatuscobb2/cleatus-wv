@@ -60,10 +60,15 @@ const jsonLd = {
   isPartOf: trip ? { '@type': 'CreativeWorkSeries', name: trip.data.title } : undefined,
 };
 
-const heroPhoto = entry.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? trip?.data.hero ?? null;
+/*
+ * §7.8 — the generated share card rather than the first photograph. It always
+ * carries the title, trip and date, is always 1200×630, and never crops a
+ * landscape badly. Built by scripts/og-images.ts.
+ */
+const ogImage = `/og/entry-${trip?.id}--${me}.png`;
 ---
 
-<Base title={d.title} description={description} ogImage={heroPhoto} jsonLd={jsonLd}>
+<Base title={d.title} description={description} ogImage={ogImage} jsonLd={jsonLd}>
   <!-- Mobile: the rail collapses to a progress bar. -->
   <div class="progress" aria-hidden="true">
     <span style={`width: ${(position / Math.max(1, siblings.length)) * 100}%`}></span>
@@ -76,8 +81,18 @@ const heroPhoto = entry.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? trip?.data.h
       )}
     </aside>
 
-    <article class="entry">
-      <nav class="crumb mono" aria-label="Breadcrumb">
+    <!--
+      Pagefind indexes what is inside data-pagefind-body and nothing else, so the
+      nav, rail and pager stay out of the index. The meta and filter attributes
+      give the results page its trip/author/year facets.
+    -->
+    <article
+      class="entry"
+      data-pagefind-body
+      data-pagefind-meta={`trip:${trip?.data.shortTitle ?? ''},date:${fmtDate(d.date)}`}
+      data-pagefind-filter={`trip:${trip?.data.shortTitle ?? ''},year:${d.date.getUTCFullYear()}`}
+    >
+      <nav class="crumb mono" aria-label="Breadcrumb" data-pagefind-ignore>
         <a href={`/${trip?.id}/`}>{trip?.data.shortTitle ?? trip?.data.title}</a>
         <span aria-hidden="true"> › </span>
         <span>{position} of {siblings.length}</span>
@@ -107,7 +122,7 @@ const heroPhoto = entry.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? trip?.data.h
         </ul>
       )}
 
-      <nav class="pager" aria-label="Entries">
+      <nav class="pager" aria-label="Entries" data-pagefind-ignore>
         {prev ? (
           <a href={`/${tripIdOf(prev)}/${entrySlug(prev)}/`} class="pager__link">
             <span class="mono">‹ Previous</span>

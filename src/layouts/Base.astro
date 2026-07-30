@@ -52,7 +52,32 @@ const ogUrl = ogImage ? new URL(ogImage, canonical).toString() : null;
       <p class="foot__note">
         Fifteen years of long, hard trips. Written mostly by Beth, mostly while exhausted.
       </p>
+      <!-- Places and tags are cross-cutting views; they live here rather than
+           crowding the four destinations in the nav. -->
+      <nav class="foot__links mono" aria-label="More">
+        <a href="/places/">Places</a>
+        <a href="/tags/">Tags</a>
+        <a href="/beth-cried-here/">Beth cried here</a>
+        <a href="/search/">Search</a>
+        <a href="/rss.xml">RSS</a>
+      </nav>
     </footer>
+
+    <!--
+      §7.5 — `/` focuses search from anywhere. This is the only script on a
+      normal page: a few hundred bytes, and nothing depends on it running.
+    -->
+    <script is:inline>
+      addEventListener('keydown', (e) => {
+        if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target;
+        if (t instanceof HTMLElement &&
+            (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        const box = document.querySelector('#search input');
+        if (box) { e.preventDefault(); box.focus(); }
+        else { e.preventDefault(); location.href = '/search/'; }
+      });
+    </script>
 
     <style>
       .skip {
@@ -80,6 +105,21 @@ const ogUrl = ogImage ? new URL(ogImage, canonical).toString() : null;
         margin-top: 0.5rem;
         font-size: 0.9375rem;
         max-width: 46ch;
+      }
+      .foot__links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem 1.4rem;
+        margin-top: 1.5rem;
+      }
+      .foot__links a {
+        color: var(--color-rime);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color 150ms ease;
+      }
+      .foot__links a:hover {
+        border-bottom-color: var(--color-rime);
       }
     </style>
   </body>

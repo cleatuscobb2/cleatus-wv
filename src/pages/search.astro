@@ -1,0 +1,119 @@
+---
+/**
+ * §7.5 — full-text search over fifteen years, via Pagefind.
+ *
+ * The index is static, built from dist/ after the site is generated. No external
+ * service, no runtime backend, works offline once loaded.
+ *
+ * Pagefind's script loads on this page only, so entry pages stay at zero JS.
+ * With JavaScript off this page degrades to a note and the browse routes, which
+ * is the honest fallback for something that is inherently interactive.
+ */
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Search"
+  description="Search fifteen years of trip journals — every entry from 2009 to now."
+>
+  <div class="search">
+    <h1 class="display">Search</h1>
+    <p class="search__note">
+      Every word of every entry, 2009 to now.
+    </p>
+
+    <div id="search" class="search__ui"></div>
+
+    <noscript>
+      <p class="search__noscript">
+        Search needs JavaScript. Everything is still browsable by
+        <a href="/trips/">trip</a>, by <a href="/archive/">date</a>, or by
+        <a href="/places/">place</a>.
+      </p>
+    </noscript>
+  </div>
+</Base>
+
+<link rel="stylesheet" href="/pagefind/pagefind-ui.css" />
+
+<!--
+  Pagefind emits its bundle into dist/pagefind *after* Astro finishes, so these
+  must stay out of Vite's module graph — hence is:inline. Rollup would otherwise
+  fail trying to resolve a file that does not exist yet at build time.
+-->
+<script src="/pagefind/pagefind-ui.js" is:inline></script>
+<script is:inline>
+  window.addEventListener('DOMContentLoaded', function () {
+    var el = document.querySelector('#search');
+    if (!el) return;
+    if (typeof window.PagefindUI !== 'function') {
+      el.innerHTML =
+        '<p>The search index has not been built yet. Run <code>npm run build</code>.</p>';
+      return;
+    }
+    new window.PagefindUI({
+      element: '#search',
+      showSubResults: true,
+      showImages: false,
+      pageSize: 12,
+      resetStyles: false,
+      translations: { placeholder: 'Gondogoro La, leeches, Bethie…' },
+    });
+    // Land the caret in the box so the page is usable the moment it loads.
+    requestAnimationFrame(function () {
+      var input = el.querySelector('input');
+      if (input) input.focus();
+    });
+  });
+</script>
+
+<style>
+  .search {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .search h1 {
+    font-size: clamp(2.2rem, 5vw, 3.25rem);
+    margin: 0;
+  }
+  .search__note {
+    color: var(--color-stone);
+    margin: 0.6rem 0 1.75rem;
+  }
+  .search__noscript,
+  .search__ui :global(p) {
+    color: var(--color-stone);
+  }
+
+  /* Bend Pagefind's default UI onto the site's tokens. */
+  .search__ui {
+    --pagefind-ui-primary: var(--color-ink);
+    --pagefind-ui-text: var(--color-ink);
+    --pagefind-ui-background: var(--color-snow);
+    --pagefind-ui-border: var(--color-rule);
+    --pagefind-ui-tag: var(--color-paper);
+    --pagefind-ui-border-width: 1px;
+    --pagefind-ui-border-radius: 0;
+    --pagefind-ui-font: var(--font-body);
+  }
+  .search__ui :global(.pagefind-ui__search-input) {
+    font-family: var(--font-body);
+    font-size: 1.125rem;
+  }
+  .search__ui :global(.pagefind-ui__result-title) {
+    font-family: var(--font-display);
+    font-stretch: 108%;
+  }
+  .search__ui :global(.pagefind-ui__result-tags),
+  .search__ui :global(.pagefind-ui__result-title .pagefind-ui__result-link) {
+    font-family: var(--font-display);
+  }
+  .search__ui :global(.pagefind-ui__filter-name),
+  .search__ui :global(.pagefind-ui__result-tag) {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+</style>

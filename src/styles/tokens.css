@@ -80,6 +80,18 @@
     font-synthesis-weight: none;
   }
 
+  /*
+   * 19px is right on a wide screen but gives only ~31 characters a line on a
+   * 375px phone, which is cramped for a 3,000 word read. 17px lands at ~35 and
+   * reads better. Line height opens slightly to compensate.
+   */
+  @media (max-width: 480px) {
+    body {
+      font-size: 17px;
+      line-height: 1.7;
+    }
+  }
+
   /* Visible focus everywhere — §9. Never remove without replacing. */
   :focus-visible {
     outline: 2px solid var(--color-headlamp);

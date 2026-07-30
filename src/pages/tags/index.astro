@@ -1,0 +1,61 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { TAGS, TAG_LABELS } from '../../data/tags.ts';
+
+const all = await getCollection('entries', ({ data }) => !data.draft);
+const counts = TAGS.map((t) => ({
+  tag: t,
+  label: TAG_LABELS[t],
+  n: all.filter((e) => e.data.tags.includes(t)).length,
+})).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+const used = counts.filter((c) => c.n > 0);
+---
+
+<Base
+  title="Tags"
+  description="Themes running across fifteen years of trips — trekking, altitude, glaciers, near misses, gear failure."
+>
+  <header class="head">
+    <h1 class="display">Tags</h1>
+    <p class="head__note">
+      {used.length > 0
+        ? `${used.length} of ${TAGS.length} themes in use across ${all.length} entries.`
+        : `${TAGS.length} themes defined. Nothing is tagged yet — the vocabulary is ready, the tagging is yours.`}
+    </p>
+  </header>
+
+  <ul class="tags">
+    {counts.map((c) => (
+      <li>
+        <a href={`/tags/${c.tag}/`} class={c.n ? '' : 'is-empty'}>
+          <span class="tags__label">{c.label}</span>
+          <span class="mono tags__n">{c.n}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>
+
+<style>
+  .head {
+    max-width: 52rem; margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; }
+  .head__note { color: var(--color-stone); margin: 0.6rem 0 0; max-width: 52ch; }
+  .tags {
+    display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none;
+    max-width: 52rem; margin: 1.75rem auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+  }
+  .tags a {
+    display: inline-flex; align-items: baseline; gap: 0.5rem;
+    padding: 0.4rem 0.7rem; border: 1px solid var(--color-rule);
+    text-decoration: none;
+  }
+  .tags a:hover { border-color: var(--color-ink); }
+  .tags a.is-empty { color: var(--color-stone); border-style: dashed; }
+  .tags__n { color: var(--color-headlamp); font-size: 0.6875rem; }
+  .tags a.is-empty .tags__n { color: var(--color-stone); }
+</style>

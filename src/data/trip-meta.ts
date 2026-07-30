@@ -94,6 +94,31 @@ export const TRIP_META: Record<string, TripMeta> = {
   },
 };
 
+/**
+ * ISO 3166-1 alpha-2 → numeric, to join our country codes onto the world-atlas
+ * TopoJSON, which is keyed by numeric id. Hong Kong has no separate feature in
+ * the 110m dataset (it is inside China), so it is deliberately absent and the
+ * map falls back to listing it.
+ */
+export const COUNTRY_NUMERIC: Record<string, string> = {
+  PK: '586', TH: '764', SG: '702', MY: '458', KR: '410', JP: '392',
+  TZ: '834', EG: '818', AT: '040', ID: '360', CL: '152', AR: '032',
+  CO: '170', NP: '524', CN: '156', IN: '356', DE: '276', GR: '300',
+  RU: '643', IS: '352', HR: '191', BA: '070', GT: '320', BZ: '084',
+  EC: '218', BO: '068', PE: '604',
+};
+
+/**
+ * Places with no drawable polygon at 110m resolution — Singapore is below the
+ * dataset's threshold, Hong Kong is folded into China. Plotted as point markers
+ * so the map is complete rather than quietly missing two countries.
+ * [longitude, latitude].
+ */
+export const POINT_MARKERS: Record<string, [number, number]> = {
+  SG: [103.8198, 1.3521],
+  HK: [114.1694, 22.3193],
+};
+
 export const COUNTRY_NAMES: Record<string, string> = {
   PK: 'Pakistan', TH: 'Thailand', SG: 'Singapore', MY: 'Malaysia', KR: 'South Korea',
   JP: 'Japan', TZ: 'Tanzania', EG: 'Egypt', AT: 'Austria', ID: 'Indonesia',

@@ -28,6 +28,15 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
           </a>
         </li>
       ))}
+      <!--
+        Search sits apart from the four destinations rather than becoming a fifth
+        one: it is an action, not a place. `/` focuses it from anywhere (§7.5).
+      -->
+      <li class="nav__search">
+        <a href="/search/" class="mono" aria-current={isCurrent('/search/') ? 'page' : undefined}>
+          Search <kbd aria-hidden="true">/</kbd>
+        </a>
+      </li>
     </ul>
   </nav>
 </header>
@@ -81,5 +90,21 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
   .nav nav a[aria-current='page'] {
     color: var(--color-headlamp);
     border-bottom-color: var(--color-headlamp);
+  }
+
+  .nav__search a {
+    color: var(--color-stone-on-dark);
+  }
+  .nav__search kbd {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    padding: 0 0.25rem;
+    margin-left: 0.15rem;
+    opacity: 0.75;
+  }
+  @media (max-width: 620px) {
+    .nav__search kbd { display: none; }
   }
 </style>

@@ -1,0 +1,98 @@
+---
+/**
+ * §7.5 — places. Problem 7 in the brief: fifteen years of material with no way
+ * through it. India appears in 2009 and again in 2015; this is where that shows.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
+
+const trips = await getCollection('trips');
+
+const byCountry = new Map<string, typeof trips>();
+for (const t of trips) {
+  for (const c of t.data.countries) {
+    byCountry.set(c, [...(byCountry.get(c) ?? []), t]);
+  }
+}
+
+const places = [...byCountry.entries()]
+  .map(([code, ts]) => ({
+    code,
+    name: COUNTRY_NAMES[code] ?? code,
+    trips: ts.sort((a, b) => +a.data.dateStart - +b.data.dateStart),
+    entries: ts.reduce((n, t) => n + t.data.stats.entries, 0),
+  }))
+  .sort((a, b) => b.trips.length - a.trips.length || a.name.localeCompare(b.name));
+
+const repeat = places.filter((p) => p.trips.length > 1);
+---
+
+<Base
+  title="Places"
+  description={`Every country Andy and Beth have written from — ${places.length} of them across ${trips.length} trips, 2009 to now.`}
+>
+  <header class="head">
+    <h1 class="display">Places</h1>
+    <p class="head__note">
+      {places.length} countries across {trips.length} trips.
+      {repeat.length > 0 && ` ${repeat.length} of them they went back to.`}
+    </p>
+  </header>
+
+  <ul class="places">
+    {places.map((p) => (
+      <li class={p.trips.length > 1 ? 'place place--repeat' : 'place'}>
+        <a href={`/places/${p.code.toLowerCase()}/`}>
+          <span class="place__name">{p.name}</span>
+          <span class="mono place__meta">
+            {p.trips.length} {p.trips.length === 1 ? 'trip' : 'trips'} · {p.entries} entries
+          </span>
+          <span class="mono place__years">
+            {[...new Set(p.trips.map((t) => t.data.year))].join(', ')}
+          </span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>
+
+<style>
+  .head {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; }
+  .head__note { color: var(--color-stone); margin: 0.6rem 0 0; max-width: 50ch; }
+
+  .places {
+    list-style: none;
+    max-width: 60rem;
+    margin: clamp(1.75rem, 4vw, 2.5rem) auto 0;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+    border-top: 1px solid var(--color-rule);
+  }
+  .place { border-bottom: 1px solid var(--color-rule); }
+  .place a {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    text-decoration: none;
+  }
+  .place a:hover .place__name { text-decoration: underline; text-underline-offset: 0.16em; }
+  .place__name { font-size: 1.125rem; }
+  /* Somewhere they went back to is the interesting case. */
+  .place--repeat .place__name::after {
+    content: '↺';
+    margin-left: 0.4rem;
+    color: var(--color-headlamp);
+  }
+  .place__meta, .place__years { color: var(--color-stone); font-size: 0.625rem; }
+
+  @media (max-width: 560px) {
+    .place a { grid-template-columns: 1fr; gap: 0.15rem; }
+  }
+</style>

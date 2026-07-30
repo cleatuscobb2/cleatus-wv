@@ -1,59 +1,210 @@
 ---
 /**
- * §7.4 — not built yet. This is a deliberate placeholder rather than a broken
- * nav link: the map needs coordinates, and the archive has none (Squarespace and
- * Google both stripped GPS from every image). See PHASE-0-REPORT.md §3.
+ * §7.4 — the world view.
+ *
+ * Built as a static SVG at build time, not a tile map. Three reasons, in order:
+ *
+ *  1. There are no coordinates in the archive. Squarespace and Google both
+ *     stripped GPS from every one of the 755 images (PHASE-0-REPORT.md §3), and
+ *     there are no GPX tracks. Country-level is the finest granularity the data
+ *     honestly supports, and a slippy map would imply precision we do not have.
+ *  2. It needs no tile provider, no API key, and no third-party request.
+ *  3. It ships zero JavaScript and works with JS disabled, which a MapLibre
+ *     island cannot.
+ *
+ * When GPX tracks or entry coordinates arrive, per-trip route maps become worth
+ * a real MapLibre island. This page is the honest version of what exists today.
  */
 import { getCollection } from 'astro:content';
+import { feature } from 'topojson-client';
+import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo';
+import world from 'world-atlas/countries-110m.json';
 import Base from '../layouts/Base.astro';
-import { COUNTRY_NAMES } from '../data/trip-meta.ts';
+import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
 
 const trips = await getCollection('trips');
-const countries = [...new Set(trips.flatMap((t) => t.data.countries))].sort();
+
+/** numeric id → the trips that touched it */
+const visited = new Map<string, typeof trips>();
+for (const t of trips) {
+  for (const code of t.data.countries) {
+    const num = COUNTRY_NUMERIC[code];
+    if (!num) continue;
+    visited.set(num, [...(visited.get(num) ?? []), t]);
+  }
+}
+const alphaOf = new Map(Object.entries(COUNTRY_NUMERIC).map(([a, n]) => [n, a]));
+
+const W = 1000;
+const H = 500;
+const fc = feature(world as never, (world as never as { objects: { countries: unknown } }).objects.countries) as unknown as {
+  features: { id?: string; properties?: { name?: string } }[];
+};
+const projection = geoNaturalEarth1().fitSize([W, H], { type: 'Sphere' } as never);
+const path = geoPath(projection);
+
+const shapes = fc.features.map((f) => {
+  const id = String(f.id ?? '');
+  const ts = visited.get(id);
+  return {
+    id,
+    d: path(f as never) ?? '',
+    name: f.properties?.name ?? '',
+    trips: ts ?? [],
+    alpha: alphaOf.get(id) ?? null,
+  };
+}).filter((s) => s.d);
+
+const graticule = path(geoGraticule10() as never) ?? '';
+const sphere = path({ type: 'Sphere' } as never) ?? '';
+
+const allCodes = [...new Set(trips.flatMap((t) => t.data.countries))];
+
+/*
+ * Which countries actually produced a polygon. Singapore is below the 110m
+ * dataset's size threshold and Hong Kong is folded into China, so both would
+ * silently vanish. They get point markers instead.
+ */
+const drawn = new Set(shapes.filter((s) => s.trips.length > 0 && s.alpha).map((s) => s.alpha as string));
+const points = allCodes
+  .filter((c) => !drawn.has(c) && POINT_MARKERS[c])
+  .map((c) => {
+    const [x, y] = projection(POINT_MARKERS[c]) ?? [0, 0];
+    return { code: c, name: COUNTRY_NAMES[c] ?? c, x, y, trips: trips.filter((t) => t.data.countries.includes(c)) };
+  });
+
+const stillMissing = allCodes.filter((c) => !drawn.has(c) && !POINT_MARKERS[c]);
+const visitedCount = drawn.size + points.length;
 ---
 
 <Base
   title="Map"
-  description="Every trip Andy and Beth have taken, plotted — coming once the route data is in."
-  noIndex={true}
+  description={`Every country Andy and Beth have written from — ${allCodes.length} of them across ${trips.length} trips, 2009 to now.`}
 >
-  <div class="soon">
+  <header class="head">
     <h1 class="display">Map</h1>
-    <p class="soon__lede">
-      Not built yet, and deliberately not faked. Plotting these trips needs
-      coordinates, and there are none in the archive — the image EXIF was stripped
-      by Squarespace and Google before we ever got to it.
+    <p class="head__note">
+      {allCodes.length} countries, {trips.length} trips. Hover or tap a country to
+      see when they were there; it links through to everything written from it.
     </p>
-    <p class="soon__lede">
-      It needs one of: GPS from the original photographs, GPX tracks, or a pass
-      adding <code class="mono">location</code> coordinates to entries by hand.
-    </p>
+  </header>
 
-    <h2 class="mono soon__head">Where these {trips.length} trips went</h2>
-    <ul class="soon__countries">
-      {countries.map((c) => <li class="mono">{COUNTRY_NAMES[c] ?? c}</li>)}
+  <figure class="mapwrap">
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`World map with ${visitedCount} countries marked`}>
+      <path d={sphere} class="m-sphere" />
+      <path d={graticule} class="m-grat" />
+      {shapes.map((s) => (
+        s.trips.length > 0 && s.alpha ? (
+          <a href={`/places/${s.alpha.toLowerCase()}/`} class="m-link">
+            <title>
+              {COUNTRY_NAMES[s.alpha] ?? s.name} — {s.trips.length}{' '}
+              {s.trips.length === 1 ? 'trip' : 'trips'}:{' '}
+              {s.trips.map((t) => t.data.year).join(', ')}
+            </title>
+            <path d={s.d} class="m-country m-country--visited" />
+          </a>
+        ) : (
+          <path d={s.d} class="m-country" />
+        )
+      ))}
+
+      {points.map((p) => (
+        <a href={`/places/${p.code.toLowerCase()}/`} class="m-link">
+          <title>
+            {p.name} — {p.trips.length} {p.trips.length === 1 ? 'trip' : 'trips'}:{' '}
+            {p.trips.map((t) => t.data.year).join(', ')}
+          </title>
+          <circle cx={p.x} cy={p.y} r="4" class="m-point" />
+        </a>
+      ))}
+    </svg>
+    <figcaption class="mono">
+      Country level, not route level — there is no GPS in the archive to plot.
+      {points.length > 0 && ` ${points.map((p) => p.name).join(' and ')} marked as points; too small to draw at this scale.`}
+      {stillMissing.length > 0 && ` Not shown: ${stillMissing.map((c) => COUNTRY_NAMES[c] ?? c).join(', ')}.`}
+    </figcaption>
+  </figure>
+
+  <section class="legend">
+    <h2 class="mono legend__head">Where they went</h2>
+    <ul>
+      {allCodes
+        .map((c) => ({ c, name: COUNTRY_NAMES[c] ?? c, n: trips.filter((t) => t.data.countries.includes(c)).length }))
+        .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+        .map((x) => (
+          <li>
+            <a href={`/places/${x.c.toLowerCase()}/`} class="mono">
+              {x.name} <span class="legend__n">{x.n}</span>
+            </a>
+          </li>
+        ))}
     </ul>
-  </div>
+  </section>
 </Base>
 
 <style>
-  .soon {
-    max-width: calc(var(--measure) + 4rem);
+  .head {
+    max-width: 68rem;
     margin: 0 auto;
-    padding: clamp(2.5rem, 6vw, 4rem) clamp(1rem, 4vw, 3rem) 0;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
   }
-  .soon h1 {
-    font-size: clamp(2.2rem, 5vw, 3.25rem);
-    margin: 0 0 1.25rem;
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; }
+  .head__note { color: var(--color-stone); margin: 0.6rem 0 0; max-width: 56ch; }
+
+  .mapwrap {
+    margin: clamp(1.5rem, 4vw, 2.5rem) 0 0;
+    padding: clamp(1rem, 3vw, 2rem) clamp(0.5rem, 2vw, 2rem);
+    background: var(--color-ink);
   }
-  .soon__lede {
-    max-width: 56ch;
+  .mapwrap svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 68rem;
+    margin-inline: auto;
   }
-  .soon__head {
-    color: var(--color-stone);
-    margin: 2.5rem 0 0.9rem;
+  .m-sphere { fill: #0d1116; stroke: none; }
+  .m-grat { fill: none; stroke: var(--color-rule-dark); stroke-width: 0.5; }
+  .m-country {
+    fill: #1d242d;
+    stroke: #0d1116;
+    stroke-width: 0.4;
   }
-  .soon__countries {
+  /* The beam: only the places they actually went. */
+  .m-country--visited {
+    fill: var(--color-rime);
+    transition: fill 150ms ease;
+  }
+  .m-link:hover .m-country--visited,
+  .m-link:focus-visible .m-country--visited {
+    fill: var(--color-headlamp);
+  }
+  /* Countries too small to draw as polygons at this scale. */
+  .m-point {
+    fill: var(--color-rime);
+    stroke: #0d1116;
+    stroke-width: 1;
+    transition: fill 150ms ease, r 150ms ease;
+  }
+  .m-link:hover .m-point,
+  .m-link:focus-visible .m-point {
+    fill: var(--color-headlamp);
+    r: 6;
+  }
+  .mapwrap figcaption {
+    max-width: 68rem;
+    margin: 1rem auto 0;
+    color: var(--color-stone-on-dark);
+    font-size: 0.625rem;
+  }
+
+  .legend {
+    max-width: 68rem;
+    margin: clamp(2rem, 4vw, 3rem) auto 0;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .legend__head { color: var(--color-stone); margin: 0 0 0.9rem; }
+  .legend ul {
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
@@ -61,9 +212,13 @@ const countries = [...new Set(trips.flatMap((t) => t.data.countries))].sort();
     margin: 0;
     padding: 0;
   }
-  .soon__countries li {
+  .legend a {
+    display: inline-block;
     padding: 0.3rem 0.6rem;
     border: 1px solid var(--color-rule);
+    text-decoration: none;
     color: var(--color-stone);
   }
+  .legend a:hover { border-color: var(--color-ink); color: var(--color-ink); }
+  .legend__n { color: var(--color-headlamp); }
 </style>

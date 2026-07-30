@@ -17,3 +17,12 @@ public/photos
 # Fonts are copied from node_modules by `npm run fonts` but committed,
 # so the site builds without a network round-trip.
 !public/fonts
+
+# Generated search index, mirrored for dev by `npm run index`.
+public/pagefind
+
+# Promoted inbox originals are kept locally, not in the repo.
+content/inbox/promoted
+
+# Generated share cards, rebuilt by `npm run og` during the build.
+public/og

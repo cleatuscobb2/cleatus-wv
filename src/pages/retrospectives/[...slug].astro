@@ -1,0 +1,85 @@
+---
+/**
+ * §7.7 — retrospectives. A separate collection so Andy or Beth can write about a
+ * trip years later without touching what they wrote at the time. The gap between
+ * the two is the most interesting thing the archive has.
+ */
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Photo from '../../components/Photo.astro';
+import PhotoPair from '../../components/PhotoPair.astro';
+import PhotoStrip from '../../components/PhotoStrip.astro';
+import Aside from '../../components/Aside.astro';
+import PullQuote from '../../components/PullQuote.astro';
+import { fmtDate, AUTHOR_NAMES, excerpt } from '../../lib/entries.ts';
+
+export async function getStaticPaths() {
+  const items = await getCollection('retrospectives');
+  const trips = await getCollection('trips');
+  return items.map((item) => ({
+    params: { slug: item.id },
+    props: {
+      item,
+      trip: trips.find(
+        (t) => t.id === (typeof item.data.trip === 'string' ? item.data.trip : item.data.trip.id),
+      ),
+    },
+  }));
+}
+
+const { item, trip } = Astro.props;
+const { Content } = await render(item);
+const d = item.data;
+---
+
+<Base
+  title={d.title}
+  description={excerpt(item.body, 155) ||
+    `${AUTHOR_NAMES[d.author]} looks back on ${trip?.data.title ?? 'the trip'}.`}
+  ogImage={trip?.data.hero}
+>
+  <article class="retro">
+    <p class="mono retro__kicker">
+      {trip && <a href={`/${trip.id}/`}>{trip.data.shortTitle}</a>}
+      <span aria-hidden="true"> › </span>Afterward
+    </p>
+    <h1 class="display retro__title">{d.title}</h1>
+    <p class={`byline byline--${d.author}`}>
+      <span class="mono byline__who">{AUTHOR_NAMES[d.author]}</span>
+      <span class="mono byline__when">Written {fmtDate(d.writtenAt)}</span>
+      {trip && (
+        <span class="mono byline__gap">
+          {d.writtenAt.getUTCFullYear() - trip.data.year} years later
+        </span>
+      )}
+    </p>
+    <div class="prose-entry">
+      <Content components={{ Photo, PhotoPair, PhotoStrip, Aside, PullQuote }} />
+    </div>
+  </article>
+</Base>
+
+<style>
+  .retro {
+    max-width: calc(var(--measure) + 6rem);
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .retro__kicker { color: var(--color-stone); margin: 0; }
+  .retro__kicker a { color: inherit; text-decoration: none; }
+  .retro__kicker a:hover { color: var(--color-ink); }
+  .retro__title {
+    font-size: clamp(1.9rem, 4.2vw, 2.85rem);
+    margin: 0.6rem 0 0.9rem;
+    max-width: 22ch;
+  }
+  .byline {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+    margin: 0 0 1.75rem; padding-left: 0.75rem;
+    border-left: 3px solid var(--color-stone);
+  }
+  .byline--beth { border-left-color: var(--color-rime); }
+  .byline--andy { border-left-color: var(--color-headlamp); }
+  .byline__who { color: var(--color-ink); font-weight: 600; }
+  .byline__when, .byline__gap { color: var(--color-stone); }
+</style>

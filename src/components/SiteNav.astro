@@ -15,9 +15,20 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
 ---
 
 <header class="nav">
-  <a href="/" class="nav__mark">
-    <span class="nav__mark-a display">Cleatus</span>
-    <span class="nav__mark-b mono">&amp; the West Virginian</span>
+  <!--
+    Both halves of the name are set identically — same face, size, weight and
+    colour — and the ampersand is the loudest thing in it. The previous wordmark
+    put "Cleatus" in 17px display white and "& the West Virginian" in 11px grey
+    mono, which set one name as a title and the other as its caption. These are
+    two people, so they get equal billing and the join carries the emphasis.
+
+    aria-label rather than relying on the spans: three separate boxes concatenate
+    without spaces, which announced as "Cleatusthe West Virginian".
+  -->
+  <a href="/" class="nav__mark" aria-label="Cleatus and the West Virginian — home">
+    <span class="nav__mark-name display">Cleatus</span>
+    <span class="nav__mark-amp" aria-hidden="true">&amp;</span>
+    <span class="nav__mark-name display">the West Virginian</span>
   </a>
   <nav aria-label="Primary">
     <ul>
@@ -55,18 +66,29 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
   .nav__mark {
     display: flex;
     align-items: baseline;
-    gap: 0.55rem;
+    gap: 0.4rem;
     text-decoration: none;
     flex-wrap: wrap;
   }
-  .nav__mark-a {
-    font-size: 1.0625rem;
+  /* Identical by construction — one rule serves both names, so they cannot
+     drift apart later. */
+  .nav__mark-name {
+    font-size: clamp(0.8125rem, 1.35vw, 1.0625rem);
     font-stretch: 118%;
-    letter-spacing: 0.01em;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-snow);
   }
-  .nav__mark-b {
-    color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+  /* The join, and the only emphasis in the wordmark. --headlamp is 11.29:1 on
+     the nav's --ink, so it carries weight without straining to be read. */
+  .nav__mark-amp {
+    font-family: var(--font-display);
+    font-stretch: 118%;
+    font-weight: 700;
+    font-size: clamp(1.15rem, 1.95vw, 1.5rem);
+    line-height: 1;
+    color: var(--color-headlamp);
   }
   .nav ul {
     display: flex;

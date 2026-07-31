@@ -207,6 +207,75 @@ page itself so the absence reads as deliberate rather than broken.
 Page clicks beyond navigation need explicit `track()` calls on specific elements
 — worth adding only for something specific, like how often "Start here" is used.
 
+## 7b. Comments — public, not just family
+
+Decided: open to public readers as well as family. That is the more demanding of
+the two shapes, and it settles most of the design by itself.
+
+### Before building anything: recover the 176 you already have
+
+The old site carries **176 comments across 103 posts** — eight on Day 9
+Gondogoro La, nine on "Getting Prepared" from 2009, seven on the last day in
+Nepal. The archive captured the *counts only*; not one word of the text.
+
+They are not reachable from the JSON API (item-level returns `commentCount` and
+nothing more) and the widget's endpoint is crumbed, so scraping will not get
+them. The route that works is **Settings → Advanced → Import/Export → export as
+WordPress XML**, which includes comment bodies and authors.
+
+That export dies with the subscription. Restoring fifteen years of family saying
+*be careful* is worth more than anything a new system collects in its first year,
+and it is a five-minute job that cannot be done later.
+
+### What "public" changes
+
+| | Family-only | Public |
+|---|---|---|
+| Spam | rare | continuous, from day one |
+| Abuse | negligible | has to be assumed |
+| Volume | a handful per trip | unbounded |
+| Moderation | occasional | a standing job |
+| Personal data | people you know | strangers, incl. EU residents |
+
+So three things stop being optional:
+
+**Default-deny.** Nothing appears until approved. This is not primarily about
+spam — it is that Andy and Beth vanish for six weeks at a time. Anything that
+publishes on submission means abuse sitting on the site, in public, while they
+are on a glacier and cannot see it.
+
+**A real bot barrier.** Honeypot field, per-IP rate limit, and Cloudflare
+Turnstile — free, privacy-preserving, and invisible to most readers. A public
+form on 295 indexed pages gets bot traffic within days.
+
+**A data answer.** Storing a stranger's name and email is a retention
+obligation. Store a name, never display an email, and have a deletion path.
+
+### Shape
+
+Reader submits → serverless function validates and rate-limits → comment lands
+in a pending queue → approved from `/admin/comments` in the same batch-commit UI
+as the tagging view → approved comments are committed to
+`src/content/comments/<trip>/<entry>/<id>.md` and the site rebuilds.
+
+Git-backed for the reason that matters here: **their comments have already died
+once.** A hosted service is exactly how the first 176 were lost. Committed to the
+repo, comments sit beside the writing and survive any platform, exportable
+forever.
+
+Recovered comments land in the same collection, marked `archival: true` and
+dated, so 2009's replies render alongside next year's.
+
+Volume makes this workable: 176 comments in fifteen years is about one a month,
+so a rebuild per approval costs nothing.
+
+### Effort
+
+Roughly a day or two **on top of** Phase B — it reuses the auth, the
+`ContentStore`, and the batch-commit moderation UI. Very little of it is new
+machinery; comments are mostly another content type flowing through the same
+pipe.
+
 ## 8. Open questions
 
 1. Do you both have GitHub accounts? OAuth needs one each. If Beth would rather

@@ -6,6 +6,7 @@ import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import RouteLine from '../../components/RouteLine.astro';
 import LegStats from '../../components/LegStats.astro';
+import TrekProfile from '../../components/TrekProfile.astro';
 import Photo from '../../components/Photo.astro';
 import PhotoPair from '../../components/PhotoPair.astro';
 import PhotoStrip from '../../components/PhotoStrip.astro';
@@ -111,6 +112,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       </p>
 
       {d.leg && <LegStats leg={d.leg} />}
+      {d.leg && trip && <TrekProfile siblings={siblings} current={me} tripSlug={trip.id} />}
 
       <div class="prose-entry">
         <Content components={{ Photo, PhotoPair, PhotoStrip, Aside, PullQuote }} />

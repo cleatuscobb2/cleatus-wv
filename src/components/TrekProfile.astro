@@ -1,0 +1,187 @@
+---
+/**
+ * The trek in section: distance along, altitude up, with this day lit.
+ *
+ * Deliberately not a geographic map. There is not a single coordinate anywhere
+ * in the archive — EXIF was stripped from all 755 photographs and there are no
+ * GPX tracks — so a map would mean inventing positions for Askole, Concordia and
+ * Gondogoro La and drawing them as fact. What the entries *do* record is
+ * distance and altitude for every day, which on this trek is the actual story:
+ * 10,500 ft at the roadhead, 18,500 at the pass, 9,400 at the far side.
+ *
+ * Built from `leg` frontmatter at render time. Zero client JS.
+ */
+import { entrySlug, type Entry } from '../lib/entries.ts';
+
+interface Props {
+  siblings: Entry[];
+  current: string;
+  tripSlug: string;
+}
+const { siblings, current, tripSlug } = Astro.props;
+
+interface Pt { slug: string; day: number | null; x: number; y: number; label: string; isLow?: boolean }
+
+const legs = siblings
+  .filter((e) => e.data.leg?.elevationHighFt)
+  .sort((a, b) => (a.data.day ?? 0) - (b.data.day ?? 0));
+
+/*
+ * `cumulativeMi` is the x-axis where the entries recorded it. Day 1 never did —
+ * it is the first leg, so its own distance is the distance travelled. Days that
+ * record neither (the rest day) inherit the previous position, which is correct:
+ * a rest day covers no ground.
+ */
+let running = 0;
+const pts: Pt[] = [];
+for (const e of legs) {
+  const leg = e.data.leg!;
+  running = leg.cumulativeMi ?? (leg.distanceMi != null ? running + leg.distanceMi : running);
+  const slug = entrySlug(e);
+  pts.push({
+    slug, day: e.data.day, x: running, y: leg.elevationHighFt!,
+    label: leg.to ?? leg.from ?? e.data.title,
+  });
+  // A day that tops out and then drops — the descent is half of what happened.
+  if (leg.elevationLowFt != null) {
+    pts.push({ slug, day: e.data.day, x: running + 1.2, y: leg.elevationLowFt, label: 'descent', isLow: true });
+  }
+}
+
+const W = 1000;
+const H = 260;
+const PAD_X = 34;
+const PAD_T = 34;
+const PAD_B = 40;
+
+const maxX = Math.max(...pts.map((p) => p.x), 1);
+const ys = pts.map((p) => p.y);
+const minY = Math.min(...ys);
+const maxY = Math.max(...ys);
+const spanY = Math.max(1, maxY - minY);
+
+const sx = (x: number) => PAD_X + (x / maxX) * (W - PAD_X * 2);
+const sy = (y: number) => H - PAD_B - ((y - minY) / spanY) * (H - PAD_T - PAD_B);
+
+const line = pts.map((p, i) => `${i ? 'L' : 'M'} ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(' ');
+const area = `${line} L ${sx(pts[pts.length - 1].x).toFixed(1)} ${H - PAD_B} L ${sx(pts[0].x).toFixed(1)} ${H - PAD_B} Z`;
+
+const here = pts.filter((p) => p.slug === current);
+const summit = pts.reduce((a, b) => (b.y > a.y ? b : a), pts[0]);
+const ft = (n: number) => n.toLocaleString('en-US');
+const gridYs = [minY, minY + spanY / 2, maxY];
+---
+
+{pts.length > 2 && (
+  <figure class="profile">
+    <figcaption class="mono profile__cap">
+      <span>Where this day sits on the trek</span>
+      <span class="profile__axis">{ft(maxY)} ft high · {Math.round(maxX)} mi total</span>
+    </figcaption>
+
+    <nav
+      class="profile__plot"
+      aria-label={`Trek profile: ${legs.length} days, ${Math.round(maxX)} miles, topping out at ${ft(maxY)} feet`}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" focusable="false">
+        {gridYs.map((g) => (
+          <line class="pr-grid" x1={PAD_X} x2={W - PAD_X} y1={sy(g)} y2={sy(g)} />
+        ))}
+        <path class="pr-area" d={area} />
+        <path class="pr-line" d={line} />
+
+        {here.length > 0 && (
+          <line class="pr-here" x1={sx(here[0].x)} x2={sx(here[0].x)} y1={PAD_T - 18} y2={H - PAD_B} />
+        )}
+
+        {pts.filter((p) => !p.isLow).map((p) => (
+          <a href={`/${tripSlug}/${p.slug}/`}>
+            <title>{p.day ? `Day ${p.day} — ` : ''}{p.label} · {ft(p.y)} ft · mile {Math.round(p.x)}</title>
+            <circle
+              class={p.slug === current ? 'pr-node pr-node--here' : 'pr-node'}
+              cx={sx(p.x)} cy={sy(p.y)} r={p.slug === current ? 7 : 4}
+            />
+          </a>
+        ))}
+      </svg>
+
+      {/* Labels sit outside the stretched SVG so they are never distorted. */}
+      <span class="mono pr-tag pr-tag--start" style={`left:${(sx(pts[0].x) / W) * 100}%`}>
+        {legs[0]?.data.leg?.from ?? ''}
+      </span>
+      <span class="mono pr-tag pr-tag--summit" style={`left:${(sx(summit.x) / W) * 100}%`}>
+        {ft(summit.y)} ft
+      </span>
+      <span class="mono pr-tag pr-tag--end" style={`left:${(sx(pts[pts.length - 1].x) / W) * 100}%`}>
+        {legs[legs.length - 1]?.data.leg?.to ?? ''}
+      </span>
+    </nav>
+  </figure>
+)}
+
+<style>
+  .profile {
+    max-width: var(--measure);
+    margin: 0 0 2rem;
+    padding: 0.9rem 1.15rem 1.1rem;
+    background: var(--color-ink);
+    border-left: 3px solid var(--color-rime);
+  }
+  .profile__cap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.35rem 1rem;
+    color: var(--color-stone-on-dark);
+    font-size: 0.625rem;
+    margin-bottom: 0.5rem;
+  }
+  .profile__axis { color: var(--color-rime); }
+
+  .profile__plot {
+    position: relative;
+    display: block;
+  }
+  .profile__plot svg {
+    display: block;
+    width: 100%;
+    height: clamp(112px, 20vw, 150px);
+    overflow: visible;
+  }
+
+  .pr-grid { stroke: var(--color-rule-dark); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .pr-area { fill: var(--color-rime); opacity: 0.10; }
+  .pr-line {
+    fill: none; stroke: var(--color-rime); stroke-width: 2;
+    stroke-linejoin: round; vector-effect: non-scaling-stroke;
+  }
+  .pr-here {
+    stroke: var(--color-headlamp); stroke-width: 1;
+    stroke-dasharray: 3 3; vector-effect: non-scaling-stroke;
+  }
+  .pr-node {
+    fill: var(--color-ink); stroke: var(--color-rime); stroke-width: 2;
+    vector-effect: non-scaling-stroke; transition: fill 150ms ease;
+  }
+  .pr-node--here { fill: var(--color-headlamp); stroke: var(--color-headlamp); }
+  a:hover .pr-node, a:focus-visible .pr-node { fill: var(--color-headlamp); stroke: var(--color-headlamp); }
+
+  .pr-tag {
+    position: absolute;
+    bottom: -0.15rem;
+    transform: translateX(-50%);
+    /* 0.625rem to match every other caption on the site; these are place names,
+       not year ticks, and 9px was the smallest text anywhere. */
+    font-size: 0.625rem;
+    color: var(--color-stone-on-dark);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .pr-tag--start { transform: translateX(0); }
+  .pr-tag--end { transform: translateX(-100%); }
+  .pr-tag--summit { bottom: auto; top: -0.35rem; color: var(--color-headlamp); }
+
+  @media (max-width: 600px) {
+    .pr-tag--summit { display: none; }
+  }
+</style>

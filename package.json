@@ -4,6 +4,10 @@
   "description": "cleatusandthewestvirginian.com — Andy and Beth's travel journal, 2009–present",
   "type": "module",
   "private": true,
+  "engineComment": "Build scripts run TypeScript directly via node --experimental-strip-types, which needs Node 22+. Pinned so a CI builder cannot silently pick an older runtime. Keep notes OUT of `engines` — npm reads every key there as an engine name and an unknown one fails the check, which silently broke the && chain in `build` before pagefind ran.",
+  "engines": {
+    "node": ">=22"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "dev": "npm run inbox && npm run photos && astro dev",

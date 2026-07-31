@@ -30,18 +30,94 @@ function fm(src: string, key: string): string | null {
 
 const todo: string[] = [];
 let written = 0;
+let refreshed = 0;
+const FORCE = process.argv.includes('--force');
 
-for (const trip of TRIPS) {
+/*
+ * Which trips to consider.
+ *
+ * `TRIPS` in scripts/trips.ts is the archival record of what was scraped off
+ * Squarespace — it is history and should stay frozen. A trip taken *after* the
+ * migration will never appear there, so the real list is "every directory that
+ * has entries in it", with the archival list only supplying titles and years
+ * for the imported ones.
+ */
+const entryDirs = (await readdir(ENTRIES, { withFileTypes: true }))
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
+
+const known = new Map(TRIPS.map((t) => [t.slug, t]));
+const slugs = [...new Set([...TRIPS.map((t) => t.slug), ...entryDirs])];
+
+for (const slug of slugs) {
   let files: string[];
   try {
-    files = (await readdir(join(ENTRIES, trip.slug))).filter((f) => f.endsWith('.mdx'));
+    files = (await readdir(join(ENTRIES, slug))).filter((f) => f.endsWith('.mdx'));
   } catch {
     continue; // the duplicate 2015 collection has no entries directory
   }
+  if (!files.length) continue;
 
-  const meta = TRIP_META[trip.slug];
+  const tripFile = join(ROOT, `src/content/trips/${slug}.mdx`);
+  let existing: string | null = null;
+  try { existing = await readFile(tripFile, 'utf8'); } catch { /* new trip */ }
+
+  /*
+   * Never overwrite a trip a human has touched.
+   *
+   * `summaryNeedsReview: false` means someone has written a real summary,
+   * chosen a hero, or fixed the dates. Regenerating would replace all of that
+   * with the auto-derived placeholder and silently undo the work — so those
+   * trips get their derived stats refreshed in place and nothing else.
+   */
+  if (existing && fm(existing, 'summaryNeedsReview') === 'false' && !FORCE) {
+    const rows = [];
+    for (const f of files) {
+      const s = await readFile(join(ENTRIES, slug, f), 'utf8');
+      rows.push({
+        date: fm(s, 'date') ?? '',
+        cumulativeMi: Number(fm(s, '  cumulativeMi')) || null,
+        distanceMi: Number(fm(s, '  distanceMi')) || null,
+        elevationHighFt: Number(fm(s, '  elevationHighFt')) || null,
+      });
+    }
+    const dates = rows.map((r) => r.date).filter(Boolean).sort();
+    const start = new Date(dates[0]);
+    const end = new Date(dates[dates.length - 1]);
+    const days = Math.max(1, Math.round((+end - +start) / 86400000) + 1);
+    const trek = Math.max(0, ...rows.map((r) => r.cumulativeMi ?? 0))
+      || rows.reduce((n, r) => n + (r.distanceMi ?? 0), 0);
+    const maxEl = Math.max(0, ...rows.map((r) => r.elevationHighFt ?? 0));
+    const countries = (existing.match(/^countries: \[(.*)\]$/m)?.[1] ?? '').split(',').filter((x) => x.trim()).length;
+
+    const stats = [
+      'stats:',
+      `  days: ${days}`,
+      `  entries: ${rows.length}`,
+      ...(trek > 0 ? [`  trekMiles: ${Math.round(trek)}`] : []),
+      ...(maxEl > 0 ? [`  maxElevationFt: ${maxEl}`] : []),
+      `  countriesCount: ${countries}`,
+    ].join('\n');
+
+    const next = existing.replace(/^stats:\n(?:  .*\n)*/m, `${stats}\n`);
+    if (next !== existing) await writeFile(tripFile, next, 'utf8');
+    refreshed++;
+    console.log(`${slug.padEnd(50)} stats refreshed (summary kept — hand-edited)`);
+    continue;
+  }
+
+  const trip = known.get(slug) ?? {
+    slug,
+    title: fm(existing ?? '', 'title') ?? slug,
+    year: Number(fm(existing ?? '', 'year')) || new Date().getUTCFullYear(),
+  };
+
+  const meta = TRIP_META[slug];
   if (!meta) {
-    todo.push(`- **${trip.slug}** — no entry in \`src/data/trip-meta.ts\`; countries and short title missing.`);
+    todo.push(
+      `- **${slug}** — new trip with no entry in \`src/data/trip-meta.ts\`. ` +
+      'Run `npm run new:trip` instead, or add countries and a short title there.',
+    );
     continue;
   }
 
@@ -159,4 +235,8 @@ await writeFile(
   'utf8',
 );
 
-console.log(`\ntrips written: ${written}  → TRIPS-TODO.md has ${todo.length} items`);
+console.log(`\ntrips generated: ${written}   stats-only refresh: ${refreshed}`);
+if (refreshed) {
+  console.log('hand-edited trips kept their summary, hero and dates. --force overrides.');
+}
+console.log(`TRIPS-TODO.md has ${todo.length} items`);

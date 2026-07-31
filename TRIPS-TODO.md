@@ -22,8 +22,6 @@ entries. Everything below is a judgement call or a piece of writing that is your
   - ⚠ Germany comes from the Schnapps/Rotwurst posts that close the trip. Confirm it belongs here.
 - **patagoniaspectacular2015** — hero is just the first photograph of the first entry (`01-blogger-image--1258730053.jpg`). Pick the one that should carry the trip.
 - **patagoniaspectacular2015** — summary is auto-derived: _"15 entries from Chile, Argentina, 19 December – 3 January 2015."_ — replace with two sentences in your own voice.
-- **greecelittlerussia2014** — no photographs anywhere in this trip; hero is null and cards fall back to a rule.
-- **greecelittlerussia2014** — summary is auto-derived: _"14 entries from Greece, Russia, 6 June – 19 June 2014."_ — replace with two sentences in your own voice.
 - **iceland-germany-austria-croatia-bosnia-2013** — hero is just the first photograph of the first entry (`01-P8290011.JPG`). Pick the one that should carry the trip.
 - **iceland-germany-austria-croatia-bosnia-2013** — summary is auto-derived: _"18 entries from Iceland, Germany, Austria and 2 more, 28 August – 17 September 2013."_ — replace with two sentences in your own voice.
 - **guatemalabelize2012** — hero is just the first photograph of the first entry (`01-P6290139.JPG`). Pick the one that should carry the trip.

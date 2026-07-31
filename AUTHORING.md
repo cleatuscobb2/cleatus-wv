@@ -79,6 +79,47 @@ Drafts are kept out of the built site until you set it back to `false`.
 
 ## At home — with a computer
 
+### Start a new trip
+
+Do this once per trip, before the first entry.
+
+```bash
+npm run new:trip -- --title "Torres del Paine 2027" --countries CL,AR
+```
+
+It writes `src/content/trips/<slug>.mdx` and makes the entries folder, so you can
+add entries straight away. Options: `--short` (the name used in nav and on cards),
+`--slug`, `--start`, `--end`, `--regions`.
+
+Countries are two-letter codes — `CL`, `AR`, `NP`. If you use one the site hasn't
+seen before it will tell you, and that country needs adding to
+`src/data/trip-meta.ts` or it won't appear on the map or in Places.
+
+Then open the trip file and write the **summary** — two sentences, your words.
+That's the only part nothing else can do for you.
+
+### Editing a trip
+
+Open `src/content/trips/<slug>.mdx` and change it. Everything is editable:
+summary, hero image, dates, countries, `startHere`, `featured`.
+
+**One thing to know.** `npm run gen:trips` recalculates the derived numbers —
+day count, entry count, trek miles, highest point — for every trip. On a trip you
+have edited by hand it refreshes *only those numbers* and leaves your summary,
+hero and dates alone. It knows because of this line:
+
+```
+summaryNeedsReview: false
+```
+
+`false` means a human has been here — don't overwrite. The thirteen imported trips
+still say `true`, because their summaries are auto-derived placeholders. **Once you
+write a real summary, set it to `false`**, or the next run will replace what you
+wrote.
+
+(`--force` overrides all of that and regenerates everything. There is rarely a
+reason to use it.)
+
 ### Start a new entry
 
 ```bash

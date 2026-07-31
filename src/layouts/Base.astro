@@ -1,6 +1,7 @@
 ---
 import '../styles/tokens.css';
 import SiteNav from '../components/SiteNav.astro';
+import Analytics from '@vercel/analytics/astro';
 
 interface Props {
   title: string;
@@ -65,8 +66,20 @@ const ogUrl = ogImage ? new URL(ogImage, canonical).toString() : null;
     </footer>
 
     <!--
-      §7.5 — `/` focuses search from anywhere. This is the only script on a
-      normal page: a few hundred bytes, and nothing depends on it running.
+      Readership counting. Cookieless and aggregate-only: it can tell you that
+      forty people read the Gondogoro La entry from eleven countries, and it
+      cannot tell you who any of them are or link one visit to the next. That is
+      the trade for asking nothing of the reader — no consent banner, no
+      identifier, nothing stored on their machine.
+
+      Deliberately production-only, so `npm run dev` never files fake pageviews
+      against the real numbers.
+    -->
+    {import.meta.env.PROD && <Analytics />}
+
+    <!--
+      §7.5 — `/` focuses search from anywhere. A few hundred bytes, and nothing
+      depends on it running.
     -->
     <script is:inline>
       addEventListener('keydown', (e) => {

@@ -168,6 +168,45 @@ This would also be the natural home for the flags already sitting in
 `migration-review.md` — the four suspect bylines, the leg-stat assumptions — so
 they get resolved rather than living in a file nobody opens.
 
+## 7a. `/admin/readers` — who is actually reading this
+
+Decided: Vercel Web Analytics for collection, and the page lives **behind the
+login**, querying live rather than baking numbers in at deploy.
+
+Behind the login because the data is about other people. An unlinked page is
+obscurity, not protection — anyone the URL reaches would see where your readers
+are and what they read. That is worth a session cookie, not a secret URL.
+
+**Collection is already in place.** `@vercel/analytics` ships on every page in
+production (~2.9 KB inline, no bundle). It is cookieless and aggregate-only, so
+there is no consent banner and nothing stored on a reader's machine.
+
+**One thing only you can do:** Web Analytics has to be switched on in the Vercel
+dashboard — Project → Analytics → Enable. Until then the API returns 404 and
+nothing is recorded. Data starts from the moment it is enabled; none of it is
+retrospective.
+
+What the page shows, all from `get_web_analytics`:
+
+| Panel | Dimension |
+|---|---|
+| Visitors and pageviews | count, with the previous period beside it |
+| Most read | `requestPath`, ranked — which entries people actually finish |
+| Where they are | `country`, against the trips' own countries |
+| How they arrived | `referrerHostname` |
+| What on | `deviceType`, `browserName`, `osName` |
+| Over time | `day` / `week`, so a trip's spike is visible |
+
+**What it will not show, and cannot.** You asked how often people come back.
+Cookieless analytics deliberately cannot link one visit to the next — that needs
+an identifier on the reader's device and, for European readers, consent. New vs
+returning in aggregate is available; per-person histories are not. That is a
+consequence of the choice not to track individuals, and worth restating on the
+page itself so the absence reads as deliberate rather than broken.
+
+Page clicks beyond navigation need explicit `track()` calls on specific elements
+— worth adding only for something specific, like how often "Start here" is used.
+
 ## 8. Open questions
 
 1. Do you both have GitHub accounts? OAuth needs one each. If Beth would rather

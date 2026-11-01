@@ -11,7 +11,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "npm run inbox && npm run photos && astro dev",
-    "build": "npm run inbox && npm run photos && npm run og && astro build && npm run index",
+    "build": "npm run inbox && npm run photos && npm run og && astro build && npm run verify:build && npm run index",
+    "verify:build": "node --experimental-strip-types scripts/verify-build.ts",
     "og": "node --experimental-strip-types scripts/og-images.ts",
     "index": "pagefind --site dist && node --experimental-strip-types scripts/sync-search.ts",
     "preview": "astro preview",

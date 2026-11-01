@@ -245,6 +245,12 @@ tags: ["trekking", "altitude"]
 
 To add a new one, put it in `src/data/tags.ts` first.
 
+**Tagging lots of entries at once:** run `npm run dev` and open
+<http://localhost:4321/admin/curate>. Every entry is one row with a checkbox per
+tag, plus Beth-cried and the byline. Tick down a column, press **Review & save**,
+and the whole batch becomes one commit. **Publish to live site** pushes it. The
+page only exists on the laptop; it is never part of the live site.
+
 ---
 
 ## When something goes wrong

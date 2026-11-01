@@ -59,12 +59,18 @@ factory, not a rewrite.
 
 Runs only under `npm run dev`. **The build must refuse to emit these routes.**
 
-Two guards, because one is not enough:
+Three guards, because one is not enough:
 
-1. Every admin route begins `if (import.meta.env.PROD) return new Response(null, { status: 404 })`.
-2. `scripts/verify-build.ts` fails the build if `dist/admin` or `dist/api` exists.
+1. The routes live in `src/admin/`, not `src/pages/`, and `src/admin/integration.ts`
+   injects them only when Astro's command is `dev`. A build never sees them.
+2. Every admin route runs `guard()` (`src/admin/guard.ts`): 404 outside dev, and
+   every write needs the `x-cleatus-admin` header plus a same-origin `Origin`, so
+   another site open in the same browser can't post to it.
+3. `scripts/verify-build.ts` runs inside `npm run build` and fails it if
+   `dist/admin` or `dist/api` exists, a sitemap lists `/admin`, or any built file
+   contains admin code.
 
-That second guard is the one that matters: it means shipping an unauthenticated
+The last guard is the one that matters: it means shipping an unauthenticated
 admin to production becomes impossible by accident rather than merely unlikely.
 
 ### Views
@@ -171,8 +177,8 @@ Revised 2026-11-01 for Beth being the main, often browser-only, author. Phase B
 moves up from last to third, so she can do real work in a browser as soon as the
 first editing screen exists — rather than after every screen is built locally.
 
-1. `ContentStore` + `FsStore` + the build guard (the seam and the safety net)
-2. `/admin/curate` (clears the largest backlog) — usable locally straight away
+1. ✅ `ContentStore` + `FsStore` + the build guard (the seam and the safety net)
+2. ✅ `/admin/curate` (clears the largest backlog) — usable locally straight away
 3. **Phase B**: adapter, magic-link sign-in, `GitHubStore` — puts 2 in a browser
 4. `/admin/trips` (clears `TRIPS-TODO.md`)
 5. `/admin/entry/…` prose editor
@@ -324,5 +330,7 @@ pipe.
    My recommendation is draft-only: nothing in this archive should be one
    mis-click from gone.
 3. ~~Vercel account?~~ Settled: the site is live on it.
-4. Which address should each of you sign in with, and which display address should
-   appear as author in the public commit history?
+4. ~~Sign-in addresses?~~ Settled 2026-11-01. The real addresses live only in the
+   Vercel env var `ADMIN_EMAILS`, never in this public repo. Beth's commits show
+   `Beth Tisdale <beth@cleatusandthewestvirginian.com>`; Andy's use his existing
+   git identity.

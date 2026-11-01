@@ -1,0 +1,100 @@
+---
+/**
+ * Shell for admin pages. Shares the site's tokens and type, but none of its
+ * public chrome: no analytics, no search, never indexed.
+ */
+import '../styles/tokens.css';
+
+interface Props {
+  title: string;
+  current?: 'home' | 'curate';
+}
+const { title, current } = Astro.props;
+const nav = [
+  { href: '/admin', label: 'Overview', id: 'home' },
+  { href: '/admin/curate', label: 'Tags & bylines', id: 'curate' },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} — Admin</title>
+  </head>
+  <body class="admin">
+    <header class="ad-bar">
+      <a href="/admin" class="ad-mark">
+        <span class="display">Cleatus</span><span class="ad-amp" aria-hidden="true">&amp;</span><span class="display">WV</span>
+        <span class="mono ad-badge">Admin · this laptop</span>
+      </a>
+      <nav aria-label="Admin">
+        {nav.map((n) => (
+          <a href={n.href} class="mono" aria-current={current === n.id ? 'page' : undefined}>{n.label}</a>
+        ))}
+        <a href="/" class="mono ad-site" target="_blank" rel="noopener">View site ↗</a>
+      </nav>
+    </header>
+    <main class="ad-main">
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  body.admin {
+    background: var(--color-snow);
+    font-size: 16px;
+  }
+  .ad-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    padding: 0.7rem clamp(1rem, 3vw, 2rem);
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .ad-mark {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+  .ad-mark .display { font-stretch: 118%; text-transform: uppercase; letter-spacing: 0.03em; }
+  .ad-amp { color: var(--color-headlamp); font-family: var(--font-display); font-weight: 700; }
+  .ad-badge {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.45rem;
+    border: 1px solid var(--color-stone-on-dark);
+    color: var(--color-stone-on-dark);
+    font-size: 0.625rem;
+  }
+  .ad-bar nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .ad-bar nav a {
+    color: var(--color-snow);
+    text-decoration: none;
+    font-size: 0.75rem;
+    padding-bottom: 2px;
+    border-bottom: 1px solid transparent;
+  }
+  .ad-bar nav a:hover { color: var(--color-rime); border-bottom-color: var(--color-rime); }
+  .ad-bar nav a[aria-current='page'] { color: var(--color-headlamp); border-bottom-color: var(--color-headlamp); }
+  .ad-bar nav .ad-site { color: var(--color-stone-on-dark); }
+  .ad-main { padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 4rem; }
+  .ad-h1 {
+    font-family: var(--font-display);
+    font-stretch: 112%;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    margin: 0;
+  }
+  .ad-lede { color: var(--color-stone); margin: 0.4rem 0 0; max-width: 70ch; }
+</style>

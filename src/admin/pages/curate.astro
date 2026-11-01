@@ -1,0 +1,588 @@
+---
+/**
+ * /admin/curate — tag all 295 entries, mark Beth-cried, fix bylines.
+ *
+ * One grid, a column per tag, so tagging is ticking down a column rather than
+ * opening entries one at a time. Nothing is written until "Review & save", and
+ * then the whole session becomes one commit. Publishing is a separate step.
+ */
+import AdminLayout from '../AdminLayout.astro';
+import { getStore } from '../store/index.ts';
+import { readMeta, excerptOf } from '../frontmatter.ts';
+import { TAGS, TAG_LABELS } from '../../data/tags.ts';
+import { guard } from '../guard.ts';
+
+export const prerender = false;
+
+const blocked = guard(Astro.request);
+if (blocked) return blocked;
+
+const store = getStore();
+
+const trips = await Promise.all(
+  (await store.list('src/content/trips', '.mdx')).map(async (p) => {
+    const t = (await store.read(p)).text;
+    const id = p.split('/').pop()!.replace(/\.mdx$/, '');
+    return {
+      id,
+      short: t.match(/^shortTitle:\s*"(.*)"\s*$/m)?.[1] ?? id,
+      start: t.match(/^dateStart:\s*(\S+)/m)?.[1] ?? '',
+    };
+  }),
+);
+trips.sort((a, b) => a.start.localeCompare(b.start));
+const shortOf = new Map(trips.map((t) => [t.id, t.short]));
+
+const entries = await Promise.all(
+  (await store.list('src/content/entries', '.mdx')).map(async (path) => {
+    const { text, version } = await store.read(path);
+    const m = readMeta(text);
+    return {
+      path,
+      version,
+      trip: m.trip,
+      tripShort: shortOf.get(m.trip) ?? m.trip,
+      slug: path.split('/').pop()!.replace(/\.mdx$/, ''),
+      title: m.title,
+      date: m.date,
+      day: m.day,
+      authors: m.authors,
+      tags: m.tags,
+      bethCried: m.bethCried,
+      draft: m.draft,
+      excerpt: excerptOf(text),
+    };
+  }),
+);
+entries.sort((a, b) => a.date.localeCompare(b.date) || (a.day ?? 0) - (b.day ?? 0) || a.path.localeCompare(b.path));
+
+// `<` escaped so nothing in an entry title can close the script tag early.
+const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries }).replace(/</g, '\\u003c');
+---
+
+<AdminLayout title="Tags & bylines" current="curate">
+  <div class="cu-top">
+    <div>
+      <h1 class="ad-h1">Tags &amp; bylines</h1>
+      <p class="ad-lede">
+        Tick down a column to tag. Hover a title to see how the entry opens; click it
+        to read the whole thing. Nothing is saved until you press <strong>Review &amp; save</strong>.
+      </p>
+    </div>
+    <p class="mono cu-stat"><span id="cu-tagged">0</span> / {entries.length} tagged</p>
+  </div>
+
+  <div class="cu-filters" role="group" aria-label="Filter entries">
+    <label class="mono">Trip
+      <select id="f-trip">
+        <option value="">All trips</option>
+        {trips.map((t) => <option value={t.id}>{t.short}</option>)}
+      </select>
+    </label>
+    <label class="mono">By
+      <select id="f-by">
+        <option value="">Anyone</option>
+        <option value="beth">Beth</option>
+        <option value="andy">Andy</option>
+        <option value="both">Both</option>
+      </select>
+    </label>
+    <label class="mono"><input type="checkbox" id="f-untagged" /> Untagged only</label>
+    <label class="mono"><input type="checkbox" id="f-changed" /> Unsaved only</label>
+    <label class="mono cu-search">Find
+      <input type="search" id="f-q" placeholder="title or opening words" />
+    </label>
+    <span class="mono cu-shown" id="cu-shown" aria-live="polite"></span>
+  </div>
+
+  <div class="cu-wrap">
+    <table class="cu">
+      <thead>
+        <tr>
+          <th class="c-date" scope="col">Date</th>
+          <th class="c-trip" scope="col">Trip</th>
+          <th class="c-title" scope="col">Entry</th>
+          <th class="c-by" scope="col">By</th>
+          {TAGS.map((t) => (
+            <th class="c-tag" scope="col">
+              <span class="vlabel">{TAG_LABELS[t]}</span>
+              <span class="mono n" data-count={t}>0</span>
+            </th>
+          ))}
+          <th class="c-tag c-cried" scope="col">
+            <span class="vlabel">Beth cried</span>
+            <span class="mono n" data-count="__cried">0</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="cu-body"></tbody>
+    </table>
+  </div>
+
+  <div class="cu-foot" id="publish">
+    <span class="mono" id="cu-dirty">No unsaved changes</span>
+    <button type="button" id="cu-review" class="btn btn--primary" disabled>Review &amp; save</button>
+    <span class="cu-sep"></span>
+    <span class="mono cu-note" id="cu-note" aria-live="polite"></span>
+    <button type="button" id="cu-publish" class="btn" hidden>Publish to live site</button>
+  </div>
+
+  <dialog id="cu-dialog" aria-labelledby="cu-dialog-h">
+    <h2 id="cu-dialog-h" class="ad-h1 dlg-h">Save changes</h2>
+    <ul id="cu-changes" class="dlg-list"></ul>
+    <label class="mono dlg-msg">Commit message
+      <textarea id="cu-msg" rows="5"></textarea>
+    </label>
+    <p class="dlg-err" id="cu-error" role="alert"></p>
+    <div class="dlg-actions">
+      <button type="button" id="cu-cancel" class="btn">Keep editing</button>
+      <button type="button" id="cu-commit" class="btn btn--primary">Save as one commit</button>
+    </div>
+  </dialog>
+
+  <script type="application/json" id="curate-data" set:html={payload}></script>
+</AdminLayout>
+
+<script>
+  type AuthorKey = 'beth' | 'andy' | 'both';
+  interface Entry {
+    path: string; version: string; trip: string; tripShort: string; slug: string;
+    title: string; date: string; day: number | null; authors: string[]; tags: string[];
+    bethCried: boolean; draft: boolean; excerpt: string;
+  }
+  interface State { tags: Set<string>; cried: boolean; by: AuthorKey }
+  interface Row { e: Entry; orig: State; cur: State }
+
+  const ADMIN = { 'x-cleatus-admin': '1' };
+  const data = JSON.parse(document.getElementById('curate-data')!.textContent!) as {
+    tags: string[]; labels: Record<string, string>; entries: Entry[];
+  };
+  const TAGS = data.tags;
+  const NAMES: Record<AuthorKey, string> = { beth: 'Beth', andy: 'Andy', both: 'Both' };
+
+  const keyOf = (a: string[]): AuthorKey =>
+    a.includes('andy') && a.includes('beth') ? 'both' : a.includes('andy') ? 'andy' : 'beth';
+  const authorsOf = (k: AuthorKey) => (k === 'both' ? ['andy', 'beth'] : [k]);
+  const snap = (e: Entry): State => ({ tags: new Set(e.tags), cried: e.bethCried, by: keyOf(e.authors) });
+  const copy = (s: State): State => ({ tags: new Set(s.tags), cried: s.cried, by: s.by });
+  const same = (a: State, b: State) =>
+    a.cried === b.cried && a.by === b.by && a.tags.size === b.tags.size && [...a.tags].every((t) => b.tags.has(t));
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+  const rows: Row[] = data.entries.map((e) => ({ e, orig: snap(e), cur: snap(e) }));
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  // ---- render once ---------------------------------------------------------
+  const body = $('cu-body');
+  body.innerHTML = rows.map((r, i) => {
+    const e = r.e;
+    const tagCells = TAGS.map((t) =>
+      `<td class="c-tag"><input type="checkbox" data-tag="${t}" aria-label="${esc(data.labels[t])}: ${esc(e.title)}"${r.cur.tags.has(t) ? ' checked' : ''}></td>`,
+    ).join('');
+    const byOpts = (['beth', 'andy', 'both'] as const)
+      .map((k) => `<option value="${k}"${r.cur.by === k ? ' selected' : ''}>${NAMES[k]}</option>`).join('');
+    return `<tr data-i="${i}">
+      <td class="c-date mono">${esc(e.date)}${e.day != null ? `<span class="day">Day ${e.day}</span>` : ''}</td>
+      <td class="c-trip">${esc(e.tripShort)}</td>
+      <td class="c-title"><a href="/${esc(e.trip)}/${esc(e.slug)}/" target="_blank" rel="noopener" title="${esc(e.excerpt)}">${esc(e.title)}</a>${e.draft ? ' <span class="mono draft">draft</span>' : ''}</td>
+      <td class="c-by"><select data-by aria-label="Byline: ${esc(e.title)}">${byOpts}</select></td>
+      ${tagCells}
+      <td class="c-tag c-cried"><input type="checkbox" data-cried aria-label="Beth cried: ${esc(e.title)}"${r.cur.cried ? ' checked' : ''}></td>
+    </tr>`;
+  }).join('');
+  const trs = [...body.querySelectorAll('tr')] as HTMLTableRowElement[];
+
+  // ---- per-row and totals --------------------------------------------------
+  function refreshRow(tr: HTMLTableRowElement, r: Row) {
+    tr.classList.toggle('dirty', !same(r.orig, r.cur));
+    for (const box of tr.querySelectorAll<HTMLInputElement>('input[data-tag]')) {
+      const t = box.dataset.tag!;
+      box.parentElement!.classList.toggle('chg', r.orig.tags.has(t) !== r.cur.tags.has(t));
+    }
+    tr.querySelector('[data-cried]')!.parentElement!.classList.toggle('chg', r.orig.cried !== r.cur.cried);
+    tr.querySelector('[data-by]')!.parentElement!.classList.toggle('chg', r.orig.by !== r.cur.by);
+  }
+
+  function refreshTotals() {
+    for (const t of TAGS) {
+      document.querySelector(`[data-count="${t}"]`)!.textContent = String(rows.filter((r) => r.cur.tags.has(t)).length);
+    }
+    document.querySelector('[data-count="__cried"]')!.textContent = String(rows.filter((r) => r.cur.cried).length);
+    $('cu-tagged').textContent = String(rows.filter((r) => r.cur.tags.size).length);
+    const n = rows.filter((r) => !same(r.orig, r.cur)).length;
+    $('cu-dirty').textContent = n ? `${n} unsaved ${n === 1 ? 'change' : 'changes'}` : 'No unsaved changes';
+    $<HTMLButtonElement>('cu-review').disabled = n === 0;
+  }
+
+  body.addEventListener('change', (ev) => {
+    const el = ev.target as HTMLInputElement | HTMLSelectElement;
+    const tr = el.closest('tr') as HTMLTableRowElement;
+    const r = rows[Number(tr.dataset.i)];
+    if (el.matches('[data-tag]')) {
+      const t = (el as HTMLInputElement).dataset.tag!;
+      (el as HTMLInputElement).checked ? r.cur.tags.add(t) : r.cur.tags.delete(t);
+    } else if (el.matches('[data-cried]')) {
+      r.cur.cried = (el as HTMLInputElement).checked;
+    } else if (el.matches('[data-by]')) {
+      r.cur.by = (el as HTMLSelectElement).value as AuthorKey;
+    }
+    // Deliberately not re-filtering here: with "Untagged only" on, a row would
+    // vanish from under the cursor the moment its first tag was ticked.
+    refreshRow(tr, r);
+    refreshTotals();
+  });
+
+  // ---- filters -------------------------------------------------------------
+  const fTrip = $<HTMLSelectElement>('f-trip');
+  const fBy = $<HTMLSelectElement>('f-by');
+  const fUntagged = $<HTMLInputElement>('f-untagged');
+  const fChanged = $<HTMLInputElement>('f-changed');
+  const fQ = $<HTMLInputElement>('f-q');
+
+  function applyFilters() {
+    const q = fQ.value.trim().toLowerCase();
+    let shown = 0;
+    trs.forEach((tr, i) => {
+      const r = rows[i];
+      const show =
+        (!fTrip.value || r.e.trip === fTrip.value) &&
+        (!fBy.value || r.cur.by === fBy.value) &&
+        (!fUntagged.checked || r.cur.tags.size === 0) &&
+        (!fChanged.checked || !same(r.orig, r.cur)) &&
+        (!q || r.e.title.toLowerCase().includes(q) || r.e.excerpt.toLowerCase().includes(q));
+      tr.hidden = !show;
+      if (show) shown++;
+    });
+    $('cu-shown').textContent = shown === rows.length ? `${shown} entries` : `showing ${shown} of ${rows.length}`;
+  }
+  for (const el of [fTrip, fBy, fUntagged, fChanged]) el.addEventListener('change', applyFilters);
+  fQ.addEventListener('input', applyFilters);
+
+  // ---- review & save -------------------------------------------------------
+  function describe(r: Row) {
+    const parts: string[] = [];
+    for (const t of TAGS) {
+      const a = r.orig.tags.has(t), b = r.cur.tags.has(t);
+      if (!a && b) parts.push(`+${t}`);
+      if (a && !b) parts.push(`−${t}`);
+    }
+    if (r.orig.cried !== r.cur.cried) parts.push(r.cur.cried ? 'Beth cried' : 'Beth cried removed');
+    if (r.orig.by !== r.cur.by) parts.push(`by ${NAMES[r.orig.by]} → ${NAMES[r.cur.by]}`);
+    return parts.join('  ');
+  }
+
+  function defaultMessage(dirty: Row[]) {
+    const kinds = new Set<string>();
+    for (const r of dirty) {
+      if (TAGS.some((t) => r.orig.tags.has(t) !== r.cur.tags.has(t))) kinds.add('tags');
+      if (r.orig.cried !== r.cur.cried) kinds.add('Beth cried');
+      if (r.orig.by !== r.cur.by) kinds.add('bylines');
+    }
+    const head = `Curate ${dirty.length} ${dirty.length === 1 ? 'entry' : 'entries'}: ${[...kinds].join(', ')}`;
+    return `${head}\n\n${dirty.map((r) => `- ${r.e.trip}/${r.e.slug}: ${describe(r)}`).join('\n')}`;
+  }
+
+  const dialog = $<HTMLDialogElement>('cu-dialog');
+  const msg = $<HTMLTextAreaElement>('cu-msg');
+  const err = $('cu-error');
+  const commitBtn = $<HTMLButtonElement>('cu-commit');
+
+  $('cu-review').addEventListener('click', () => {
+    const dirty = rows.filter((r) => !same(r.orig, r.cur));
+    $('cu-dialog-h').textContent = `Save ${dirty.length} ${dirty.length === 1 ? 'change' : 'changes'}`;
+    $('cu-changes').innerHTML = dirty
+      .map((r) => `<li><span class="dlg-title">${esc(r.e.title)}</span><span class="mono dlg-diff">${esc(describe(r))}</span></li>`)
+      .join('');
+    msg.value = defaultMessage(dirty);
+    err.textContent = '';
+    dialog.showModal();
+  });
+  $('cu-cancel').addEventListener('click', () => dialog.close());
+
+  // Under `astro dev`, writing a content file makes Astro reload the page —
+  // sometimes before the save response arrives. Keep the view (filters, scroll)
+  // and a "just saved" flag across that reload so it doesn't look like a reset.
+  const VIEW_KEY = 'cu-view';
+  const SAVING_KEY = 'cu-saving';
+  const ss = {
+    get: (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } },
+    set: (k: string, v: string) => { try { sessionStorage.setItem(k, v); } catch {} },
+    del: (k: string) => { try { sessionStorage.removeItem(k); } catch {} },
+  };
+
+  commitBtn.addEventListener('click', async () => {
+    const dirty = rows.filter((r) => !same(r.orig, r.cur));
+    commitBtn.disabled = true;
+    err.textContent = '';
+    ss.set(SAVING_KEY, `${Date.now()}`);
+    try {
+      const res = await fetch('/api/admin/curate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...ADMIN },
+        body: JSON.stringify({
+          message: msg.value,
+          changes: dirty.map((r) => ({
+            path: r.e.path, version: r.e.version,
+            tags: [...r.cur.tags], bethCried: r.cur.cried, authors: authorsOf(r.cur.by),
+          })),
+        }),
+      });
+      const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (res.ok && out.commit) ss.set(SAVING_KEY, `${Date.now()} ${out.commit}`);
+      else ss.del(SAVING_KEY);
+      if (res.status === 409) {
+        err.textContent = `Nothing was saved. These entries changed on disk after this page loaded: ${out.paths.join(', ')}. Reload the page to pick up the new versions.`;
+        return;
+      }
+      if (!res.ok) { err.textContent = `Nothing was saved: ${out.error}`; return; }
+
+      for (const r of dirty) {
+        const v = out.versions?.[r.e.path];
+        if (v) r.e.version = v;
+        r.orig = copy(r.cur);
+      }
+      trs.forEach((tr, i) => refreshRow(tr, rows[i]));
+      refreshTotals();
+      dialog.close();
+      $('cu-note').textContent = out.commit ? `Saved on this laptop as ${out.commit}.` : 'Nothing needed saving.';
+      await refreshGit();
+    } catch (e) {
+      ss.del(SAVING_KEY);
+      err.textContent = `Nothing was saved: ${(e as Error).message}`;
+    } finally {
+      commitBtn.disabled = false;
+    }
+  });
+
+  // ---- publish -------------------------------------------------------------
+  const publishBtn = $<HTMLButtonElement>('cu-publish');
+  async function refreshGit(): Promise<{ ahead: number; last: string } | null> {
+    const g = await fetch('/api/admin/git').then((r) => r.json()).catch(() => null);
+    if (!g) return null;
+    publishBtn.hidden = !g.ahead;
+    if (g.ahead) {
+      $('cu-note').textContent = `${g.ahead} saved ${g.ahead === 1 ? 'commit is' : 'commits are'} not on the live site yet.`;
+    }
+    return g;
+  }
+  publishBtn.addEventListener('click', async () => {
+    if (!confirm('Publish to the live site? It updates within a minute or two.')) return;
+    publishBtn.disabled = true;
+    try {
+      const res = await fetch('/api/admin/git', { method: 'POST', headers: ADMIN });
+      const out = await res.json();
+      if (!res.ok || !out.ok) { $('cu-note').textContent = `Publish failed: ${out.error}`; return; }
+      $('cu-note').textContent = 'Published. The live site updates in a minute or two.';
+      publishBtn.hidden = true;
+    } finally {
+      publishBtn.disabled = false;
+    }
+  });
+
+  addEventListener('beforeunload', (e) => {
+    if (rows.some((r) => !same(r.orig, r.cur))) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  const wrap = document.querySelector<HTMLElement>('.cu-wrap')!;
+  addEventListener('pagehide', () => {
+    ss.set(VIEW_KEY, JSON.stringify({
+      trip: fTrip.value, by: fBy.value, untagged: fUntagged.checked, q: fQ.value, scroll: wrap.scrollTop,
+    }));
+  });
+  try {
+    const v = JSON.parse(ss.get(VIEW_KEY) ?? 'null');
+    if (v) {
+      fTrip.value = v.trip; fBy.value = v.by; fUntagged.checked = v.untagged; fQ.value = v.q;
+      requestAnimationFrame(() => { wrap.scrollTop = v.scroll; });
+    }
+  } catch {}
+
+  refreshTotals();
+  applyFilters();
+  refreshGit().then((g) => {
+    // "<ms> [<commit>]": the commit is missing if the reload beat the response.
+    const [at, commit] = (ss.get(SAVING_KEY) ?? '').split(' ');
+    ss.del(SAVING_KEY);
+    if (!at || Date.now() - Number(at) > 15_000 || !g) return;
+    const hash = commit ?? g.last.split(' ')[0];
+    $('cu-note').textContent = `Saved on this laptop as ${hash}. ${g.ahead} not on the live site yet.`;
+  });
+</script>
+
+<!-- Global: the rows are built client-side, so scoped styles wouldn't reach them. -->
+<style is:global>
+  .cu-top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+  }
+  .cu-stat { margin: 0; font-size: 0.875rem; }
+  .cu-stat span { color: var(--color-ink); font-weight: 600; }
+
+  .cu-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.25rem;
+    margin: 1.25rem 0 0.75rem;
+    font-size: 0.6875rem;
+  }
+  .cu-filters label { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--color-stone); }
+  .cu-filters select,
+  .cu-filters input[type='search'] {
+    font: inherit;
+    font-size: 0.8125rem;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .cu-search input { width: 16rem; }
+  .cu-shown { color: var(--color-stone); margin-left: auto; }
+
+  .cu-wrap {
+    max-height: calc(100vh - 17rem);
+    min-height: 20rem;
+    overflow: auto;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+  }
+  .cu {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    font-size: 0.8125rem;
+  }
+  .cu thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-ink);
+    color: var(--color-snow);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
+    vertical-align: bottom;
+    padding: 0.5rem 0.5rem;
+    white-space: nowrap;
+  }
+  .cu thead th.c-tag {
+    text-align: center;
+    padding: 0.5rem 0.15rem 0.35rem;
+  }
+  .vlabel {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    margin: 0 auto;
+    max-height: 7rem;
+  }
+  .cu thead .n {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.5625rem;
+    color: var(--color-headlamp);
+  }
+  .cu td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid var(--color-rule);
+    vertical-align: middle;
+  }
+  .cu tbody tr:hover td { background: var(--color-snow); }
+  .c-date { white-space: nowrap; font-size: 0.6875rem; color: var(--color-stone); }
+  .c-date .day { display: block; color: var(--color-ember); }
+  .c-trip { white-space: nowrap; color: var(--color-stone); max-width: 9rem; overflow: hidden; text-overflow: ellipsis; }
+  .c-title { min-width: 16rem; max-width: 28rem; }
+  .c-title a { text-decoration: none; }
+  .c-title a:hover { text-decoration: underline; }
+  .draft { font-size: 0.5625rem; color: var(--color-ember); }
+  .c-by select { font: inherit; font-size: 0.75rem; padding: 0.1rem 0.2rem; background: transparent; border: 1px solid var(--color-rule); }
+  td.c-tag { text-align: center; padding: 0.3rem 0.15rem; width: 1.9rem; }
+  td.c-tag input { width: 1rem; height: 1rem; cursor: pointer; accent-color: var(--color-rime-on-light); }
+  td.c-cried input { accent-color: var(--color-ember); }
+  .cu .c-cried { border-left: 1px solid var(--color-rule); }
+
+  /* Unsaved edits are visible at a glance — the row, and the exact cell. */
+  .cu tbody tr.dirty td { background: color-mix(in srgb, var(--color-ember) 7%, var(--color-paper)); }
+  .cu tbody tr.dirty td:first-child { box-shadow: inset 3px 0 0 var(--color-ember); }
+  .cu td.chg { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-ember) 60%, transparent); }
+
+  .cu-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    margin-top: 0.75rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--color-ink);
+    color: var(--color-snow);
+    font-size: 0.75rem;
+  }
+  .cu-sep { flex: 1; }
+  .cu-note { color: var(--color-stone-on-dark); }
+
+  .btn {
+    font: inherit;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--color-stone-on-dark);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--color-headlamp); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .btn--primary { background: var(--color-headlamp); color: var(--color-ink); border-color: var(--color-headlamp); }
+
+  dialog {
+    margin: auto; /* the site's reset zeroes it, which pins a modal top-left */
+    width: min(46rem, 92vw);
+    max-height: 85vh;
+    padding: 1.25rem 1.4rem;
+    border: 0;
+    border-top: 3px solid var(--color-headlamp);
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  dialog::backdrop { background: rgb(18 22 28 / 0.55); }
+  .dlg-h { font-size: 1.3rem; }
+  .dlg-list {
+    list-style: none;
+    margin: 0.9rem 0;
+    padding: 0;
+    max-height: 40vh;
+    overflow: auto;
+    border-top: 1px solid var(--color-rule);
+  }
+  .dlg-list li { padding: 0.45rem 0; border-bottom: 1px solid var(--color-rule); }
+  .dlg-title { display: block; }
+  .dlg-diff { display: block; color: var(--color-stone); font-size: 0.6875rem; margin-top: 0.1rem; }
+  .dlg-msg { display: block; color: var(--color-stone); font-size: 0.6875rem; }
+  .dlg-msg textarea {
+    display: block;
+    width: 100%;
+    margin-top: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--color-rule);
+  }
+  .dlg-err { color: #9b1c1c; font-size: 0.8125rem; min-height: 1em; }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+  .dlg-actions .btn:not(.btn--primary) { color: var(--color-ink); border-color: var(--color-rule); }
+</style>

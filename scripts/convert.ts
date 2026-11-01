@@ -10,7 +10,7 @@
  * the plain text of the source HTML. Any post that loses words is reported, not
  * silently accepted.
  */
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { convert, plainText } from './html-to-mdx.ts';
@@ -18,6 +18,23 @@ import { parseLeg } from './parse-leg.ts';
 import { TRIPS } from './trips.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/*
+ * This is a one-time migration, already run. It rewrites every entry from raw/
+ * with no regard for what has happened since — the stat-line cleanup, tags,
+ * bethCried, hand corrections. Refuse to run over existing entries unless told
+ * to, so a stray `npm run convert` can't erase that work.
+ */
+try {
+  const existing = await readdir(join(ROOT, 'src/content/entries'));
+  if (existing.length && !process.argv.includes('--force')) {
+    console.error('\n  src/content/entries already exists. This script would overwrite every entry');
+    console.error('  from raw/ and discard all edits made since the migration.');
+    console.error('  To rebuild redirects only:  npm run redirects');
+    console.error('  To really re-migrate:       npm run convert -- --force\n');
+    process.exit(1);
+  }
+} catch { /* no entries yet — first run */ }
 
 /** Decided in Phase 0 review: the two 2015 collections are one trip. */
 const CANONICAL_2015 = 'nepal-tibet-india-golden-triangle-2015';
@@ -254,28 +271,9 @@ await save(
 
 await save('raw/redirects.json', JSON.stringify(redirects, null, 2));
 
-/*
- * vercel.json — §4.4. Every legacy path must keep resolving.
- *
- * The old paths contain a double slash (`/trip//2016/01/post.html`) because the
- * Blogger import kept a leading slash in the urlId. Vercel matches `source`
- * against the raw pathname, so the double slash is written literally.
- */
-const seenSource = new Set<string>();
-const rules = redirects
-  .filter((r) => {
-    if (r.source === r.destination || seenSource.has(r.source)) return false;
-    seenSource.add(r.source);
-    return true;
-  })
-  .map((r) => ({ source: r.source, destination: r.destination, permanent: true }));
-
-// The Squarespace commerce route the brief asks to remove.
-rules.push({ source: '/cart', destination: '/', permanent: true });
-rules.push({ source: '/checkout', destination: '/', permanent: true });
-
-await save('vercel.json', `${JSON.stringify({ redirects: rules }, null, 2)}\n`);
-console.log(`vercel.json rules  : ${rules.length}`);
+// vercel.json is built from raw/redirects.json by scripts/gen-redirects.ts, which
+// also handles Vercel collapsing `//` before it evaluates rules.
+console.log('redirects          : raw/redirects.json written — run `npm run redirects` to rebuild vercel.json');
 
 console.log(`entries written    : ${written}`);
 console.log(`leg stat lines     : ${legsParsed}`);

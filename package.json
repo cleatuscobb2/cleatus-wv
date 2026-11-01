@@ -19,6 +19,7 @@
     "photos": "node --experimental-strip-types scripts/link-photos.ts",
     "scrape": "node --experimental-strip-types scripts/scrape.ts",
     "convert": "node --experimental-strip-types scripts/convert.ts",
+    "redirects": "node --experimental-strip-types scripts/gen-redirects.ts",
     "gen:trips": "node --experimental-strip-types scripts/gen-trips.ts",
     "verify": "node --experimental-strip-types scripts/verify-phase0.ts",
     "fonts": "node --experimental-strip-types scripts/copy-fonts.ts",

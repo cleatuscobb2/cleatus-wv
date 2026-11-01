@@ -94,6 +94,22 @@ for (const r of redirects) {
 }
 check(danglingRedirect === 0, `no redirect points at a missing entry (dangling: ${danglingRedirect})`);
 
+/*
+ * 7. Every double-slash legacy path also has a rule for its collapsed form.
+ * Vercel collapses `//` before evaluating redirects, so without the collapsed
+ * rule those links 404 — which is what ~200 of them did when the real domain
+ * first went live. See scripts/gen-redirects.ts.
+ */
+const vercelSources = new Set(
+  (JSON.parse(await readFile(join(ROOT, 'vercel.json'), 'utf8')).redirects as { source: string }[])
+    .map((r) => r.source),
+);
+const missingCollapsed = redirects
+  .map((r: any) => r.source as string)
+  .filter((s: string) => s.includes('//') && !vercelSources.has(s.replace(/\/{2,}/g, '/')));
+check(missingCollapsed.length === 0,
+  `every double-slash legacy path has a collapsed-form rule (missing: ${missingCollapsed.length})`);
+
 console.log('PASS');
 for (const o of ok) console.log('  ✓ ' + o);
 if (fail.length) {

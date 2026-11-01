@@ -1,7 +1,13 @@
 # Admin and edit mode — plan
 
-Decisions taken: **local first, public later**; **GitHub OAuth** when it goes public;
-all four capability areas in scope; **photographs stay in git** for now.
+Decisions taken: **local first, public later**; **email magic-link sign-in** when it
+goes public (revised 2026-11-01 — was GitHub OAuth); all four capability areas in
+scope; **photographs stay in git** for now.
+
+**Who it is for (2026-11-01):** Beth — Elizabeth Tisdale, `eliengler1` on WordPress.com
+— will do most of the writing and editing. She works from a laptop, sometimes with the
+repo checked out, often browser-only. So the browser admin (Phase B) is not a later
+nicety; it is the version that serves the main author. Andy uses the same screens.
 
 Nothing here is built yet. This is the plan to review before any of it lands.
 
@@ -19,17 +25,12 @@ exactly as it does today. If that ever stops being true, the admin is wrong.
 
 ## 2. Prerequisites, in order
 
-These are facts, not choices — none of the below exists yet.
-
-| # | Step | Why |
+| # | Step | Status |
 |---|---|---|
-| 1 | `git remote add origin …` and push (~399 MB) | Nothing is backed up anywhere but this laptop. Do this regardless of the admin. |
-| 2 | Deploy to Vercel | Needed before any public admin. Also the first time the redirects and `/cart` removal get exercised for real. |
-| 3 | Add `@astrojs/vercel` adapter | Only for Phase B. Phase A needs nothing. |
-
-Step 1 is worth doing this week whatever happens to this plan. A 15-year archive
-that exists on one machine inside a OneDrive folder is one disk failure from the
-situation Phase 0 was built to prevent.
+| 1 | Push to GitHub | ✅ `cleatuscobb2/cleatus-wv`, public |
+| 2 | Deploy to Vercel | ✅ live at cleatusandthewestvirginian.com since 2026-11-01; all 333 legacy links verified |
+| 3 | Add `@astrojs/vercel` adapter | Phase B only. Phase A needs nothing. |
+| 4 | Provision magic-link sign-in | Phase B only — see §5, "What Andy and Beth set up". |
 
 ## 3. Shape: one interface, two backends
 
@@ -47,8 +48,9 @@ interface ContentStore {
 
 - **Phase A — `FsStore`**: writes files with `node:fs`, no network, works on a plane.
   `version` is the file mtime+size.
-- **Phase B — `GitHubStore`**: writes through the GitHub Contents API as the
-  signed-in user. `version` is the blob SHA.
+- **Phase B — `GitHubStore`**: writes through the GitHub Git Data API with a
+  repo-scoped bot token, setting the commit **author** to whoever is signed in, so
+  Beth's edits still read as Beth's in the history. `version` is the blob SHA.
 
 The UI never knows which it is talking to. Swapping backends is one line in a
 factory, not a rewrite.
@@ -104,18 +106,52 @@ This overlaps with the existing `content/inbox` flow on purpose. The inbox stays
 it is the thing that works from a tea house at 15,000 ft, and no browser UI beats
 a text file on a bad connection.
 
-## 5. Phase B — public, GitHub OAuth
+## 5. Phase B — public, email magic-link sign-in
 
-- A GitHub OAuth app; `/api/auth/login` → GitHub → `/api/auth/callback`.
-- Callback exchanges the code, checks the login against a two-name allowlist in
-  `ADMIN_LOGINS`, and sets a signed, `httpOnly`, `SameSite=Lax`, `Secure` session
-  cookie. Signed with Web Crypto HMAC — no JWT library needed.
-- The user's token is what commits, so **history stays honest**: Beth's edits say
-  Beth. That is the whole reason for choosing OAuth over a shared password on an
-  archive whose value is partly its provenance.
+Chosen over GitHub OAuth because the main author should not need a GitHub account
+she would never otherwise use. Passwords were never on the table.
+
+**The flow.** Beth goes to `/admin`, types her email, and gets a sign-in link. Clicking
+it sets a session cookie, and she stays signed in on that laptop for 30 days.
+
+- `POST /api/auth/request` with an email address. The reply is always the same —
+  *"if that address can sign in, a link is on its way"* — so the form never reveals
+  which addresses are allowed. Only addresses in `ADMIN_EMAILS` are actually sent mail.
+- The link carries a token signed with Web Crypto HMAC: email, a 15-minute expiry,
+  and a nonce. **Single-use**: the nonce is recorded when spent, so a forwarded or
+  intercepted link is dead once used.
+- `GET /api/auth/verify` checks it and sets a signed, `httpOnly`, `Secure`,
+  `SameSite=Lax` session cookie (30 days).
+- Link requests are **rate-limited per address and per IP**, so nobody can use the
+  form to flood Beth's inbox.
 - Everything under `/admin` and `/api` (except the auth routes) checks the session
   and 404s — not 401s — when absent. An admin that does not announce itself is a
   smaller target.
+
+**Honest history without GitHub accounts.** Commits are made by a bot token scoped to
+this one repository, with the commit *author* set to the signed-in person. The log
+still says Beth wrote Beth's edits.
+
+**Mind the address that goes into public history.** The repo is public, so a commit
+author's email is readable by anyone. Commits use a display address — e.g.
+`beth@cleatusandthewestvirginian.com` — never the address the sign-in link is
+mailed to, if that is a personal one.
+
+**One small store.** Spent nonces and rate limits need somewhere to live. A free
+Upstash Redis via the Vercel Marketplace covers both, and the comments pending queue
+(§7b) later reuses it — one store, not three.
+
+### What Andy and Beth set up
+
+Nothing here can be done from code; each is a few minutes in a dashboard.
+
+| | Where | What |
+|---|---|---|
+| 1 | **Resend** (resend.com, free tier) | Account and an API key. It sends the sign-in emails. |
+| 2 | **WordPress.com DNS** | The records Resend gives for a `send.` subdomain. They live on the subdomain, so **Titan's MX and SPF on the main domain are untouched** — the same records that must never move. |
+| 3 | **GitHub** | A fine-grained token for `cleatuscobb2/cleatus-wv` only, permission *Contents: read and write*. |
+| 4 | **Vercel Marketplace** | Upstash Redis (free), connected to the project — it adds its own env vars. |
+| 5 | **Vercel env vars** | `RESEND_API_KEY`, `GITHUB_TOKEN`, `SESSION_SECRET` (I generate it), `ADMIN_EMAILS` (both your sign-in addresses). |
 
 ### Rails, because this writes to an irreplaceable archive
 
@@ -129,16 +165,21 @@ a text file on a bad connection.
 - **Rate limit** the write endpoints, and log who wrote what.
 - Admin routes carry `noindex` and stay out of the sitemap.
 
-## 6. What I would build first
+## 6. Build order
+
+Revised 2026-11-01 for Beth being the main, often browser-only, author. Phase B
+moves up from last to third, so she can do real work in a browser as soon as the
+first editing screen exists — rather than after every screen is built locally.
 
 1. `ContentStore` + `FsStore` + the build guard (the seam and the safety net)
-2. `/admin/curate` (clears the largest backlog)
-3. `/admin/trips` (clears `TRIPS-TODO.md`)
-4. `/admin/entry/…` prose editor
-5. `/admin/new` + photo upload
-6. Phase B: adapter, OAuth, `GitHubStore`
+2. `/admin/curate` (clears the largest backlog) — usable locally straight away
+3. **Phase B**: adapter, magic-link sign-in, `GitHubStore` — puts 2 in a browser
+4. `/admin/trips` (clears `TRIPS-TODO.md`)
+5. `/admin/entry/…` prose editor
+6. `/admin/new` + photo upload
 
-Stopping after 3 would already be worth it.
+1–2 need nothing from anyone. 3 needs the five set-up steps in §5, which can happen
+in parallel with 1–2.
 
 ## 7. Proposed: archive health on the dashboard
 
@@ -278,9 +319,10 @@ pipe.
 
 ## 8. Open questions
 
-1. Do you both have GitHub accounts? OAuth needs one each. If Beth would rather
-   not, say so and Phase B becomes passkeys instead — same rails, different door.
+1. ~~GitHub accounts?~~ Settled 2026-11-01: email magic link, no GitHub needed.
 2. Should the admin be able to **delete** an entry, or only set `draft: true`?
    My recommendation is draft-only: nothing in this archive should be one
    mis-click from gone.
-3. Is a Vercel account already set up, or is that a step too?
+3. ~~Vercel account?~~ Settled: the site is live on it.
+4. Which address should each of you sign in with, and which display address should
+   appear as author in the public commit history?

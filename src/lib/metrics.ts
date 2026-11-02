@@ -144,7 +144,9 @@ export async function computeMetrics(): Promise<Metrics> {
 
   // --- superlatives -------------------------------------------------------
   const longestTripT = [...sane].sort((a, b) => b.data.stats.days - a.data.stats.days)[0];
-  const mostEntriesT = [...trips].sort((a, b) => b.data.stats.entries - a.data.stats.entries)[0];
+  // Counted from the entries, not the trip file's stats.entries (see entryCounts).
+  const countOf = (id: string) => entries.filter((e) => tripIdOf(e) === id).length;
+  const mostEntriesT = [...trips].sort((a, b) => countOf(b.id) - countOf(a.id))[0];
 
   let longestGap: Metrics['longestGap'] = null;
   for (let i = 1; i < byStart.length; i++) {
@@ -182,7 +184,7 @@ export async function computeMetrics(): Promise<Metrics> {
       ? { title: longestTripT.data.title, days: longestTripT.data.stats.days, href: `/${longestTripT.id}/` }
       : null,
     mostEntries: mostEntriesT
-      ? { title: mostEntriesT.data.title, entries: mostEntriesT.data.stats.entries, href: `/${mostEntriesT.id}/` }
+      ? { title: mostEntriesT.data.title, entries: countOf(mostEntriesT.id), href: `/${mostEntriesT.id}/` }
       : null,
     longestGap,
     bethCried: entries.filter((e) => e.data.bethCried).length,

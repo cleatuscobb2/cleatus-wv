@@ -19,6 +19,7 @@ const trips = defineCollection({
     hero: z.string().nullable().default(null),
     stats: z.object({
       days: z.number(),
+      /** As of gen-trips' last run — goes stale as entries are added. Display entryCounts() instead. */
       entries: z.number(),
       trekMiles: z.number().optional(),
       maxElevationFt: z.number().optional(),

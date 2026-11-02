@@ -84,7 +84,7 @@ const columnLabel = (e: Entry) => [
 ].filter(Boolean).join(' ');
 
 const stats = [
-  { label: 'Entries', value: String(d.stats.entries) },
+  { label: 'Entries', value: String(entries.length) },
   ...(d.stats.trekMiles ? [{ label: 'Trek', value: `${d.stats.trekMiles} mi` }] : []),
   ...(d.stats.maxElevationFt
     ? [{ label: 'High point', value: `${d.stats.maxElevationFt.toLocaleString('en-US')} ft` }] : []),

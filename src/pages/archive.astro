@@ -5,10 +5,11 @@
  */
 import { getCollection } from 'astro:content';
 import Base from '../layouts/Base.astro';
-import { fmtRange } from '../lib/entries.ts';
+import { fmtRange, entryCounts } from '../lib/entries.ts';
 
 const trips = (await getCollection('trips')).sort((a, b) => +a.data.dateStart - +b.data.dateStart);
-const totalEntries = trips.reduce((n, t) => n + t.data.stats.entries, 0);
+const counts = await entryCounts();
+const totalEntries = trips.reduce((n, t) => n + (counts.get(t.id) ?? 0), 0);
 
 const first = +trips[0].data.dateStart;
 const last = +trips[trips.length - 1].data.dateEnd;
@@ -38,7 +39,7 @@ const posOf = (t: (typeof trips)[number]) => ((+t.data.dateStart - first) / span
           <span class="node__body">
             <span class="display node__title">{t.data.title}</span>
             <span class="mono node__meta">
-              {fmtRange(t.data.dateStart, t.data.dateEnd)} · {t.data.stats.entries} entries
+              {fmtRange(t.data.dateStart, t.data.dateEnd)} · {counts.get(t.id) ?? 0} entries
             </span>
           </span>
         </a>

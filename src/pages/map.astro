@@ -32,7 +32,7 @@ import Timeline from '../components/Timeline.astro';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
 import { beenTo, yearSpans } from '../data/been-to.ts';
 import { KIND_ORDER, KIND_ICONS, KIND_LABELS, kindsOf, type Kind } from '../lib/journey.ts';
-import { tripIdOf } from '../lib/entries.ts';
+import { tripIdOf, entryCounts } from '../lib/entries.ts';
 
 const allTrips = await getCollection('trips');
 const now = new Date();
@@ -42,6 +42,7 @@ const now = new Date();
  * shade its countries or add to the count before they get there.
  */
 const trips = allTrips.filter((t) => t.data.dateStart <= now);
+const counts = await entryCounts();
 /** Every country they've been to, from the travel log; trips with entries are a subset. */
 const been = beenTo(now);
 
@@ -301,7 +302,7 @@ const globeConfig = {
           year: t.data.year,
           dateStart: t.data.dateStart,
           dateEnd: t.data.dateEnd,
-          entries: t.data.stats.entries,
+          entries: counts.get(t.id) ?? 0,
           countries: t.data.countries,
           upcoming: t.data.dateStart > now,
         }))}

@@ -25,6 +25,20 @@ export function chronological(entries: Entry[]): Entry[] {
   });
 }
 
+/**
+ * Published entries per trip, counted from the entries themselves. A trip
+ * file's `stats.entries` is only what gen-trips wrote when it last ran —
+ * entries added, drafted or deleted in the admin since don't touch it — so
+ * nothing on the site should show that number; show this one.
+ */
+export async function entryCounts(): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  for (const e of await getCollection('entries', ({ data }) => !data.draft)) {
+    counts.set(tripIdOf(e), (counts.get(tripIdOf(e)) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export async function entriesForTrip(tripId: string): Promise<Entry[]> {
   const all = await getCollection('entries', ({ data }) => !data.draft);
   return chronological(all.filter((e) => tripIdOf(e) === tripId));

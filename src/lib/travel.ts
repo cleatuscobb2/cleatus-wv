@@ -63,6 +63,7 @@ const FLAG_LABELS: Record<keyof typeof FLAGS, string> = {
   scuba: 'countries they’ve dived in',
   muslim: 'Muslim-majority countries',
   communist: 'communist countries, at the time',
+  livedIn: 'countries they’ve lived in',
 };
 
 const monthOf = (d: Date) => d.toISOString().slice(0, 7);

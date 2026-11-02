@@ -116,7 +116,7 @@ month still in the future is left off until the site is next rebuilt after it.
 
 The same file feeds the Numbers page — the year-by-year count, most-visited
 countries, and the spreadsheet's tick boxes (`FLAGS`: dived, Muslim-majority,
-communist at the time). Tick a new country by adding its code to the right list.
+communist at the time, lived in). Tick a new country by adding its code to the right list.
 
 Then open the trip file and write the **summary** — two sentences, your words.
 That's the only part nothing else can do for you.

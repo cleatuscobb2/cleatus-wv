@@ -94,6 +94,8 @@ export const FLAGS = {
   muslim: ['ID', 'MA', 'MV', 'EG', 'AE', 'TR', 'PK', 'MY'],
   /** Communist when they were there — hence Czechoslovakia, 1988. */
   communist: ['LA', 'CN', 'RU', 'CZ', 'VN'],
+  /** Lived in: home for a while, not a trip. */
+  livedIn: ['DE', 'IN'],
 } as const satisfies Record<string, readonly string[]>;
 
 /** How a country reads in a FLAGS list when its modern name would mislead. */

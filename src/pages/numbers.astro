@@ -345,7 +345,8 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
 
   .stamps {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    /* Two across: four stamps make a tidy 2×2, one column on a phone. */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
     gap: 1rem;
   }
   .stamp {

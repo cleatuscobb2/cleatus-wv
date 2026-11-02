@@ -66,7 +66,7 @@ const FLAG_LABELS: Record<keyof typeof FLAGS, string> = {
 };
 
 const monthOf = (d: Date) => d.toISOString().slice(0, 7);
-const pretty = (month: string) => `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
+const pretty = (month: string) => (month.length === 4 ? month : `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`);
 
 /** 2005, 2009, 2012–14 */
 function spans(years: number[]): string {
@@ -120,7 +120,8 @@ export function travelMetrics(trips: TripLike[], been: Record<string, string[]>,
   // --- visits -----------------------------------------------------------------
   const allMonths = [...months.values()].flatMap((s) => [...s]);
   const visits = allMonths.length;
-  const away = new Set(allMonths);
+  // A year-only entry ('2018') is a visit, but not a month anyone can count.
+  const away = new Set(allMonths.filter((m) => m.length === 7));
 
   const mostVisited = dated
     .map((c) => ({ place: place(c), visits: months.get(c)!.size, years: spans([...months.get(c)!].map((m) => Number(m.slice(0, 4)))) }))

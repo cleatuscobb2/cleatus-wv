@@ -2,8 +2,9 @@
  * Everywhere Andy and Beth have been, written up or not — the "Been To" tab of
  * Andy's "Countries I've Been" spreadsheet (rev B), transcribed 2026-11-02.
  *
- * Each country lists the months they were there, 'YYYY-MM'. An empty list means
- * been, but no date recorded. A month still in the future is a trip that's booked:
+ * Each country lists the months they were there, 'YYYY-MM' — or just 'YYYY' when
+ * the month isn't known (it then sits mid-year on the timeline and counts as a
+ * visit, but not as a month away). An empty list means been, but no date recorded. A month still in the future is a trip that's booked:
  * it isn't counted or drawn until a build on or after that month.
  *
  * The trips themselves (src/content/trips) stay the record of what was written;
@@ -60,6 +61,7 @@ export const BEEN_TO: Record<string, string[]> = {
   NP: ['2009-07', '2015-12', '2016-01'],
   NZ: ['2026-06'],
   PE: ['2011-07'],
+  PH: ['2018'], // added 2026-11-02, month not known
   PK: ['2024-08'],
   PT: ['2025-06'],
   RU: ['2014-06'],
@@ -98,9 +100,9 @@ export const NAME_THEN: Record<string, [string, string]> = {
   CZ: ['1993-01', 'Czechoslovakia'],
 };
 
-const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+const MONTH = /^\d{4}(-(0[1-9]|1[0-2]))?$/;
 for (const [code, months] of Object.entries(BEEN_TO)) {
-  for (const m of months) if (!MONTH.test(m)) throw new Error(`been-to.ts: ${code} has a bad month "${m}" (want YYYY-MM)`);
+  for (const m of months) if (!MONTH.test(m)) throw new Error(`been-to.ts: ${code} has a bad month "${m}" (want YYYY-MM, or YYYY)`);
 }
 
 /** The current month as 'YYYY-MM', so a booked trip waits until it has happened. */

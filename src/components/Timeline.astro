@@ -43,7 +43,9 @@ interface Props {
 const { trips, visits = [], class: klass = '' } = Astro.props;
 
 const sorted = [...trips].sort((a, b) => +a.dateStart - +b.dateStart);
-const mid = (month: string) => Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 15);
+// 'YYYY' (month not known) sits at mid-year.
+const mid = (month: string) =>
+  month.length === 4 ? Date.UTC(Number(month), 6, 1) : Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 15);
 
 /** Years of silence before the axis breaks rather than stretches. */
 const BREAK_MS = 8 * 365.25 * 864e5;
@@ -128,7 +130,7 @@ const dots = stack(
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const fmtMonth = (month: string) =>
-  new Date(mid(month)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  month.length === 4 ? `${month}, month not recorded` : new Date(mid(month)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYear;
 ---
 

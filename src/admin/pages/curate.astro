@@ -189,7 +189,7 @@ const payload = JSON.stringify({ hosted: HOSTED, tags: TAGS, labels: TAG_LABELS,
     return `<tr data-i="${i}">
       <td class="c-date mono">${esc(e.date)}${e.day != null ? `<span class="day">Day ${e.day}</span>` : ''}</td>
       <td class="c-trip">${esc(e.tripShort)}</td>
-      <td class="c-title"><a href="/${esc(e.trip)}/${esc(e.slug)}/" target="_blank" rel="noopener" title="${esc(e.excerpt)}">${esc(e.title)}</a>${e.draft ? ' <span class="mono draft">draft</span>' : ''}</td>
+      <td class="c-title"><a href="/${esc(e.trip)}/${esc(e.slug)}/" target="_blank" rel="noopener" title="${esc(e.excerpt)}">${esc(e.title)}</a>${e.draft ? ' <span class="mono draft">draft</span>' : ''} <a class="mono c-edit" href="/admin/entry/${esc(e.trip)}/${esc(e.slug)}" aria-label="Edit text: ${esc(e.title)}">edit</a></td>
       <td class="c-by"><select data-by aria-label="Byline: ${esc(e.title)}">${byOpts}</select></td>
       ${tagCells}
       <td class="c-tag c-cried"><input type="checkbox" data-cried aria-label="Beth cried: ${esc(e.title)}"${r.cur.cried ? ' checked' : ''}></td>
@@ -514,6 +514,8 @@ const payload = JSON.stringify({ hosted: HOSTED, tags: TAGS, labels: TAG_LABELS,
   .c-title a { text-decoration: none; }
   .c-title a:hover { text-decoration: underline; }
   .draft { font-size: 0.5625rem; color: var(--color-ember); }
+  .c-edit { font-size: 0.5625rem; margin-left: 0.35rem; color: var(--color-rime-on-light); text-decoration: none; }
+  .cu tbody tr:hover .c-edit, .c-edit:focus-visible { text-decoration: underline; }
   .c-by select { font: inherit; font-size: 0.75rem; padding: 0.1rem 0.2rem; background: transparent; border: 1px solid var(--color-rule); }
   td.c-tag { text-align: center; padding: 0.3rem 0.15rem; width: 1.9rem; }
   td.c-tag input { width: 1rem; height: 1rem; cursor: pointer; accent-color: var(--color-rime-on-light); }

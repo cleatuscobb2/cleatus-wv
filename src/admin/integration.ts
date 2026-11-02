@@ -26,6 +26,9 @@ export default function cleatusAdmin(): AstroIntegration {
         route('/admin/trips/[trip]', './pages/trip.astro');
         route('/api/admin/curate', './api/curate.ts');
         route('/api/admin/trip', './api/trip.ts');
+        route('/admin/entry/[trip]/[slug]', './pages/entry.astro');
+        route('/api/admin/preview', './api/entry-preview.ts');
+        route('/api/admin/entry', './api/entry-save.ts');
         route('/api/admin/git', './api/git.ts');
         route('/api/auth/request', './api/auth-request.ts');
         route('/api/auth/verify', './api/auth-verify.ts');

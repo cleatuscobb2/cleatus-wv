@@ -195,7 +195,13 @@ first editing screen exists — rather than after every screen is built locally.
    the terminal and saves commit to that branch, never main.
 4. ✅ `/admin/trips` (clears `TRIPS-TODO.md` — and shows the same list live, so
    the file is now only a snapshot from the last `gen:trips` run)
-5. `/admin/entry/…` prose editor
+5. ✅ `/admin/entry/…` prose editor. Every body is parsed with the build's own MDX
+   parser and held to what the 295 entries actually use (`src/admin/mdx.ts`):
+   Markdown plus `<Photo>`, `<PullQuote>`, `<Aside>` with plain-text attributes.
+   No `{…}` expressions (they run at build time, where the secrets are), no
+   imports/exports, no raw HTML, no non-http(s)/mailto links. Import lines are
+   managed automatically. The save endpoint re-checks on its own, so a body that
+   would break the build — and with it every deploy — can't be committed.
 6. `/admin/new` + photo upload
 
 1–2 need nothing from anyone. 3 needs the five set-up steps in §5, which can happen

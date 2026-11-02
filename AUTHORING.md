@@ -129,6 +129,19 @@ placeholder.
 (`--force` overrides all of that and regenerates everything. There is rarely a
 reason to use it.)
 
+### Fixing the words in an entry
+
+From any browser: sign in at `/admin`, open **Tags & bylines**, find the entry
+(the **Find** box searches titles and opening lines) and click **edit** next to
+its title. The text is on the left, how the page will look on the right, updated
+as you type.
+
+The text is checked as you go. If something would break the site — a curly brace,
+a stray `<`, a tag the site doesn't know — it's listed under the text with its
+line number (click the number to jump there), and saving waits until it's fixed.
+**Formatting**, above the text, lists everything you can use. **Review & publish**
+shows every word you changed before anything is saved.
+
 ### Start a new entry
 
 ```bash

@@ -35,6 +35,7 @@ for (const f of readdirSync(STATIC).filter((f) => /^sitemap.*\.xml$/.test(f))) {
 const routes: { src?: string; dest?: string }[] = JSON.parse(readFileSync(join(OUT, 'config.json'), 'utf8')).routes;
 const expected = [
   '/admin', '/admin/curate', '/admin/verify', '/admin/trips', '/admin/trips/japan-2022',
+  '/admin/entry/japan-2022/all-food-122822', '/api/admin/preview', '/api/admin/entry',
   '/api/admin/curate', '/api/admin/trip', '/api/auth/request', '/api/auth/verify', '/api/auth/signout',
 ];
 for (const path of expected) {

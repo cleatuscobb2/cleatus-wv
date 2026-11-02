@@ -1,0 +1,392 @@
+---
+/**
+ * /admin/entry/[trip]/[slug] — edit an entry's title and prose.
+ *
+ * The text as it's stored (Markdown, plus <Photo>, <PullQuote> and <Aside>) in a
+ * plain textarea, with the page preview beside it, checked as you type. Not
+ * contenteditable on the rendered page: saving edited HTML back to MDX is a
+ * lossy conversion, and the prose is the asset (ADMIN-PLAN.md §4).
+ */
+import AdminLayout from '../AdminLayout.astro';
+import { getStore } from '../store/index.ts';
+import { guard, notFound, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
+import { readMeta } from '../frontmatter.ts';
+import { readTrip } from '../trip-edit.ts';
+import { checkBody, renderPreview, splitEntry } from '../mdx.ts';
+
+export const prerender = false;
+
+const blocked = guard(Astro.request);
+if (blocked) return blocked;
+const user = HOSTED ? userOf(Astro.request) : null;
+
+const { trip, slug } = Astro.params;
+if (!trip || !slug || !/^[a-z0-9-]+$/.test(trip) || !/^[a-z0-9-]+$/.test(slug)) return notFound();
+const path = `src/content/entries/${trip}/${slug}.mdx`;
+
+const store = getStore();
+let file;
+try { file = await store.read(path); } catch { return notFound(); }
+const meta = readMeta(file.text);
+const { body } = splitEntry(file.text);
+const tripShort = await store.read(`src/content/trips/${trip}.mdx`).then((t) => readTrip(t.text).shortTitle).catch(() => trip);
+const first = checkBody(body);
+const saveLabel = HOSTED ? 'Review & publish' : 'Review & save';
+
+const payload = JSON.stringify({
+  hosted: HOSTED, path, version: file.version, title: meta.title, body,
+}).replace(/</g, '\\u003c');
+---
+
+<AdminLayout title={`${meta.title} — Edit`} current="curate" user={user}>
+  <p class="mono ee-back"><a href="/admin/curate">← Tags &amp; bylines</a> · {tripShort} · {meta.date}{meta.day != null && ` · Day ${meta.day}`}</p>
+
+  <label class="ee-title">
+    <span class="mono">Title</span>
+    <input id="f-title" value={meta.title} maxlength="200" />
+  </label>
+
+  <div class="ee-panes">
+    <section class="ee-pane" aria-labelledby="ee-src-h">
+      <div class="ee-pane__bar">
+        <h2 class="mono" id="ee-src-h">Text</h2>
+        <details class="ee-help">
+          <summary class="mono">Formatting</summary>
+          <dl>
+            <dt><code>**bold**</code> <code>*italic*</code></dt><dd>Emphasis</dd>
+            <dt><code>## Heading</code></dt><dd>A heading (own line)</dd>
+            <dt><code>&gt; text</code></dt><dd>An indented quote</dd>
+            <dt><code>[words](https://…)</code></dt><dd>A link</dd>
+            <dt><code>&lt;Photo src="/photos/…" caption="…" /&gt;</code></dt><dd>A photograph — copy an existing line and change the file name. <code>size="text|wide|full"</code> is optional.</dd>
+            <dt><code>&lt;PullQuote attribution="Beth"&gt;…&lt;/PullQuote&gt;</code></dt><dd>A big pulled-out quote</dd>
+            <dt><code>&lt;Aside term="Porter"&gt;…&lt;/Aside&gt;</code></dt><dd>A boxed side note</dd>
+            <dt><code>\{</code> <code>\}</code> <code>\&lt;</code></dt><dd>To show a brace or a &lt; as plain text</dd>
+          </dl>
+          <p>A blank line starts a new paragraph.</p>
+        </details>
+      </div>
+      <textarea id="f-body" spellcheck="true" aria-labelledby="ee-src-h" aria-describedby="ee-problems">{body}</textarea>
+      <ul class="ee-problems" id="ee-problems" aria-live="polite"></ul>
+    </section>
+
+    <section class="ee-pane" aria-labelledby="ee-prev-h">
+      <div class="ee-pane__bar">
+        <h2 class="mono" id="ee-prev-h">Preview</h2>
+        <a class="mono" href={`/${trip}/${slug}/`} target="_blank" rel="noopener">Live page ↗</a>
+      </div>
+      <div class="ee-preview" tabindex="0" role="region" aria-label="How the page will look (scrollable)">
+        <h1 class="ee-preview__title" id="ee-preview-title">{meta.title}</h1>
+        <div class="prose-entry" id="ee-preview" set:html={first.tree ? renderPreview(first.tree) : ''}></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="ee-foot">
+    <span class="mono" id="ee-dirty">No unsaved changes</span>
+    <button type="button" id="ee-review" class="btn btn--primary" disabled>{saveLabel}</button>
+    <span class="ee-sep"></span>
+    <span class="mono ee-note" id="ee-note" aria-live="polite"></span>
+  </div>
+
+  <dialog id="ee-dialog" aria-labelledby="ee-dialog-h">
+    <h2 id="ee-dialog-h" class="ad-h1 dlg-h">Check your changes</h2>
+    <p class="mono ee-legend"><span class="ee-add">added</span> <span class="ee-del">removed</span></p>
+    <div id="ee-diff" class="ee-diff"></div>
+    <p class="dlg-err" id="ee-error" role="alert"></p>
+    <div class="dlg-actions">
+      <button type="button" id="ee-cancel" class="btn">Keep editing</button>
+      <button type="button" id="ee-commit" class="btn btn--primary">{HOSTED ? 'Publish' : 'Save as one commit'}</button>
+    </div>
+  </dialog>
+
+  <script type="application/json" id="entry-data" set:html={payload}></script>
+</AdminLayout>
+
+<script>
+  import { diffLines, diffWordsWithSpace } from 'diff';
+
+  interface Problem { line: number | null; message: string }
+  const data = JSON.parse(document.getElementById('entry-data')!.textContent!) as {
+    hosted: boolean; path: string; version: string; title: string; body: string;
+  };
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+  const titleEl = $<HTMLInputElement>('f-title');
+  const bodyEl = $<HTMLTextAreaElement>('f-body');
+  let orig = { title: data.title, body: data.body };
+  let problems: Problem[] = [];
+  let pending = 0;
+
+  const norm = (s: string) => `${s.replace(/\r\n/g, '\n').replace(/\s+$/, '')}\n`;
+  const titleNow = () => titleEl.value.replace(/\s+/g, ' ').trim();
+  const dirty = () => titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body);
+
+  function refresh() {
+    const d = dirty();
+    $('ee-dirty').textContent = problems.length
+      ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} to fix before saving`
+      : d ? 'Unsaved changes' : 'No unsaved changes';
+    $<HTMLButtonElement>('ee-review').disabled = !d || problems.length > 0 || pending > 0 || !titleNow();
+  }
+
+  function showProblems() {
+    $('ee-problems').innerHTML = problems.map((p, i) =>
+      `<li><button type="button" data-i="${i}">${p.line != null ? `Line ${p.line}` : 'Text'}</button> ${esc(p.message)}</li>`,
+    ).join('');
+  }
+
+  // Jump to the line a problem is on.
+  $('ee-problems').addEventListener('click', (ev) => {
+    const i = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-i]')?.dataset.i;
+    const line = i != null ? problems[Number(i)].line : null;
+    if (line == null) return;
+    const lines = bodyEl.value.split('\n');
+    const start = lines.slice(0, line - 1).reduce((n, l) => n + l.length + 1, 0);
+    bodyEl.focus();
+    bodyEl.setSelectionRange(start, start + (lines[line - 1]?.length ?? 0));
+    const lh = parseFloat(getComputedStyle(bodyEl).lineHeight) || 20;
+    bodyEl.scrollTop = Math.max(0, (line - 4) * lh);
+  });
+
+  // Check and preview as you type, a moment after you stop.
+  let timer = 0;
+  let seq = 0;
+  async function runPreview() {
+    const mine = ++seq;
+    pending++;
+    refresh();
+    try {
+      const res = await fetch('/api/admin/preview', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
+        body: JSON.stringify({ body: bodyEl.value }),
+      });
+      const out = await res.json();
+      if (mine !== seq) return; // a newer check is already on its way
+      problems = out.problems ?? [];
+      showProblems();
+      if (out.html != null) $('ee-preview').innerHTML = out.html;
+      $('ee-preview').classList.toggle('is-stale', out.html == null);
+    } catch {
+      if (mine === seq) $('ee-problems').innerHTML = '<li>Couldn’t check the text just now — it will try again as you type.</li>';
+    } finally {
+      pending--;
+      refresh();
+    }
+  }
+  bodyEl.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(runPreview, 450);
+    refresh();
+  });
+  titleEl.addEventListener('input', () => {
+    $('ee-preview-title').textContent = titleNow();
+    refresh();
+  });
+
+  // ---- review & save -------------------------------------------------------
+  function diffHtml(a: string, b: string) {
+    const parts = diffLines(norm(a), norm(b));
+    const out: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (!p.added && !p.removed) {
+        // Keep two lines of context either side of each change.
+        const lines = p.value.replace(/\n$/, '').split('\n');
+        if (lines.length > 5) {
+          const head = i > 0 ? lines.slice(0, 2) : [];
+          const tail = i < parts.length - 1 ? lines.slice(-2) : [];
+          out.push(...head.map((l) => `<div class="ee-ctx">${esc(l) || '&nbsp;'}</div>`));
+          out.push(`<div class="ee-gap mono">· · · ${lines.length - head.length - tail.length} unchanged lines · · ·</div>`);
+          out.push(...tail.map((l) => `<div class="ee-ctx">${esc(l) || '&nbsp;'}</div>`));
+        } else {
+          out.push(...lines.map((l) => `<div class="ee-ctx">${esc(l) || '&nbsp;'}</div>`));
+        }
+        continue;
+      }
+      // A removed block followed by an added one is an edit: mark the words.
+      const next = parts[i + 1];
+      if (p.removed && next?.added) {
+        const words = diffWordsWithSpace(p.value, next.value);
+        out.push(`<div class="ee-chg">${words.map((w) =>
+          w.added ? `<ins>${esc(w.value)}</ins>` : w.removed ? `<del>${esc(w.value)}</del>` : esc(w.value),
+        ).join('').replace(/\n/g, '<br>')}</div>`);
+        i++;
+        continue;
+      }
+      const cls = p.added ? 'ee-chg ee-chg--add' : 'ee-chg ee-chg--del';
+      out.push(`<div class="${cls}">${p.added ? '<ins>' : '<del>'}${esc(p.value).replace(/\n/g, '<br>')}${p.added ? '</ins>' : '</del>'}</div>`);
+    }
+    return out.join('');
+  }
+
+  const dialog = $<HTMLDialogElement>('ee-dialog');
+  const err = $('ee-error');
+  const commitBtn = $<HTMLButtonElement>('ee-commit');
+
+  $('ee-review').addEventListener('click', () => {
+    const t = titleNow();
+    $('ee-diff').innerHTML =
+      (t !== orig.title ? `<p class="ee-titlechg"><span class="mono">Title</span> <del>${esc(orig.title)}</del> → <ins>${esc(t)}</ins></p>` : '') +
+      (norm(bodyEl.value) !== norm(orig.body) ? diffHtml(orig.body, bodyEl.value) : '');
+    err.textContent = '';
+    dialog.showModal();
+  });
+  $('ee-cancel').addEventListener('click', () => dialog.close());
+
+  commitBtn.addEventListener('click', async () => {
+    commitBtn.disabled = true;
+    err.textContent = '';
+    try {
+      const sent = { title: titleNow(), body: bodyEl.value };
+      const res = await fetch('/api/admin/entry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
+        body: JSON.stringify({ path: data.path, version: data.version, ...sent }),
+      });
+      const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (res.status === 409) {
+        err.textContent = 'Nothing was saved: someone else changed this entry since the page loaded. Copy your text somewhere safe, reload the page, and make your changes again.';
+        return;
+      }
+      if (res.status === 422) {
+        problems = out.problems ?? [];
+        showProblems();
+        dialog.close();
+        refresh();
+        return;
+      }
+      if (!res.ok) { err.textContent = `Nothing was saved: ${out.error}`; return; }
+      const v = out.versions?.[data.path];
+      if (v) data.version = v;
+      orig = sent;
+      dialog.close();
+      refresh();
+      $('ee-note').textContent = !out.commit
+        ? 'Nothing needed saving.'
+        : data.hosted
+          ? `Published as ${out.commit}. The live site updates in a minute or two.`
+          : `Saved on this laptop as ${out.commit}. Publish from the Tags page.`;
+    } catch (e) {
+      err.textContent = `Nothing was saved: ${(e as Error).message}`;
+    } finally {
+      commitBtn.disabled = false;
+    }
+  });
+
+  addEventListener('beforeunload', (e) => {
+    if (dirty()) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  refresh();
+</script>
+
+<style>
+  .ee-back { margin: 0 0 0.9rem; font-size: 0.6875rem; color: var(--color-stone); }
+  .ee-back a { text-decoration: none; }
+  .ee-title { display: grid; gap: 0.3rem; max-width: 48rem; }
+  .ee-title .mono { font-size: 0.6875rem; color: var(--color-stone); }
+  .ee-title input {
+    font: inherit; font-family: var(--font-display); font-weight: 700; font-size: 1.35rem;
+    padding: 0.45rem 0.6rem; border: 1px solid var(--color-rule); background: var(--color-paper); color: var(--color-ink);
+  }
+  .ee-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+    padding-bottom: 4.5rem;
+  }
+  .ee-pane { display: flex; flex-direction: column; min-width: 0; }
+  .ee-pane__bar { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.4rem; }
+  .ee-pane__bar h2 { margin: 0; font-size: 0.6875rem; color: var(--color-stone); font-weight: 500; }
+  .ee-pane__bar a { font-size: 0.6875rem; }
+  #f-body {
+    height: calc(100vh - 19rem);
+    min-height: 22rem;
+    resize: vertical;
+    padding: 0.8rem 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    tab-size: 2;
+  }
+  .ee-preview {
+    height: calc(100vh - 19rem);
+    min-height: 22rem;
+    overflow: auto;
+    padding: 1.25rem 1.5rem;
+    background: var(--color-snow);
+    border: 1px solid var(--color-rule);
+  }
+  .ee-preview__title { font-family: var(--font-display); font-size: 1.8rem; line-height: 1.15; margin: 0 0 1.25rem; }
+  .ee-preview :global(.is-stale), #ee-preview.is-stale { opacity: 0.45; }
+
+  /* The components' own styles are scoped to them, so the preview restates them. */
+  .ee-preview :global(.photo) { margin-block: 1.5rem; }
+  .ee-preview :global(.photo img) { display: block; width: 100%; height: auto; background: var(--color-rule); }
+  .ee-preview :global(.photo figcaption) { margin-top: 0.5rem; font-size: 0.9375rem; font-style: italic; color: var(--color-stone); }
+  .ee-preview :global(.pull) { margin-block: 2rem; padding-left: 1.25rem; border-left: 3px solid var(--color-headlamp); }
+  .ee-preview :global(.pull__text) { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 1.4rem; line-height: 1.28; }
+  .ee-preview :global(.pull__cite) { display: block; margin-top: 0.6rem; color: var(--color-stone); font-style: normal; font-family: var(--font-mono); font-size: 0.75rem; }
+  .ee-preview :global(.note) { margin-block: 1.5rem; padding: 1rem 1.15rem; background: var(--color-paper); border: 1px solid var(--color-rule); border-left: 3px solid var(--color-rime); }
+  .ee-preview :global(.note__term) { margin: 0 0 0.4rem; color: var(--color-stone); font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; }
+
+  .ee-problems { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.3rem; }
+  .ee-problems :global(li) {
+    font-size: 0.875rem; padding: 0.45rem 0.6rem;
+    background: color-mix(in srgb, #9b1c1c 7%, var(--color-paper)); border-left: 3px solid #9b1c1c;
+  }
+  .ee-problems :global(button) {
+    font: inherit; font-family: var(--font-mono); font-size: 0.6875rem; margin-right: 0.4rem;
+    border: 1px solid currentColor; background: none; color: #9b1c1c; cursor: pointer; padding: 0.05rem 0.35rem;
+  }
+
+  .ee-help { position: relative; }
+  .ee-help summary { font-size: 0.6875rem; cursor: pointer; color: var(--color-rime-on-light); }
+  .ee-help[open] > :not(summary) { max-width: 34rem; }
+  .ee-help dl {
+    position: absolute; right: 0; z-index: 6; width: min(34rem, 80vw); margin: 0.4rem 0 0;
+    padding: 0.9rem 1rem; background: var(--color-paper); border: 1px solid var(--color-rule);
+    box-shadow: 0 8px 24px rgb(18 22 28 / 0.15); font-size: 0.875rem;
+    display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 0.9rem;
+  }
+  .ee-help dt { font-family: var(--font-mono); font-size: 0.75rem; }
+  .ee-help dd { margin: 0; color: var(--color-stone); }
+  .ee-help p { display: none; }
+
+  .ee-foot {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
+    padding: 0.7rem clamp(1rem, 3vw, 2rem);
+    background: var(--color-ink); color: var(--color-snow); font-size: 0.75rem;
+  }
+  .ee-sep { flex: 1; }
+  .ee-note { color: var(--color-stone-on-dark); }
+
+  .ee-legend { font-size: 0.6875rem; margin: 0.4rem 0 0.6rem; }
+  .ee-legend span { padding: 0.05rem 0.35rem; margin-right: 0.4rem; }
+  .ee-add, .ee-diff :global(ins) { background: color-mix(in srgb, var(--color-rime-on-light) 18%, transparent); text-decoration: none; }
+  .ee-del, .ee-diff :global(del) { background: color-mix(in srgb, #9b1c1c 14%, transparent); }
+  .ee-diff {
+    max-height: 55vh; overflow: auto; border: 1px solid var(--color-rule); background: var(--color-snow);
+    padding: 0.6rem 0.8rem; font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .ee-diff :global(.ee-ctx) { color: var(--color-stone); }
+  .ee-diff :global(.ee-gap) { color: var(--color-stone); text-align: center; padding: 0.3rem 0; font-size: 0.625rem; }
+  .ee-diff :global(.ee-chg) { margin: 0.15rem 0; }
+  .ee-diff :global(.ee-titlechg) { font-family: var(--font-body); font-size: 0.9375rem; margin: 0 0 0.6rem; white-space: normal; }
+  .ee-diff :global(.ee-titlechg .mono) { font-size: 0.6875rem; color: var(--color-stone); margin-right: 0.4rem; }
+
+  @media (max-width: 900px) {
+    .ee-panes { grid-template-columns: 1fr; }
+    #f-body, .ee-preview { height: 60vh; }
+  }
+</style>

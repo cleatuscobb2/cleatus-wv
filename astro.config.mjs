@@ -10,6 +10,10 @@ export default defineConfig({
   // Every public page is still prerendered. The adapter exists for the admin's
   // server routes; scripts/vercel-routes.ts carries vercel.json's redirects over.
   adapter: vercel(),
+  // Without this, server routes see every request as https://localhost/… (Astro
+  // ignores the Host header unless the domain is listed), so each same-site POST
+  // looks cross-site and is refused. www never reaches the function — it 308s.
+  security: { allowedDomains: [{ hostname: 'cleatusandthewestvirginian.com', protocol: 'https' }] },
   integrations: [
     mdx(),
     // The sitemap would otherwise list the admin's server routes too.

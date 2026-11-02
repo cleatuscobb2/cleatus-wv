@@ -4,12 +4,20 @@
  * public chrome: no analytics, no search, never indexed.
  */
 import '../styles/tokens.css';
+import { HOSTED } from './mode.ts';
+import type { User } from './session.ts';
 
 interface Props {
   title: string;
   current?: 'home' | 'curate';
+  /** Hosted only: who is signed in. Absent on the sign-in screens. */
+  user?: User | null;
 }
-const { title, current } = Astro.props;
+const { title, current, user } = Astro.props;
+// Never cache an admin page, and never let one be indexed.
+Astro.response.headers.set('cache-control', 'no-store');
+Astro.response.headers.set('x-robots-tag', 'noindex, nofollow');
+const showNav = !HOSTED || !!user;
 const nav = [
   { href: '/admin', label: 'Overview', id: 'home' },
   { href: '/admin/curate', label: 'Tags & bylines', id: 'curate' },
@@ -22,20 +30,30 @@ const nav = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
+    <!-- Keeps the sign-in token out of Referer for other sites. Not `no-referrer`:
+         that makes form posts send `Origin: null`, which the origin check refuses. -->
+    <meta name="referrer" content="same-origin" />
     <title>{title} — Admin</title>
   </head>
   <body class="admin">
     <header class="ad-bar">
       <a href="/admin" class="ad-mark">
         <span class="display">Cleatus</span><span class="ad-amp" aria-hidden="true">&amp;</span><span class="display">WV</span>
-        <span class="mono ad-badge">Admin · this laptop</span>
+        <span class="mono ad-badge">{HOSTED ? (user ? `Signed in · ${user.name}` : 'Admin') : 'Admin · this laptop'}</span>
       </a>
-      <nav aria-label="Admin">
-        {nav.map((n) => (
-          <a href={n.href} class="mono" aria-current={current === n.id ? 'page' : undefined}>{n.label}</a>
-        ))}
-        <a href="/" class="mono ad-site" target="_blank" rel="noopener">View site ↗</a>
-      </nav>
+      {showNav && (
+        <nav aria-label="Admin">
+          {nav.map((n) => (
+            <a href={n.href} class="mono" aria-current={current === n.id ? 'page' : undefined}>{n.label}</a>
+          ))}
+          <a href="/" class="mono ad-site" target="_blank" rel="noopener">View site ↗</a>
+          {HOSTED && user && (
+            <form method="post" action="/api/auth/signout" class="ad-out">
+              <button type="submit" class="mono">Sign out</button>
+            </form>
+          )}
+        </nav>
+      )}
     </header>
     <main class="ad-main">
       <slot />
@@ -88,6 +106,17 @@ const nav = [
   .ad-bar nav a:hover { color: var(--color-rime); border-bottom-color: var(--color-rime); }
   .ad-bar nav a[aria-current='page'] { color: var(--color-headlamp); border-bottom-color: var(--color-headlamp); }
   .ad-bar nav .ad-site { color: var(--color-stone-on-dark); }
+  .ad-out { display: contents; }
+  .ad-out button {
+    font-size: 0.75rem;
+    padding: 0 0 2px;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    background: none;
+    color: var(--color-stone-on-dark);
+    cursor: pointer;
+  }
+  .ad-out button:hover { color: var(--color-rime); border-bottom-color: var(--color-rime); }
   .ad-main { padding: clamp(1.25rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 4rem; }
   .ad-h1 {
     font-family: var(--font-display);

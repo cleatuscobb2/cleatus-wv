@@ -1,35 +1,55 @@
 /**
- * Runs after `astro build`: the admin is dev-only, so nothing of it may reach
- * dist/. Fails the build if any admin page, admin API, or sitemap mention of
- * /admin got through.
+ * Runs inside `npm run build`, after `npm run routes`.
+ *
+ * The admin is built (Phase B), but only ever as server code that checks the
+ * session on every request. What must never happen is an admin page landing in
+ * the public static files, where it would be served to anyone with no check at
+ * all. This fails the build if:
+ *
+ *   - any admin or API path exists as a static file
+ *   - a sitemap lists /admin or /api
+ *   - an admin or API path is not routed to the server function
+ *   - a static HTML page carries the admin's request header (i.e. admin markup)
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const DIST = 'dist';
+const OUT = '.vercel/output';
+const STATIC = join(OUT, 'static');
 const problems: string[] = [];
 
+if (!existsSync(STATIC)) {
+  console.error(`verify-build: ${STATIC} is missing — did the Vercel adapter run?`);
+  process.exit(1);
+}
+
 for (const p of ['admin', 'api']) {
-  if (existsSync(join(DIST, p))) problems.push(`${DIST}/${p}/ exists`);
+  if (existsSync(join(STATIC, p))) problems.push(`static/${p}/ exists — admin would be public and unauthenticated`);
 }
 
-for (const f of readdirSync(DIST).filter((f) => /^sitemap.*\.xml$/.test(f))) {
-  if (readFileSync(join(DIST, f), 'utf8').includes('/admin')) problems.push(`${f} lists an /admin URL`);
+for (const f of readdirSync(STATIC).filter((f) => /^sitemap.*\.xml$/.test(f))) {
+  if (/\/(admin|api)\b/.test(readFileSync(join(STATIC, f), 'utf8'))) problems.push(`${f} lists an /admin or /api URL`);
 }
 
-// Server code from the admin would land in a function bundle, not in dist/
-// pages, so check that no built file mentions the admin's private header.
+// Every injected admin path must go to the function, where the session check lives.
+const routes: { src?: string; dest?: string }[] = JSON.parse(readFileSync(join(OUT, 'config.json'), 'utf8')).routes;
+const expected = ['/admin', '/admin/curate', '/admin/verify', '/api/admin/curate', '/api/auth/request', '/api/auth/verify', '/api/auth/signout'];
+for (const path of expected) {
+  const r = routes.find((r) => r.src && new RegExp(r.src).test(path));
+  if (!r || r.dest !== '_render') problems.push(`${path} is not routed to the server function`);
+}
+
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
     d.isDirectory() ? walk(join(dir, d.name)) : [join(dir, d.name)],
   );
 }
-for (const f of walk(DIST).filter((f) => /\.(html|js|mjs)$/.test(f))) {
-  if (readFileSync(f, 'utf8').includes('x-cleatus-admin')) problems.push(`${f} contains admin code`);
+for (const f of walk(STATIC).filter((f) => f.endsWith('.html'))) {
+  if (readFileSync(f, 'utf8').includes('x-cleatus-admin')) problems.push(`${f} contains admin markup`);
 }
 
 if (problems.length) {
-  console.error(`verify-build: admin leaked into the build:\n  ${problems.join('\n  ')}`);
+  console.error(`verify-build: the admin is exposed in the build:\n  ${problems.join('\n  ')}`);
   process.exit(1);
 }
-console.log('verify-build: no admin output in dist/ ✓');
+console.log('verify-build: admin is server-only, nothing of it in the static files ✓');

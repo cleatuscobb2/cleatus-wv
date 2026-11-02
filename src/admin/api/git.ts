@@ -4,20 +4,26 @@
  *
  * Pushing is kept as its own explicit action: committing saves the work on this
  * laptop, publishing puts it on the live site.
+ *
+ * Local only. The hosted admin commits straight to GitHub, so a save there is
+ * already published.
  */
 import type { APIRoute } from 'astro';
 import { gitPush, gitStatus } from '../store/fs-store.ts';
-import { guard, json } from '../guard.ts';
+import { guard, json, notFound } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request }) => {
+  if (HOSTED) return notFound();
   const blocked = guard(request);
   if (blocked) return blocked;
   return json(await gitStatus(process.cwd()));
 };
 
 export const POST: APIRoute = async ({ request }) => {
+  if (HOSTED) return notFound();
   const blocked = guard(request);
   if (blocked) return blocked;
   try {

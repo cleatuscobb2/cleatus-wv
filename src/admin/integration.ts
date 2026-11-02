@@ -1,13 +1,13 @@
 /**
- * Registers the admin routes — in development only (Phase A).
+ * Registers the admin routes.
  *
- * The admin lives outside src/pages so Astro never picks it up on its own. This
- * integration injects the routes when the command is `dev` and does nothing
- * during `build`, so a production build cannot contain an unauthenticated
- * admin: the routes simply don't exist there. scripts/verify-build.ts checks the
- * output as a second line of defence.
+ * The admin lives outside src/pages so Astro never picks it up on its own. Every
+ * route is server-rendered (`prerender: false`), so in production it runs in the
+ * Vercel function, where guard.ts checks the session on each request — nothing
+ * of it is ever written out as a static file. scripts/verify-build.ts fails the
+ * build if that ever stops being true.
  *
- * Phase B will inject them for production too, behind sign-in.
+ * Under `astro dev` the same routes are the local, no-sign-in admin (mode.ts).
  */
 import type { AstroIntegration } from 'astro';
 
@@ -16,16 +16,22 @@ export default function cleatusAdmin(): AstroIntegration {
     name: 'cleatus-admin',
     hooks: {
       'astro:config:setup': ({ command, injectRoute, logger }) => {
-        if (command !== 'dev') return;
         const route = (pattern: string, file: string) =>
           injectRoute({ pattern, entrypoint: new URL(file, import.meta.url), prerender: false });
 
         route('/admin', './pages/index.astro');
         route('/admin/curate', './pages/curate.astro');
+        route('/admin/verify', './pages/verify.astro');
         route('/api/admin/curate', './api/curate.ts');
         route('/api/admin/git', './api/git.ts');
+        route('/api/auth/request', './api/auth-request.ts');
+        route('/api/auth/verify', './api/auth-verify.ts');
+        route('/api/auth/signout', './api/auth-signout.ts');
 
-        logger.info('local admin at /admin (development only — never built)');
+        if (command === 'dev') {
+          const hosted = process.env.ADMIN_HOSTED === '1';
+          logger.info(hosted ? 'hosted admin (sign-in + GitHub) at /admin' : 'local admin at /admin (no sign-in, this laptop only)');
+        }
       },
     },
   };

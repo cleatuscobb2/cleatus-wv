@@ -1,69 +1,141 @@
 ---
 /**
- * /admin — what's done and what's left, read live from the files.
+ * /admin — what's done and what's left, read live from the content.
+ *
+ * Hosted and signed out, this is the sign-in form instead: the one admin page
+ * that answers without a session, so it can be bookmarked.
  */
 import AdminLayout from '../AdminLayout.astro';
 import { getStore } from '../store/index.ts';
 import { readMeta } from '../frontmatter.ts';
 import { gitStatus } from '../store/fs-store.ts';
-import { guard } from '../guard.ts';
+import { guard, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
+import { LINK_MINUTES } from '../session.ts';
 
 export const prerender = false;
 
-const blocked = guard(Astro.request);
-if (blocked) return blocked;
+const user = HOSTED ? userOf(Astro.request) : null;
+const signIn = HOSTED && !user;
 
-const store = getStore();
-const entryPaths = await store.list('src/content/entries', '.mdx');
-const metas = await Promise.all(entryPaths.map(async (p) => readMeta((await store.read(p)).text)));
-const tripPaths = await store.list('src/content/trips', '.mdx');
-const tripTexts = await Promise.all(tripPaths.map(async (p) => (await store.read(p)).text));
-const people = await store.list('src/content/people', '.mdx').catch(() => []);
+const MESSAGES: Record<string, string> = {
+  sent: `If that address can sign in, a link is on its way. It works once, for ${LINK_MINUTES} minutes — check spam if it hasn't arrived in a couple of minutes.`,
+  bad: "That doesn't look like an email address.",
+  sendfail: "The email couldn't be sent just now. Try again in a minute; if it keeps happening, tell Andy.",
+  expired: 'That sign-in link has expired or isn\'t valid. Ask for a new one below.',
+  used: 'That sign-in link has already been used. Ask for a new one below.',
+  out: 'Signed out.',
+};
+const message = MESSAGES[Astro.url.searchParams.get('m') ?? ''];
 
-const tagged = metas.filter((m) => m.tags.length).length;
-const cried = metas.filter((m) => m.bethCried).length;
-const summaries = tripTexts.filter((t) => /^summaryNeedsReview:\s*false/m.test(t)).length;
-const git = await gitStatus(process.cwd());
+let rows: { label: string; done: number; of: number | null; href: string | null; action: string }[] = [];
+let ahead: number | null = null;
 
-const rows = [
-  { label: 'Entries tagged', done: tagged, of: metas.length, href: '/admin/curate', action: 'Tag entries' },
-  { label: 'Trip summaries written', done: summaries, of: tripTexts.length, href: null, action: 'Coming next' },
-  { label: 'Beth cried (marked)', done: cried, of: null, href: '/admin/curate', action: 'Mark entries' },
-  { label: 'People recorded', done: people.length, of: null, href: null, action: 'Coming later' },
-];
+if (!signIn) {
+  const blocked = guard(Astro.request);
+  if (blocked) return blocked;
+
+  const store = getStore();
+  const entryPaths = await store.list('src/content/entries', '.mdx');
+  const metas = await Promise.all(entryPaths.map(async (p) => readMeta((await store.read(p)).text)));
+  const tripPaths = await store.list('src/content/trips', '.mdx');
+  const tripTexts = await Promise.all(tripPaths.map(async (p) => (await store.read(p)).text));
+  const people = await store.list('src/content/people', '.mdx').catch(() => []);
+
+  const tagged = metas.filter((m) => m.tags.length).length;
+  const cried = metas.filter((m) => m.bethCried).length;
+  const summaries = tripTexts.filter((t) => /^summaryNeedsReview:\s*false/m.test(t)).length;
+  if (!HOSTED) ahead = (await gitStatus(process.cwd())).ahead;
+
+  rows = [
+    { label: 'Entries tagged', done: tagged, of: metas.length, href: '/admin/curate', action: 'Tag entries' },
+    { label: 'Trip summaries written', done: summaries, of: tripTexts.length, href: null, action: 'Coming next' },
+    { label: 'Beth cried (marked)', done: cried, of: null, href: '/admin/curate', action: 'Mark entries' },
+    { label: 'People recorded', done: people.length, of: null, href: null, action: 'Coming later' },
+  ];
+}
 ---
 
-<AdminLayout title="Overview" current="home">
-  <h1 class="ad-h1">Overview</h1>
-  <p class="ad-lede">
-    Everything here edits the files on this laptop and saves each batch as one
-    git commit. Nothing reaches the live site until you publish.
-  </p>
-
-  {git.ahead ? (
-    <p class="mono pending">
-      {git.ahead} saved {git.ahead === 1 ? 'change' : 'changes'} not yet published —
-      <a href="/admin/curate#publish">publish from the Tags page</a>
+{signIn ? (
+  <AdminLayout title="Sign in">
+    <div class="signin">
+      <h1 class="ad-h1">Sign in</h1>
+      <p class="ad-lede">Type your email and we'll send you a link. No password.</p>
+      {message && <p class="mono note" role="status">{message}</p>}
+      <form method="post" action="/api/auth/request" class="signin__form">
+        <label for="email" class="mono">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required autofocus />
+        <button type="submit" class="mono">Send me a link</button>
+      </form>
+    </div>
+  </AdminLayout>
+) : (
+  <AdminLayout title="Overview" current="home" user={user}>
+    <h1 class="ad-h1">Overview</h1>
+    <p class="ad-lede">
+      {HOSTED
+        ? 'Everything here edits the site directly. Each save becomes one change in its history, and the live site updates a minute or two later.'
+        : 'Everything here edits the files on this laptop and saves each batch as one git commit. Nothing reaches the live site until you publish.'}
     </p>
-  ) : null}
 
-  <ul class="progress">
-    {rows.map((r) => (
-      <li>
-        <span class="progress__label">{r.label}</span>
-        <span class="mono progress__n">{r.done}{r.of != null && ` / ${r.of}`}</span>
-        {r.of != null && (
-          <span class="progress__bar" aria-hidden="true">
-            <span style={`width:${(r.done / Math.max(1, r.of)) * 100}%`}></span>
-          </span>
-        )}
-        {r.href ? <a href={r.href} class="mono">{r.action} →</a> : <span class="mono muted">{r.action}</span>}
-      </li>
-    ))}
-  </ul>
-</AdminLayout>
+    {message && <p class="mono note" role="status">{message}</p>}
+
+    {ahead ? (
+      <p class="mono pending">
+        {ahead} saved {ahead === 1 ? 'change' : 'changes'} not yet published —
+        <a href="/admin/curate#publish">publish from the Tags page</a>
+      </p>
+    ) : null}
+
+    <ul class="progress">
+      {rows.map((r) => (
+        <li>
+          <span class="progress__label">{r.label}</span>
+          <span class="mono progress__n">{r.done}{r.of != null && ` / ${r.of}`}</span>
+          {r.of != null && (
+            <span class="progress__bar" aria-hidden="true">
+              <span style={`width:${(r.done / Math.max(1, r.of)) * 100}%`}></span>
+            </span>
+          )}
+          {r.href ? <a href={r.href} class="mono">{r.action} →</a> : <span class="mono muted">{r.action}</span>}
+        </li>
+      ))}
+    </ul>
+  </AdminLayout>
+)}
 
 <style>
+  .note {
+    margin: 1.25rem 0 0;
+    padding: 0.6rem 0.8rem;
+    max-width: 52rem;
+    background: var(--color-paper);
+    border-left: 3px solid var(--color-rime-on-light);
+    font-size: 0.75rem;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .signin { max-width: 30rem; margin: clamp(1rem, 8vh, 5rem) auto 0; }
+  .signin__form { display: grid; gap: 0.5rem; margin-top: 1.5rem; }
+  .signin__form label { font-size: 0.6875rem; color: var(--color-stone); }
+  .signin__form input {
+    font: inherit;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .signin__form button {
+    justify-self: start;
+    margin-top: 0.5rem;
+    padding: 0.7rem 1.2rem;
+    font-size: 0.8125rem;
+    border: 0;
+    background: var(--color-ink);
+    color: var(--color-snow);
+    cursor: pointer;
+  }
+  .signin__form button:hover { background: var(--color-rime-on-light); }
   .pending {
     margin: 1.25rem 0 0;
     padding: 0.6rem 0.8rem;

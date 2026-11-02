@@ -245,11 +245,24 @@ tags: ["trekking", "altitude"]
 
 To add a new one, put it in `src/data/tags.ts` first.
 
-**Tagging lots of entries at once:** run `npm run dev` and open
-<http://localhost:4321/admin/curate>. Every entry is one row with a checkbox per
-tag, plus Beth-cried and the byline. Tick down a column, press **Review & save**,
-and the whole batch becomes one commit. **Publish to live site** pushes it. The
-page only exists on the laptop; it is never part of the live site.
+**Tagging lots of entries at once — from any browser:**
+
+1. Go to <https://cleatusandthewestvirginian.com/admin>, type your email, press
+   **Send me a link**.
+2. Open the email ("Your sign-in link"), click **Sign in**, then **Sign in** again
+   on the page it opens. The link works once, for 15 minutes. You stay signed in
+   on that browser for 30 days.
+3. **Tags & bylines** shows every entry as one row, with a checkbox per tag plus
+   Beth-cried and the byline. Tick down a column, press **Review & publish**,
+   check the list, press **Publish**. The live site updates a minute or two later.
+
+If two of you edit the same entry at once, the second save is refused rather than
+overwriting the first — it tells you which entry, and nothing is lost on the site.
+
+**On the laptop with the repo**, the same screen is at
+<http://localhost:4321/admin/curate> under `npm run dev`, with no sign-in. There,
+saving makes a local commit and **Publish to live site** pushes it — so run
+`git pull` first if anyone has edited through the website since.
 
 ---
 

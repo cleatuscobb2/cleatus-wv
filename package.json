@@ -11,10 +11,12 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "npm run inbox && npm run photos && astro dev",
-    "build": "npm run inbox && npm run photos && npm run og && astro build && npm run verify:build && npm run index",
-    "verify:build": "node --experimental-strip-types scripts/verify-build.ts",
+    "dev:hosted": "node --experimental-strip-types scripts/dev-hosted.ts",
+    "build": "npm run inbox && npm run photos && npm run og && astro build && npm run routes && npm run verify:build && npm run index",
+    "routes": "node --experimental-strip-types scripts/vercel-routes.ts",
+    "verify:build": "node --experimental-strip-types scripts/verify-build.ts && node --experimental-strip-types scripts/verify-routes.ts",
     "og": "node --experimental-strip-types scripts/og-images.ts",
-    "index": "pagefind --site dist && node --experimental-strip-types scripts/sync-search.ts",
+    "index": "pagefind --site .vercel/output/static && node --experimental-strip-types scripts/sync-search.ts",
     "preview": "astro preview",
     "check": "astro check",
     "photos": "node --experimental-strip-types scripts/link-photos.ts",
@@ -35,6 +37,7 @@
     "@astrojs/mdx": "^4.3.14",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/vercel": "8.2.11",
     "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource-variable/source-serif-4": "^5.3.0",
@@ -45,6 +48,7 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@vercel/routing-utils": "5.3.3",
     "axe-core": "^4.12.1",
     "d3-geo": "^3.1.1",
     "lighthouse": "^13.4.1",

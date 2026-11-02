@@ -10,12 +10,16 @@ import AdminLayout from '../AdminLayout.astro';
 import { getStore } from '../store/index.ts';
 import { readMeta, excerptOf } from '../frontmatter.ts';
 import { TAGS, TAG_LABELS } from '../../data/tags.ts';
-import { guard } from '../guard.ts';
+import { guard, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
 
 export const prerender = false;
 
 const blocked = guard(Astro.request);
 if (blocked) return blocked;
+const user = HOSTED ? userOf(Astro.request) : null;
+// Hosted saves go straight to GitHub, so saving is publishing.
+const saveLabel = HOSTED ? 'Review & publish' : 'Review & save';
 
 const store = getStore();
 
@@ -57,16 +61,16 @@ const entries = await Promise.all(
 entries.sort((a, b) => a.date.localeCompare(b.date) || (a.day ?? 0) - (b.day ?? 0) || a.path.localeCompare(b.path));
 
 // `<` escaped so nothing in an entry title can close the script tag early.
-const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries }).replace(/</g, '\\u003c');
+const payload = JSON.stringify({ hosted: HOSTED, tags: TAGS, labels: TAG_LABELS, trips, entries }).replace(/</g, '\\u003c');
 ---
 
-<AdminLayout title="Tags & bylines" current="curate">
+<AdminLayout title="Tags & bylines" current="curate" user={user}>
   <div class="cu-top">
     <div>
       <h1 class="ad-h1">Tags &amp; bylines</h1>
       <p class="ad-lede">
         Tick down a column to tag. Hover a title to see how the entry opens; click it
-        to read the whole thing. Nothing is saved until you press <strong>Review &amp; save</strong>.
+        to read the whole thing. Nothing is saved until you press <strong>{saveLabel}</strong>.
       </p>
     </div>
     <p class="mono cu-stat"><span id="cu-tagged">0</span> / {entries.length} tagged</p>
@@ -121,7 +125,7 @@ const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries 
 
   <div class="cu-foot" id="publish">
     <span class="mono" id="cu-dirty">No unsaved changes</span>
-    <button type="button" id="cu-review" class="btn btn--primary" disabled>Review &amp; save</button>
+    <button type="button" id="cu-review" class="btn btn--primary" disabled>{saveLabel}</button>
     <span class="cu-sep"></span>
     <span class="mono cu-note" id="cu-note" aria-live="polite"></span>
     <button type="button" id="cu-publish" class="btn" hidden>Publish to live site</button>
@@ -136,7 +140,7 @@ const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries 
     <p class="dlg-err" id="cu-error" role="alert"></p>
     <div class="dlg-actions">
       <button type="button" id="cu-cancel" class="btn">Keep editing</button>
-      <button type="button" id="cu-commit" class="btn btn--primary">Save as one commit</button>
+      <button type="button" id="cu-commit" class="btn btn--primary">{HOSTED ? 'Publish' : 'Save as one commit'}</button>
     </div>
   </dialog>
 
@@ -155,7 +159,7 @@ const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries 
 
   const ADMIN = { 'x-cleatus-admin': '1' };
   const data = JSON.parse(document.getElementById('curate-data')!.textContent!) as {
-    tags: string[]; labels: Record<string, string>; entries: Entry[];
+    hosted: boolean; tags: string[]; labels: Record<string, string>; entries: Entry[];
   };
   const TAGS = data.tags;
   const NAMES: Record<AuthorKey, string> = { beth: 'Beth', andy: 'Andy', both: 'Both' };
@@ -332,7 +336,8 @@ const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries 
       if (res.ok && out.commit) ss.set(SAVING_KEY, `${Date.now()} ${out.commit}`);
       else ss.del(SAVING_KEY);
       if (res.status === 409) {
-        err.textContent = `Nothing was saved. These entries changed on disk after this page loaded: ${out.paths.join(', ')}. Reload the page to pick up the new versions.`;
+        const titles = (out.paths as string[]).map((p) => rows.find((r) => r.e.path === p)?.e.title ?? p);
+        err.textContent = `Nothing was saved. Since this page loaded, someone else changed: ${titles.map((t) => `“${t}”`).join(', ')}. Note what you changed, reload the page to see their version, then make your changes again.`;
         return;
       }
       if (!res.ok) { err.textContent = `Nothing was saved: ${out.error}`; return; }
@@ -345,7 +350,12 @@ const payload = JSON.stringify({ tags: TAGS, labels: TAG_LABELS, trips, entries 
       trs.forEach((tr, i) => refreshRow(tr, rows[i]));
       refreshTotals();
       dialog.close();
-      $('cu-note').textContent = out.commit ? `Saved on this laptop as ${out.commit}.` : 'Nothing needed saving.';
+      $('cu-note').textContent = !out.commit
+        ? 'Nothing needed saving.'
+        : data.hosted
+          ? `Published as ${out.commit}. The live site updates in a minute or two.`
+          : `Saved on this laptop as ${out.commit}.`;
+      if (data.hosted) ss.del(SAVING_KEY); // no dev reload to survive
       await refreshGit();
     } catch (e) {
       ss.del(SAVING_KEY);

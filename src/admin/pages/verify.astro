@@ -1,0 +1,57 @@
+---
+/**
+ * /admin/verify?t=… — where the emailed link lands.
+ *
+ * Deliberately a page with a button rather than signing in on arrival: mail
+ * scanners open links to check them, and a single-use link spent by a scanner
+ * would be dead before the person clicked it. Opening this page spends nothing;
+ * pressing the button does.
+ */
+import AdminLayout from '../AdminLayout.astro';
+import { HOSTED } from '../mode.ts';
+import { notFound } from '../guard.ts';
+import { verify } from '../session.ts';
+
+export const prerender = false;
+
+if (!HOSTED) return notFound();
+
+const token = Astro.url.searchParams.get('t') ?? '';
+let claims = null;
+try { claims = verify(token, 'link'); } catch { /* not configured — treat as invalid */ }
+---
+
+<AdminLayout title="Sign in">
+  <div class="verify">
+    <h1 class="ad-h1">Sign in</h1>
+    {claims ? (
+      <>
+        <p class="ad-lede">Signing in as <strong>{claims.e}</strong> on this device for the next 30 days.</p>
+        <form method="post" action="/api/auth/verify">
+          <input type="hidden" name="t" value={token} />
+          <button type="submit" class="mono">Sign in</button>
+        </form>
+      </>
+    ) : (
+      <>
+        <p class="ad-lede">This sign-in link has expired or isn't valid. Links work once, for 15 minutes.</p>
+        <p><a href="/admin" class="mono">Ask for a new link →</a></p>
+      </>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .verify { max-width: 30rem; margin: clamp(1rem, 8vh, 5rem) auto 0; }
+  .verify form { margin-top: 1.5rem; }
+  .verify button {
+    padding: 0.8rem 1.6rem;
+    font-size: 0.875rem;
+    border: 0;
+    background: var(--color-ink);
+    color: var(--color-snow);
+    cursor: pointer;
+  }
+  .verify button:hover { background: var(--color-rime-on-light); }
+  .verify a { font-size: 0.75rem; }
+</style>

@@ -2,20 +2,21 @@
  * Mirror the built Pagefind index into public/ so search also works under
  * `astro dev`, which serves public/ rather than dist/.
  *
- * Runs after `pagefind --site dist`. Harmless if the index is missing.
+ * Runs after `pagefind --site .vercel/output/static`. Harmless if the index is missing.
  */
 import { cp, rm, stat } from 'node:fs/promises';
 import { join, resolve, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = join(ROOT, 'dist/pagefind');
+// Where the Vercel adapter puts the deployed static files.
+const SRC = join(ROOT, '.vercel/output/static/pagefind');
 const DEST = join(ROOT, 'public/pagefind');
 
 try {
   await stat(SRC);
 } catch {
-  console.log('no dist/pagefind yet — skipping (run `npm run build`)');
+  console.log('no .vercel/output/static/pagefind yet — skipping (run `npm run build`)');
   process.exit(0);
 }
 
@@ -25,4 +26,4 @@ if (!DEST.includes(`public${sep}pagefind`)) {
 }
 await rm(DEST, { recursive: true, force: true });
 await cp(SRC, DEST, { recursive: true });
-console.log('synced dist/pagefind → public/pagefind (for dev)');
+console.log('synced .vercel/output/static/pagefind → public/pagefind (for dev)');

@@ -10,17 +10,26 @@
 import type { APIRoute } from 'astro';
 import { getStore, ConflictError } from '../store/index.ts';
 import { applyCuration, validateCuration } from '../frontmatter.ts';
-import { guard, json } from '../guard.ts';
+import { guard, json, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
+import { countHit } from '../kv.ts';
 
 export const prerender = false;
 
 const MAX_CHANGES = 400;
+const SAVES_PER_HOUR = 60;
 // The exact shape of every entry path — no `..`, no other folders.
 const ENTRY_PATH = /^src\/content\/entries\/[a-z0-9-]+\/[a-z0-9-]+\.mdx$/;
 
 export const POST: APIRoute = async ({ request }) => {
   const blocked = guard(request);
   if (blocked) return blocked;
+
+  // Hosted: the commit says who made it. Local: git's own identity on this laptop.
+  const user = HOSTED ? userOf(request) : null;
+  if (user && (await countHit(`rl:save:${user.email}`, 3600)) > SAVES_PER_HOUR) {
+    return json({ error: 'too many saves in the last hour — try again shortly' }, 429);
+  }
 
   let body: { message?: unknown; changes?: unknown };
   try { body = await request.json(); } catch { return json({ error: 'expected JSON' }, 400); }
@@ -56,7 +65,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (!edits.length) return json({ commit: null, versions: {} });
 
   try {
-    const result = await store.write(edits, message);
+    const result = await store.write(edits, message, user?.author);
     return json(result);
   } catch (e) {
     if (e instanceof ConflictError) return json({ error: 'conflict', paths: e.paths }, 409);

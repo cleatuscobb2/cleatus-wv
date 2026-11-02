@@ -57,21 +57,32 @@ factory, not a rewrite.
 
 ## 4. Phase A — local admin, no login
 
-Runs only under `npm run dev`. **The build must refuse to emit these routes.**
+Runs under `npm run dev`: this laptop's files and git, no sign-in. Since Phase B
+the same routes also exist in production, behind sign-in — `src/admin/mode.ts`
+decides which admin is running.
 
-Three guards, because one is not enough:
+The guards, because one is not enough:
 
 1. The routes live in `src/admin/`, not `src/pages/`, and `src/admin/integration.ts`
-   injects them only when Astro's command is `dev`. A build never sees them.
-2. Every admin route runs `guard()` (`src/admin/guard.ts`): 404 outside dev, and
-   every write needs the `x-cleatus-admin` header plus a same-origin `Origin`, so
+   injects them as server routes (`prerender: false`). They run in the Vercel
+   function; none is ever written out as a static file.
+2. Every admin route runs `guard()` (`src/admin/guard.ts`). Hosted: no valid
+   session is a 404. Local: only answers under `astro dev`. Either way every
+   write needs the `x-cleatus-admin` header plus a same-origin `Origin`, so
    another site open in the same browser can't post to it.
-3. `scripts/verify-build.ts` runs inside `npm run build` and fails it if
-   `dist/admin` or `dist/api` exists, a sitemap lists `/admin`, or any built file
-   contains admin code.
+3. `scripts/verify-build.ts` runs inside `npm run build` and fails it if an
+   admin or API path exists as a static file, a sitemap lists one, an admin path
+   isn't routed to the function, or a static page contains admin markup.
 
 The last guard is the one that matters: it means shipping an unauthenticated
 admin to production becomes impossible by accident rather than merely unlikely.
+
+**Since the adapter (Phase B)** the build hands Vercel a ready-made
+`.vercel/output`, and Vercel routes by its `config.json` rather than
+`vercel.json`. `scripts/vercel-routes.ts` copies the 535 legacy redirects into it,
+and `scripts/verify-routes.ts` walks all 333 legacy URLs through the result and
+fails the build unless each one ends on a built page. `vercel.json` stays the
+place to edit redirects (`npm run redirects` regenerates it).
 
 ### Views
 
@@ -179,7 +190,9 @@ first editing screen exists — rather than after every screen is built locally.
 
 1. ✅ `ContentStore` + `FsStore` + the build guard (the seam and the safety net)
 2. ✅ `/admin/curate` (clears the largest backlog) — usable locally straight away
-3. **Phase B**: adapter, magic-link sign-in, `GitHubStore` — puts 2 in a browser
+3. ✅ **Phase B**: adapter, magic-link sign-in, `GitHubStore` — puts 2 in a browser.
+   Test it locally with `npm run dev:hosted -- <throwaway-branch>`: links print to
+   the terminal and saves commit to that branch, never main.
 4. `/admin/trips` (clears `TRIPS-TODO.md`)
 5. `/admin/entry/…` prose editor
 6. `/admin/new` + photo upload

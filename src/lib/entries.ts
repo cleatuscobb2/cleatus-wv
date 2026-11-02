@@ -26,6 +26,15 @@ export function chronological(entries: Entry[]): Entry[] {
 }
 
 /**
+ * Trips that have begun. One started in the admin ahead of time (Vietnam,
+ * December 2026) has a page of its own, but doesn't make its countries places
+ * they've been until the first build on or after its start date.
+ */
+export async function startedTrips(now = new Date()): Promise<Trip[]> {
+  return (await getCollection('trips')).filter((t) => t.data.dateStart <= now);
+}
+
+/**
  * Published entries per trip, counted from the entries themselves. A trip
  * file's `stats.entries` is only what gen-trips wrote when it last ran —
  * entries added, drafted or deleted in the admin since don't touch it — so

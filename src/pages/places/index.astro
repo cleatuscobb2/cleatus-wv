@@ -3,12 +3,11 @@
  * §7.5 — places. Problem 7 in the brief: fifteen years of material with no way
  * through it. India appears in 2009 and again in 2015; this is where that shows.
  */
-import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
-import { entryCounts } from '../../lib/entries.ts';
+import { entryCounts, startedTrips } from '../../lib/entries.ts';
 
-const trips = await getCollection('trips');
+const trips = await startedTrips();
 const counts = await entryCounts();
 
 const byCountry = new Map<string, typeof trips>();

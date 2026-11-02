@@ -302,13 +302,43 @@ so you never end up with `wildlife` and `animals` as two separate pages:
 
 `trekking` · `altitude` · `glacier` · `wildlife` · `food` · `border-crossing` ·
 `gear-failure` · `near-miss` · `city` · `rest-day` · `logistics` · `people` ·
-`water` · `illness`
+`water` · `illness` · `weather` · `transport` · `culture` · `diving` ·
+`celebration` · `history`
+
+Each has an emoji (in `src/data/tags.ts`) — that's the icon on the maps.
 
 ```
 tags: ["trekking", "altitude"]
 ```
 
-To add a new one, put it in `src/data/tags.ts` first.
+To add a new one, put it in `src/data/tags.ts` first (with an icon).
+
+### How it felt, and where
+
+Beside the tags, every entry can say how the day felt and where it happened.
+Both show on the trip page (the story, its map, the "read these first" picks and
+the mood strip) and on the globe at /map/.
+
+- **How it felt** — four dials, 0 to 3: **Stress**, **Danger**, **Effort**,
+  **Awe** (0 none · 1 some · 2 a lot · 3 off the charts). Leave one "not rated"
+  if it doesn't apply.
+- **Where** — a place name, plus a position for the map. Type the place and press
+  **Find on map**, then pick the right match. A photo whose camera recorded where
+  it was taken fills this in by itself. While a trip is under way, the newest
+  entry with a position is "where we are now" on the trip page.
+
+In the file they're one line each:
+
+```
+meters: {"stress":2,"danger":3,"effort":2,"awe":3}
+location: {"name":"Concordia","lat":35.7436,"lng":76.5133}
+```
+
+**The first pass was a machine's.** On 2 November 2026 every entry got a proposed
+place, tags and dials, read from its own text, and "Beth cried" was set only where
+the entry says so in as many words. Places are pinned to the town, camp or park,
+not a GPS track, and the dials are a stranger's reading of your days — change
+anything that's wrong in the editor.
 
 **One entry at a time:** the row of tags above the text in the entry editor
 (**New entry**, or **edit** next to an entry's title).

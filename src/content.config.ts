@@ -1,6 +1,6 @@
 import { defineCollection, reference, z } from 'astro:content';
 import { glob } from 'astro/loaders';
-import { TAGS } from './data/tags.ts';
+import { TAGS, METERS, type Meter } from './data/tags.ts';
 
 const tag = z.enum(TAGS);
 
@@ -65,6 +65,10 @@ const entries = defineCollection({
     tags: z.array(tag).default([]),
     people: z.array(reference('people')).default([]),
     bethCried: z.boolean().default(false),
+    /** How it felt, 0–3 each (src/data/tags.ts METERS). Unset means not rated. */
+    meters: z
+      .object(Object.fromEntries(METERS.map((m) => [m, z.number().int().min(0).max(3).optional()])) as Record<Meter, z.ZodOptional<z.ZodNumber>>)
+      .default({}),
     draft: z.boolean().default(false),
     // Provenance, written by scripts/convert.ts. Not for hand editing.
     sourceUrl: z.string().optional(),

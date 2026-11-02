@@ -21,6 +21,12 @@ export const TAGS = [
   'people',
   'water',
   'illness',
+  'weather',
+  'transport',
+  'culture',
+  'diving',
+  'celebration',
+  'history',
 ] as const;
 
 export type Tag = (typeof TAGS)[number];
@@ -41,4 +47,63 @@ export const TAG_LABELS: Record<Tag, string> = {
   people: 'People',
   water: 'Water',
   illness: 'Illness',
+  weather: 'Weather',
+  transport: 'Getting there',
+  culture: 'Culture',
+  diving: 'Diving',
+  celebration: 'Celebrations',
+  history: 'History',
 };
+
+/**
+ * One emoji per tag, for the maps' event markers, the trip page's story flow
+ * and the tag chips. Deliberately playful — they mark where things happened,
+ * the writing does the rest.
+ */
+export const TAG_ICONS: Record<Tag, string> = {
+  trekking: '🥾',
+  altitude: '⛰️',
+  glacier: '🧊',
+  wildlife: '🐾',
+  food: '🍜',
+  'border-crossing': '🛂',
+  'gear-failure': '🔧',
+  'near-miss': '⚠️',
+  city: '🏙️',
+  'rest-day': '🛌',
+  logistics: '🧭',
+  people: '🤝',
+  water: '🌊',
+  illness: '🤒',
+  weather: '⛈️',
+  transport: '🚌',
+  culture: '🏛️',
+  diving: '🤿',
+  celebration: '🎉',
+  history: '📜',
+};
+
+/** Not a tag, but it gets an icon everywhere a tag does. */
+export const BETH_CRIED_ICON = '😢';
+
+/**
+ * How it felt, 0–3 each, set per entry beside the tags. Levels rather than
+ * tags because "a bit stressful" and "we thought we'd die" are the same theme
+ * at very different volumes.
+ */
+export const METERS = ['stress', 'danger', 'effort', 'awe'] as const;
+export type Meter = (typeof METERS)[number];
+export const METER_LABELS: Record<Meter, string> = {
+  stress: 'Stress',
+  danger: 'Danger',
+  effort: 'Effort',
+  awe: 'Awe',
+};
+export const METER_ICONS: Record<Meter, string> = {
+  stress: '😬',
+  danger: '☠️',
+  effort: '💪',
+  awe: '🤩',
+};
+/** What each level means, for the editor's hints and the hover text. */
+export const METER_LEVELS = ['none', 'some', 'a lot', 'off the charts'] as const;

@@ -2,7 +2,7 @@
  * The prose editor's two endpoints (see mdx.ts for what is and isn't allowed):
  *
  *   POST /api/admin/preview  { body }                                  → { problems, html }
- *   POST /api/admin/entry    { path, version, title, body, draft?, tags?, bethCried?, photos? } → { commit, versions }
+ *   POST /api/admin/entry    { path, version, title, body, draft?, tags?, bethCried?, meters?, location?, photos? } → { commit, versions }
  *   POST /api/admin/new      { trip, slug, title, date, day, authors, draft, body, tags?, bethCried?, photos?, newTrip? }
  *
  * `newTrip` starts the trip as well (trip-new.ts), in the same commit as its
@@ -18,7 +18,7 @@
 import type { APIRoute } from 'astro';
 import { getStore, ConflictError, type Author, type Edit } from '../store/index.ts';
 import { checkBody, joinEntry, renderPreview, splitEntry } from '../mdx.ts';
-import { list, replaceLine, splitFrontmatter } from '../frontmatter.ts';
+import { line, list, locationLine, metersLine, replaceLine, splitFrontmatter, upsertLine } from '../frontmatter.ts';
 import { newTripFile, validateNewTrip } from '../trip-new.ts';
 import { TAGS } from '../../data/tags.ts';
 import { guard, json, userOf } from '../guard.ts';
@@ -93,6 +93,11 @@ export const save: APIRoute = async ({ request }) => {
     if (typeof input?.draft === 'boolean') nextFm = replaceLine(nextFm, 'draft', String(input.draft));
     if (tags) nextFm = replaceLine(nextFm, 'tags', list(tags));
     if (typeof input?.bethCried === 'boolean') nextFm = replaceLine(nextFm, 'bethCried', String(input.bethCried));
+    // Sent (even as null) means set or clear; absent means leave alone.
+    if (input && 'meters' in input) nextFm = upsertLine(nextFm, 'meters', metersLine(input.meters));
+    if (input && 'location' in input) {
+      nextFm = upsertLine(nextFm, 'location', locationLine(input.location), line(nextFm, 'meters') != null ? 'meters' : 'bethCried');
+    }
   } catch (e) {
     return json({ error: (e as Error).message }, 422);
   }
@@ -222,6 +227,12 @@ export const create: APIRoute = async ({ request }) => {
 
   let photos;
   try { photos = await photoEdits(input?.photos, trip, slug, newBody); } catch (e) { return json({ error: (e as Error).message }, 400); }
+  let meters: string | null;
+  let location: string | null;
+  try {
+    meters = metersLine(input?.meters);
+    location = locationLine(input?.location);
+  } catch (e) { return json({ error: (e as Error).message }, 400); }
 
   const head = [
     '---',
@@ -233,6 +244,8 @@ export const create: APIRoute = async ({ request }) => {
     `tags: ${list(tags)}`,
     'people: []',
     `bethCried: ${input?.bethCried === true}`,
+    ...(meters ? [`meters: ${meters}`] : []),
+    ...(location ? [`location: ${location}`] : []),
     `draft: ${input?.draft === true}`,
     '---',
     '',

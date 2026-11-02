@@ -1,6 +1,12 @@
 ---
 /**
  * §7.2 — the trip page, the "trailhead".
+ *
+ * Built to pull a reader in: a few "read these first" teasers chosen from how
+ * each day felt, a strip of the trip's stress, danger, effort and awe, and the
+ * entries as a story you can filter by what happened — with a map beside them
+ * that follows along as you read. Everything is in the HTML; the map and the
+ * filters are enhancements.
  */
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
@@ -9,6 +15,8 @@ import {
   entriesForTrip, entrySlug, routeNodes, fmtRange, fmtDateShort,
   AUTHOR_NAMES, excerpt, type Entry,
 } from '../../lib/entries.ts';
+import { journeyPoints, firstPhoto, kindsOf, peakOf, KIND_ICONS, KIND_LABELS, KIND_ORDER, type Kind } from '../../lib/journey.ts';
+import { METERS, METER_LABELS, METER_ICONS, METER_LEVELS, type Meter } from '../../data/tags.ts';
 
 export async function getStaticPaths() {
   const trips = await getCollection('trips');
@@ -30,7 +38,50 @@ const startHere = d.startHere
   ? entries.find((e) => entrySlug(e) === d.startHere)
   : undefined;
 
-const firstPhoto = (e: Entry) => e.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? null;
+const href = (e: Entry) => `/${trip.id}/${entrySlug(e)}/`;
+
+// --- the map --------------------------------------------------------------------------
+const points = journeyPoints(entries);
+const pointIndex = new Map(points.map((p, i) => [p.slug, i]));
+const hasMap = points.length >= 2;
+const now = new Date();
+/** Under way (or just back): the map opens on the latest place, and the page says so. */
+const live = hasMap && now >= d.dateStart && +now <= +d.dateEnd + 3 * 864e5;
+const latest = points[points.length - 1];
+
+// --- what happened, for the filter chips ------------------------------------------------
+const kindCounts = KIND_ORDER
+  .map((k) => ({ k, n: entries.filter((e) => kindsOf(e).includes(k)).length }))
+  .filter((x) => x.n > 0);
+const cried = entries.filter((e) => e.data.bethCried);
+
+// --- read these first: the peaks of the trip, one entry each -------------------------------
+type Teaser = { icon: string; label: string; e: Entry; note?: string };
+const teasers: Teaser[] = [];
+const take = (t: Teaser | null) => {
+  if (t && !teasers.some((x) => x.e.id === t.e.id)) teasers.push(t);
+};
+const peak = (m: Meter, label: string) => {
+  const e = peakOf(entries, m);
+  return e ? { icon: METER_ICONS[m], label, e } : null;
+};
+take(peak('danger', 'Most dangerous'));
+take(cried[0] ? { icon: KIND_ICONS.cried, label: cried.length > 1 ? `Beth cried (${cried.length} times)` : 'Beth cried', e: cried[0] } : null);
+take(peak('awe', 'Most awe-inspiring'));
+const highest = [...entries].filter((e) => e.data.leg?.elevationHighFt).sort((a, b) => b.data.leg!.elevationHighFt! - a.data.leg!.elevationHighFt!)[0];
+take(highest ? { icon: '🏔️', label: 'Highest point', e: highest, note: `${highest.data.leg!.elevationHighFt!.toLocaleString('en-US')} ft` } : null);
+take(peak('stress', 'Most stressful'));
+take(peak('effort', 'Hardest day'));
+const shownTeasers = teasers.slice(0, 4);
+
+// --- the mood strip: one column per entry ------------------------------------------------
+const rated = entries.some((e) => METERS.some((m) => e.data.meters[m] != null)) || cried.length > 0;
+const label = (e: Entry) => (e.data.day != null ? `Day ${e.data.day}` : fmtDateShort(e.data.date));
+const columnLabel = (e: Entry) => [
+  `${label(e)}: ${e.data.title}.`,
+  ...METERS.filter((m) => e.data.meters[m] != null).map((m) => `${METER_LABELS[m]} ${METER_LEVELS[e.data.meters[m]!]}`),
+  e.data.bethCried ? 'Beth cried.' : '',
+].filter(Boolean).join(' ');
 
 const stats = [
   { label: 'Entries', value: String(d.stats.entries) },
@@ -38,7 +89,15 @@ const stats = [
   ...(d.stats.maxElevationFt
     ? [{ label: 'High point', value: `${d.stats.maxElevationFt.toLocaleString('en-US')} ft` }] : []),
   { label: 'Countries', value: String(d.stats.countriesCount) },
+  ...(cried.length ? [{ label: 'Beth cried', value: `${cried.length}×` }] : []),
 ];
+
+const journeyConfig = {
+  points,
+  icons: { ...KIND_ICONS },
+  live,
+  tripTitle: d.shortTitle,
+};
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -61,10 +120,17 @@ const jsonLd = {
   <header class="head">
     <h1 class="display head__title">{d.title}</h1>
     <p class="mono head__dates">{fmtRange(d.dateStart, d.dateEnd)}</p>
+    {live && latest && (
+      <p class="head__now">
+        <span class="head__pulse" aria-hidden="true"></span>
+        <span class="mono">Where they are now</span>
+        <a href={latest.href}>{latest.place}</a> <span class="mono head__now-when">{latest.when}</span>
+      </p>
+    )}
     <p class="head__summary">{d.summary}</p>
     {startHere && (
       <p class="head__start">
-        <a href={`/${trip.id}/${entrySlug(startHere)}/`}>
+        <a href={href(startHere)}>
           <span class="mono">Start here</span> — {startHere.data.title}
         </a>
       </p>
@@ -80,46 +146,133 @@ const jsonLd = {
         </div>
       ))}
     </dl>
+
+    {shownTeasers.length > 0 && (
+      <div class="teasers">
+        <h2 class="mono panel__sub">Read these first</h2>
+        <ul>
+          {shownTeasers.map((t) => (
+            <li>
+              <a href={href(t.e)} class="teaser">
+                <span class="teaser__icon" aria-hidden="true">{t.icon}</span>
+                <span class="mono teaser__label">{t.label}{t.note && ` · ${t.note}`}</span>
+                <span class="teaser__title">{t.e.data.title}</span>
+                <span class="mono teaser__when">{label(t.e)}{t.e.data.location && ` · ${t.e.data.location.name}`}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
     {nodes.length > 1 && <RouteLine nodes={nodes} tripSlug={trip.id} />}
     <p class="mono panel__caption">
       {d.stats.maxElevationFt
         ? 'Elevation profile · each node is an entry, spaced by date'
         : 'Timeline · each node is an entry, spaced by date'}
     </p>
+
+    {rated && (
+      <div class="mood">
+        <h2 class="mono panel__sub">How it felt, entry by entry</h2>
+        <div class="mood__grid" style={`--n:${entries.length}`}>
+          <span class="mono mood__row-label" aria-hidden="true">{KIND_ICONS.cried} Beth cried</span>
+          {METERS.map((m) => <span class="mono mood__row-label" style={`grid-row:${METERS.indexOf(m) + 2}`} aria-hidden="true">{METER_ICONS[m]} {METER_LABELS[m]}</span>)}
+          {entries.map((e, i) => (
+            <a href={href(e)} class="mood__col" style={`grid-column:${i + 2}`} title={columnLabel(e)}>
+              <span class="sr-only">{columnLabel(e)}</span>
+              <span class="mood__cell mood__cell--cried" aria-hidden="true">{e.data.bethCried ? KIND_ICONS.cried : ''}</span>
+              {METERS.map((m) => (
+                <span class="mood__cell" data-level={e.data.meters[m] ?? ''} aria-hidden="true"></span>
+              ))}
+            </a>
+          ))}
+        </div>
+        <p class="mono panel__caption">Darker is calmer: each square is one entry, 0 to 3 · {METER_LEVELS.join(' · ')}</p>
+      </div>
+    )}
   </section>
 
-  <section class="entries" aria-label="Entries">
-    <h2 class="mono entries__head">Day by day</h2>
-    <ol class="entries__list">
-      {entries.map((e) => {
-        const photo = firstPhoto(e);
-        const leg = e.data.leg;
-        const bits = [
-          e.data.day != null ? `Day ${e.data.day}` : null,
-          fmtDateShort(e.data.date),
-          leg?.distanceMi != null ? `${leg.distanceMi} mi` : null,
-          leg?.elevationHighFt != null
-            ? `${leg.elevationHighFt.toLocaleString('en-US')} ft` : null,
-        ].filter(Boolean);
-        return (
-          <li class="card">
-            <a href={`/${trip.id}/${entrySlug(e)}/`} class="card__link">
-              {photo
-                ? <img class="card__thumb" src={photo} alt="" loading="lazy" decoding="async" />
-                : <span class="card__thumb card__thumb--none" aria-hidden="true" />}
-              <span class="card__body">
-                <span class="mono card__meta">{bits.join(' · ')}</span>
-                <span class="card__title">{e.data.title}</span>
-                <span class="mono card__by">
-                  {e.data.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}
+  <section class:list={['journey', { 'journey--map': hasMap }]} data-journey aria-label="Entries">
+    {hasMap && <script type="application/json" id="journey-config" set:html={JSON.stringify(journeyConfig)} />}
+
+    <div class="journey__flow">
+      <div class="journey__top">
+        <h2 class="mono entries__head">Day by day</h2>
+        {kindCounts.length > 1 && (
+          <div class="chips" role="group" aria-label="Show only entries about…" data-chips hidden>
+            <button type="button" class="chip" aria-pressed="true" data-chip="">All {entries.length}</button>
+            {kindCounts.map((x) => (
+              <button type="button" class="chip" aria-pressed="false" data-chip={x.k}>
+                <span aria-hidden="true">{KIND_ICONS[x.k]}</span> {KIND_LABELS[x.k]} <span class="chip__n">{x.n}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <ol class="entries__list">
+        {entries.map((e) => {
+          const photo = firstPhoto(e);
+          const leg = e.data.leg;
+          const kinds = kindsOf(e);
+          const idx = pointIndex.get(entrySlug(e));
+          const bits = [
+            e.data.day != null ? `Day ${e.data.day}` : null,
+            fmtDateShort(e.data.date),
+            leg?.distanceMi != null ? `${leg.distanceMi} mi` : null,
+            leg?.elevationHighFt != null
+              ? `${leg.elevationHighFt.toLocaleString('en-US')} ft` : null,
+          ].filter(Boolean);
+          const rated = METERS.filter((m) => (e.data.meters[m] ?? 0) > 0);
+          return (
+            <li class="card" data-point={idx} data-kinds={kinds.join(' ')}>
+              <a href={href(e)} class="card__link">
+                {photo
+                  ? <img class="card__thumb" src={photo} alt="" loading="lazy" decoding="async" />
+                  : <span class="card__thumb card__thumb--none" aria-hidden="true" />}
+                <span class="card__body">
+                  <span class="mono card__meta">
+                    {bits.join(' · ')}
+                    {e.data.location && <span class="card__place"> · 📍 {e.data.location.name}</span>}
+                  </span>
+                  <span class="card__title">{e.data.title}</span>
+                  <span class="mono card__by">
+                    {e.data.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}
+                  </span>
+                  {(kinds.length > 0 || rated.length > 0) && (
+                    <span class="card__tags">
+                      {kinds.map((k) => (
+                        <span class:list={['tagchip', { 'tagchip--cried': k === 'cried' }]}><span aria-hidden="true">{KIND_ICONS[k]}</span> {KIND_LABELS[k]}</span>
+                      ))}
+                      {rated.map((m) => (
+                        <span class="meter" title={`${METER_LABELS[m]}: ${METER_LEVELS[e.data.meters[m]!]}`}>
+                          <span aria-hidden="true">{METER_ICONS[m]}</span>
+                          <span class="sr-only">{METER_LABELS[m]}: {METER_LEVELS[e.data.meters[m]!]}</span>
+                          <span class="meter__pips" aria-hidden="true">{[1, 2, 3].map((n) => <i class:list={{ on: n <= e.data.meters[m]! }} />)}</span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <span class="card__excerpt">{excerpt(e.body)}</span>
                 </span>
-                <span class="card__excerpt">{excerpt(e.body)}</span>
-              </span>
-            </a>
-          </li>
-        );
-      })}
-    </ol>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+
+    {hasMap && (
+      <div class="journey__map" data-journey-map>
+        <div class="journey__canvas" data-journey-canvas></div>
+        <div class="journey__controls">
+          <button type="button" class="mono jbtn" data-journey-play>▶ Play the trip</button>
+          <button type="button" class="mono jbtn jbtn--quiet" data-journey-overview>Whole trip</button>
+        </div>
+        <p class="jm-cap" data-journey-caption hidden aria-live="polite"></p>
+      </div>
+    )}
   </section>
 
   {people.length > 0 && (
@@ -148,6 +301,27 @@ const jsonLd = {
   )}
 </Base>
 
+<script>
+  import '../../scripts/journey-map.ts';
+
+  /*
+   * The filter chips: show only the entries about one thing. Hidden until this
+   * runs, so without JavaScript nobody sees buttons that do nothing.
+   */
+  const chips = document.querySelector<HTMLElement>('[data-chips]');
+  if (chips) {
+    chips.hidden = false;
+    const cards = [...document.querySelectorAll<HTMLElement>('.card[data-kinds]')];
+    chips.addEventListener('click', (ev) => {
+      const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-chip]');
+      if (!btn) return;
+      const k = btn.dataset.chip!;
+      chips.querySelectorAll('[data-chip]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      for (const c of cards) c.hidden = !!k && !(c.dataset.kinds ?? '').split(' ').includes(k);
+    });
+  }
+</script>
+
 <style>
   .hero {
     height: clamp(220px, 52vh, 560px);
@@ -174,6 +348,24 @@ const jsonLd = {
     color: var(--color-stone);
     margin: 0.7rem 0 1.4rem;
   }
+  .head__now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: -0.6rem 0 1.2rem;
+    font-size: 1.05rem;
+  }
+  .head__now .mono { color: var(--color-ember); font-size: 0.6875rem; }
+  .head__now-when { color: var(--color-stone) !important; }
+  .head__pulse {
+    width: 0.6rem; height: 0.6rem; border-radius: 50%;
+    background: var(--color-ember);
+    box-shadow: 0 0 0 0 rgb(143 96 0 / 0.5);
+    animation: pulse 1.8s ease-out infinite;
+  }
+  @keyframes pulse { to { box-shadow: 0 0 0 0.6rem rgb(143 96 0 / 0); } }
+  @media (prefers-reduced-motion: reduce) { .head__pulse { animation: none; } }
   .head__summary {
     margin: 0;
     font-size: 1.1875rem;
@@ -220,16 +412,132 @@ const jsonLd = {
     color: var(--color-stone-on-dark);
     font-size: 0.6875rem;
   }
+  .panel__sub {
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+    margin: 0 0 0.8rem;
+  }
 
-  .entries {
+  .teasers { max-width: 68rem; margin: 0 auto 2rem; }
+  .teasers ul {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem;
+  }
+  .teaser {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    grid-template-areas: 'icon label' 'icon title' 'icon when';
+    column-gap: 0.6rem;
+    height: 100%;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid var(--color-rule-dark);
+    color: var(--color-snow);
+    text-decoration: none;
+    transition: border-color 150ms ease, background 150ms ease;
+  }
+  .teaser:hover, .teaser:focus-visible { border-color: var(--color-headlamp); background: rgb(255 194 75 / 0.06); }
+  .teaser__icon { grid-area: icon; font-size: 1.6rem; line-height: 1; }
+  .teaser__label { grid-area: label; color: var(--color-headlamp); font-size: 0.625rem; }
+  .teaser__title { grid-area: title; font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; line-height: 1.25; margin: 0.2rem 0; }
+  .teaser__when { grid-area: when; color: var(--color-stone-on-dark); font-size: 0.625rem; }
+
+  /* The mood strip: rows are meters, columns are entries, darker is calmer. */
+  .mood { max-width: 68rem; margin: 2.2rem auto 0; }
+  .mood__grid {
+    display: grid;
+    grid-template-columns: 6.5rem repeat(var(--n), minmax(0, 1fr));
+    grid-template-rows: repeat(5, 1.05rem);
+    gap: 3px 2px;
+  }
+  .mood__row-label { grid-column: 1; font-size: 0.5625rem; color: var(--color-stone-on-dark); align-self: center; white-space: nowrap; }
+  .mood__col {
+    grid-row: 1 / span 5;
+    display: grid;
+    grid-template-rows: subgrid;
+    text-decoration: none;
+    border-radius: 2px;
+  }
+  .mood__col:hover .mood__cell, .mood__col:focus-visible .mood__cell { outline: 1px solid var(--color-headlamp); }
+  .mood__cell { display: block; border-radius: 2px; background: #1b232c; }
+  .mood__cell--cried { background: none; text-align: center; font-size: 0.75rem; line-height: 1.05rem; }
+  .mood__cell[data-level='1'] { background: #2a5560; }
+  .mood__cell[data-level='2'] { background: #3a8f9c; }
+  .mood__cell[data-level='3'] { background: var(--color-rime); }
+
+  /* --- the story and its map ----------------------------------------------------------- */
+  .journey {
     max-width: 60rem;
     margin: clamp(2.5rem, 6vw, 4rem) auto 0;
     padding-inline: clamp(1rem, 4vw, 3rem);
   }
+  .journey__map { display: none; }
+  .journey--map[data-live] {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 36rem) minmax(0, 1fr);
+    gap: clamp(1.5rem, 3vw, 2.5rem);
+    padding-right: 0;
+  }
+  .journey--map[data-live] .journey__map {
+    display: block;
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    background: var(--color-ink);
+  }
+  .journey__canvas { position: absolute; inset: 0; }
+  .journey__controls {
+    position: absolute; z-index: 2; top: 0.8rem; left: 0.8rem;
+    display: flex; gap: 0.5rem;
+  }
+  .jbtn {
+    font-size: 0.6875rem; padding: 0.45rem 0.8rem; border: 0; cursor: pointer;
+    background: var(--color-headlamp); color: var(--color-ink);
+  }
+  .jbtn--quiet { background: rgb(18 22 28 / 0.85); color: var(--color-snow); box-shadow: inset 0 0 0 1px var(--color-rule-dark); }
+  .jm-cap {
+    position: absolute; z-index: 2; left: 0.8rem; right: 3.4rem; bottom: 1.6rem;
+    margin: 0; padding: 0.65rem 0.85rem;
+    background: rgb(18 22 28 / 0.88); backdrop-filter: blur(6px);
+    border: 1px solid var(--color-rule-dark);
+    color: var(--color-snow);
+  }
+  .jm-cap[hidden] { display: none; }
+  .jm-cap :global(.jm-cap__meta) { display: block; font-family: var(--font-mono, monospace); font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-stone-on-dark); }
+  .jm-cap :global(a) { color: var(--color-snow); font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; text-decoration: none; }
+  .jm-cap :global(a:hover) { color: var(--color-headlamp); }
+  :global(.jm-here) {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--color-headlamp);
+    border: 3px solid var(--color-ink);
+    box-shadow: 0 0 0 0 rgb(255 194 75 / 0.6);
+    animation: here 1.6s ease-out infinite;
+  }
+  @keyframes here { to { box-shadow: 0 0 0 16px rgb(255 194 75 / 0); } }
+  @media (prefers-reduced-motion: reduce) { :global(.jm-here) { animation: none; } }
+
+  .journey__top {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.75rem;
+    margin: 0 0 1rem;
+  }
   .entries__head {
     color: var(--color-stone);
-    margin: 0 0 1.25rem;
+    margin: 0;
   }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .chips[hidden] { display: none; }
+  .chip {
+    font: inherit; font-size: 0.8125rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--color-rule);
+    background: transparent;
+    color: var(--color-stone);
+    cursor: pointer;
+  }
+  .chip[aria-pressed='true'] { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-snow); }
+  .chip__n { color: var(--color-ember); font-size: 0.75rem; }
+  .chip[aria-pressed='true'] .chip__n { color: var(--color-headlamp); }
+
   .entries__list {
     list-style: none;
     margin: 0;
@@ -238,12 +546,15 @@ const jsonLd = {
   }
   .card {
     border-bottom: 1px solid var(--color-rule);
+    transition: box-shadow 200ms ease;
   }
+  .card[hidden] { display: none; }
+  .card[data-active] { box-shadow: inset 3px 0 0 var(--color-ember); }
   .card__link {
     display: grid;
     grid-template-columns: 96px 1fr;
     gap: 1.25rem;
-    padding: 1.1rem 0;
+    padding: 1.1rem 0 1.1rem 0.75rem;
     text-decoration: none;
     transition: background 150ms ease;
   }
@@ -272,6 +583,7 @@ const jsonLd = {
     color: var(--color-stone);
     font-size: 0.6875rem;
   }
+  .card__place { color: var(--color-rime-on-light); }
   .card__title {
     display: block;
     font-family: var(--font-display);
@@ -286,6 +598,16 @@ const jsonLd = {
     color: var(--color-stone);
     font-size: 0.625rem;
   }
+  .card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.45rem; margin-top: 0.5rem; }
+  .tagchip {
+    font-size: 0.75rem; color: var(--color-stone);
+    padding: 0.05rem 0.45rem; border: 1px solid var(--color-rule); border-radius: 999px;
+  }
+  .tagchip--cried { border-color: var(--color-ember); color: var(--color-ember); }
+  .meter { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.75rem; }
+  .meter__pips { display: inline-flex; gap: 2px; }
+  .meter__pips i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-rule); }
+  .meter__pips i.on { background: var(--color-rime-on-light); }
   .card__excerpt {
     display: block;
     margin-top: 0.4rem;
@@ -316,6 +638,25 @@ const jsonLd = {
     font-size: 0.6875rem;
   }
 
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* On a phone the map sits on top and stays there while the story scrolls under it. */
+  @media (max-width: 960px) {
+    .journey--map[data-live] { grid-template-columns: minmax(0, 1fr); padding-right: clamp(1rem, 4vw, 3rem); }
+    .journey--map[data-live] .journey__map {
+      order: -1;
+      z-index: 5;
+      height: 42svh;
+      margin-inline: calc(-1 * clamp(1rem, 4vw, 3rem));
+    }
+    .jm-cap { bottom: 0.6rem; right: 0.6rem; left: 0.6rem; padding: 0.45rem 0.6rem; }
+    .jm-cap :global(a) { font-size: 0.9rem; }
+    /* Play and map taps line a card up just below the map, not behind it. */
+    .journey--map[data-live] .card { scroll-margin-top: calc(42svh + 0.75rem); }
+  }
   @media (max-width: 560px) {
     .card__link {
       grid-template-columns: 64px 1fr;
@@ -323,5 +664,6 @@ const jsonLd = {
     }
     .card__thumb { width: 64px; height: 52px; }
     .card__thumb--none { height: 52px; }
+    .mood__grid { grid-template-columns: 4.6rem repeat(var(--n), minmax(0, 1fr)); gap: 2px 1px; }
   }
 </style>

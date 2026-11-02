@@ -20,10 +20,10 @@ import AdminLayout from '../AdminLayout.astro';
 import { getStore } from '../store/index.ts';
 import { guard, notFound, userOf } from '../guard.ts';
 import { HOSTED } from '../mode.ts';
-import { readMeta } from '../frontmatter.ts';
+import { readMeta, type Meters, type Place } from '../frontmatter.ts';
 import { readTrip } from '../trip-edit.ts';
 import { checkBody, renderPreview, splitEntry } from '../mdx.ts';
-import { TAGS, TAG_LABELS } from '../../data/tags.ts';
+import { TAGS, TAG_LABELS, TAG_ICONS, METERS, METER_LABELS, METER_ICONS, METER_LEVELS } from '../../data/tags.ts';
 import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
 
 export const prerender = false;
@@ -48,6 +48,7 @@ let version = '';
 let meta = {
   title: '', date: new Date().toISOString().slice(0, 10), day: null as number | null, draft: false,
   authors: ['beth'] as string[], tags: [] as string[], bethCried: false,
+  meters: {} as Meters, location: null as Place | null,
 };
 let body = '';
 let existingPhotos: string[] = [];
@@ -65,7 +66,10 @@ if (isNew) {
   try { file = await store.read(path); } catch { return notFound(); }
   version = file.version;
   const m = readMeta(file.text);
-  meta = { title: m.title, date: m.date, day: m.day, draft: m.draft, authors: m.authors, tags: m.tags, bethCried: m.bethCried };
+  meta = {
+    title: m.title, date: m.date, day: m.day, draft: m.draft, authors: m.authors, tags: m.tags, bethCried: m.bethCried,
+    meters: m.meters, location: m.location,
+  };
   body = splitEntry(file.text).body;
   existingPhotos = await store.listDir(`assets/photos/${tripParam}/${slugParam}`);
 }
@@ -78,6 +82,7 @@ const byKey = meta.authors.includes('andy') && meta.authors.includes('beth') ? '
 
 const payload = JSON.stringify({
   hosted: HOSTED, isNew, path, version, title: meta.title, body, draft: meta.draft, tags: meta.tags, bethCried: meta.bethCried,
+  meters: meta.meters, location: meta.location,
   trip: tripParam ?? trips[0]?.id ?? '', slug: slugParam ?? '', existingPhotos, takenSlugs, tripIds: trips.map((t) => t.id),
 }).replace(/</g, '\\u003c');
 ---
@@ -118,10 +123,36 @@ const payload = JSON.stringify({
   <fieldset class="ee-tags">
     <legend class="mono">Tags</legend>
     {TAGS.map((t) => (
-      <label class="ee-tag"><input type="checkbox" name="tag" value={t} checked={meta.tags.includes(t)} /><span>{TAG_LABELS[t]}</span></label>
+      <label class="ee-tag"><input type="checkbox" name="tag" value={t} checked={meta.tags.includes(t)} /><span><i aria-hidden="true">{TAG_ICONS[t]}</i> {TAG_LABELS[t]}</span></label>
     ))}
-    <label class="ee-tag ee-tag--cried"><input type="checkbox" id="f-cried" checked={meta.bethCried} /><span>Beth cried</span></label>
+    <label class="ee-tag ee-tag--cried"><input type="checkbox" id="f-cried" checked={meta.bethCried} /><span><i aria-hidden="true">😢</i> Beth cried</span></label>
   </fieldset>
+
+  <div class="ee-extra">
+    <fieldset class="ee-feel">
+      <legend class="mono">How it felt</legend>
+      {METERS.map((m) => (
+        <label class="ee-meter">
+          <span><i aria-hidden="true">{METER_ICONS[m]}</i> {METER_LABELS[m]}</span>
+          <select data-meter={m}>
+            <option value="">not rated</option>
+            {METER_LEVELS.map((l, i) => <option value={String(i)} selected={meta.meters[m] === i}>{i} · {l}</option>)}
+          </select>
+        </label>
+      ))}
+    </fieldset>
+
+    <fieldset class="ee-where">
+      <legend class="mono">Where</legend>
+      <div class="ee-where__row">
+        <input id="f-place" value={meta.location?.name ?? ''} maxlength="80" placeholder="Place — e.g. Concordia, Kyoto" aria-label="Place name" />
+        <button type="button" class="btn ee-find" id="f-find">Find on map</button>
+      </div>
+      <ul class="ee-found" id="f-found" hidden></ul>
+      <p class="mono ee-where__coords"><span id="f-coords"></span> <button type="button" class="ee-linkbtn" id="f-clearpos" hidden>remove position</button></p>
+      <p class="ee-hint">Puts the entry on the trip's map. Uploading a photo that knows where it was taken fills this in.</p>
+    </fieldset>
+  </div>
 
   <div class="ee-panes">
     <section class="ee-pane" aria-labelledby="ee-src-h">
@@ -223,6 +254,7 @@ const payload = JSON.stringify({
   const data = JSON.parse(document.getElementById('entry-data')!.textContent!) as {
     hosted: boolean; isNew: boolean; path: string; version: string; title: string; body: string; draft: boolean;
     tags: string[]; bethCried: boolean;
+    meters: Record<string, number>; location: { name: string; lat?: number; lng?: number } | null;
     trip: string; slug: string; existingPhotos: string[]; takenSlugs: Record<string, string[]>; tripIds: string[];
   };
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -237,8 +269,73 @@ const payload = JSON.stringify({
   const tagBoxes = [...document.querySelectorAll<HTMLInputElement>('input[name="tag"]')];
   const tagsNow = () => tagBoxes.filter((b) => b.checked).map((b) => b.value);
   const tagLabel = (t: string) => tagBoxes.find((b) => b.value === t)?.nextElementSibling?.textContent ?? t;
-  let orig = { title: data.title, body: data.body, draft: data.draft, tags: data.tags, bethCried: data.bethCried };
+  // ---- how it felt, and where -------------------------------------------------------
+  const meterEls = [...document.querySelectorAll<HTMLSelectElement>('select[data-meter]')];
+  const metersNow = () =>
+    Object.fromEntries(meterEls.filter((s) => s.value !== '').map((s) => [s.dataset.meter!, Number(s.value)])) as Record<string, number>;
+  const placeEl = $<HTMLInputElement>('f-place');
+  const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
+  let pos: { lat: number; lng: number } | null =
+    data.location?.lat != null && data.location?.lng != null ? { lat: data.location.lat, lng: data.location.lng } : null;
+  const placeNow = () => (placeEl.value.trim() ? { name: placeEl.value.trim(), ...(pos ?? {}) } : null);
+  const showPos = () => {
+    $('f-coords').textContent = pos
+      ? `📍 ${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)} — on the map`
+      : placeEl.value.trim() ? 'No position yet — Find on map to pin it.' : '';
+    $('f-clearpos').hidden = !pos;
+  };
+  const setPos = (lat: number, lng: number) => { pos = { lat: round4(lat), lng: round4(lng) }; showPos(); refresh(); };
+
+  let orig = {
+    title: data.title, body: data.body, draft: data.draft, tags: data.tags, bethCried: data.bethCried,
+    meters: data.meters, location: data.location,
+  };
+  const feelChanged = () =>
+    JSON.stringify(metersNow()) !== JSON.stringify(orig.meters) || JSON.stringify(placeNow()) !== JSON.stringify(orig.location);
   const tagsChanged = () => tagsNow().join() !== orig.tags.join() || criedEl.checked !== orig.bethCried;
+
+  /*
+   * Place search: OpenStreetMap's Nominatim, called from this browser only when
+   * someone presses Find (their usage policy: occasional, user-initiated).
+   */
+  const NOMINATIM = 'https://nominatim.openstreetmap.org';
+  const found = $<HTMLUListElement>('f-found');
+  const shortName = (r: { name?: string; display_name: string }) => r.name || r.display_name.split(',')[0];
+  async function findPlace() {
+    const q = placeEl.value.trim();
+    if (!q) { placeEl.focus(); return; }
+    found.hidden = false;
+    found.innerHTML = '<li class="mono">Searching…</li>';
+    try {
+      const res = await fetch(`${NOMINATIM}/search?format=jsonv2&limit=6&accept-language=en&q=${encodeURIComponent(q)}`);
+      const hits = (await res.json()) as { name?: string; display_name: string; lat: string; lon: string; type: string }[];
+      if (!hits.length) { found.innerHTML = '<li class="mono">Nothing found — try a bigger nearby place.</li>'; return; }
+      found.innerHTML = hits.map((h, i) =>
+        `<li><button type="button" data-hit="${i}"><b>${esc(shortName(h))}</b> <span>${esc(h.display_name)}</span></button></li>`).join('');
+      found.querySelectorAll<HTMLButtonElement>('[data-hit]').forEach((b) => b.addEventListener('click', () => {
+        const h = hits[Number(b.dataset.hit)];
+        setPos(Number(h.lat), Number(h.lon));
+        found.hidden = true;
+      }));
+    } catch {
+      found.innerHTML = '<li class="mono">The place search didn\'t answer — try again in a moment.</li>';
+    }
+  }
+  async function nameFromPosition(lat: number, lng: number) {
+    try {
+      const res = await fetch(`${NOMINATIM}/reverse?format=jsonv2&zoom=14&accept-language=en&lat=${lat}&lon=${lng}`);
+      const r = (await res.json()) as { name?: string; display_name?: string; address?: Record<string, string> };
+      const a = r.address ?? {};
+      const name = r.name || a.village || a.town || a.city || a.suburb || a.county || a.state || r.display_name?.split(',')[0];
+      if (name && !placeEl.value.trim()) { placeEl.value = name; showPos(); refresh(); }
+    } catch { /* the position alone is still saved */ }
+  }
+  $('f-find').addEventListener('click', findPlace);
+  placeEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); findPlace(); } });
+  placeEl.addEventListener('input', () => { showPos(); refresh(); });
+  $('f-clearpos').addEventListener('click', () => { pos = null; showPos(); refresh(); });
+  meterEls.forEach((s) => s.addEventListener('change', () => refresh()));
+  showPos();
   let problems: Problem[] = [];
   let pending = 0;
   let uploading = 0;
@@ -253,7 +350,7 @@ const payload = JSON.stringify({
   const stagedInBody = () => [...staged.keys()].filter((src) => bodyEl.value.includes(`src="${src}"`));
   const dirty = () => data.isNew
     ? !!(titleNow() || bodyEl.value.trim())
-    : titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body) || draftEl.checked !== orig.draft || tagsChanged() || stagedInBody().length > 0;
+    : titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body) || draftEl.checked !== orig.draft || tagsChanged() || feelChanged() || stagedInBody().length > 0;
 
   // ---- where this entry lives (new entries: from trip + web address) -------
   const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
@@ -543,6 +640,11 @@ const payload = JSON.stringify({
         staged.set(src, { token: out.token, url, facts });
         lines.push(`<Photo src="${src}" caption="" />`);
         li.innerHTML = `<img src="${url}" alt="" /> <span class="ee-up__name">${esc(file.name)}</span> <span class="mono ee-up__state is-ok">added · ${Math.round(out.bytes / 1024)} KB${facts.lat != null ? ' · position saved for the map' : ''}</span>`;
+        // The first photo that knows where it was taken places the entry, if nothing has yet.
+        if (facts.lat != null && facts.lng != null && !pos) {
+          setPos(facts.lat, facts.lng);
+          if (!placeEl.value.trim()) nameFromPosition(facts.lat, facts.lng);
+        }
       } catch (e) {
         li.classList.add('is-bad');
         state.textContent = (e as Error).message;
@@ -634,6 +736,15 @@ const payload = JSON.stringify({
         ? `<p class="ee-titlechg"><span class="mono">Tags</span> ${esc(now)}</p>`
         : `<p class="ee-titlechg"><span class="mono">Tags</span> <del>${esc(shown(orig.tags, orig.bethCried))}</del> → <ins>${esc(now)}</ins></p>`);
     }
+    const feel = (m: Record<string, number>) =>
+      meterEls.filter((s) => m[s.dataset.meter!] != null).map((s) => `${s.previousElementSibling!.textContent!.trim()} ${m[s.dataset.meter!]}`).join(', ') || 'not rated';
+    if (JSON.stringify(metersNow()) !== JSON.stringify(orig.meters)) {
+      bits.push(`<p class="ee-titlechg"><span class="mono">How it felt</span> ${data.isNew ? '' : `<del>${esc(feel(orig.meters))}</del> → `}<ins>${esc(feel(metersNow()))}</ins></p>`);
+    }
+    if (JSON.stringify(placeNow()) !== JSON.stringify(orig.location)) {
+      const where = (l: { name: string; lat?: number } | null) => (l ? `${l.name}${l.lat != null ? ' (on the map)' : ''}` : 'nowhere');
+      bits.push(`<p class="ee-titlechg"><span class="mono">Where</span> ${data.isNew ? '' : `<del>${esc(where(orig.location))}</del> → `}<ins>${esc(where(placeNow()))}</ins></p>`);
+    }
     if (draftEl.checked !== orig.draft || data.isNew) {
       bits.push(`<p class="ee-titlechg"><span class="mono">Status</span> ${draftEl.checked ? 'Draft — kept off the site' : '<ins>Published on the site</ins>'}</p>`);
     }
@@ -651,7 +762,10 @@ const payload = JSON.stringify({
     commitBtn.disabled = true;
     err.textContent = '';
     try {
-      const sent = { title: titleNow(), body: bodyEl.value, draft: draftEl.checked, tags: tagsNow(), bethCried: criedEl.checked };
+      const sent = {
+        title: titleNow(), body: bodyEl.value, draft: draftEl.checked, tags: tagsNow(), bethCried: criedEl.checked,
+        meters: metersNow(), location: placeNow(),
+      };
       const photos = stagedInBody().map((src) => {
         const { token, facts } = staged.get(src)!;
         return {
@@ -774,6 +888,25 @@ const payload = JSON.stringify({
     display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.9rem 0 0; padding: 0; border: 0; max-width: 72rem;
   }
   .ee-tags legend { font-size: 0.6875rem; color: var(--color-stone); margin-bottom: 0.35rem; padding: 0; }
+  .ee-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0 1.5rem; margin-top: 0.5rem; }
+  .ee-feel, .ee-where { border: 0; padding: 0; margin: 0.6rem 0 0; min-width: 0; }
+  .ee-feel legend, .ee-where legend { font-size: 0.6875rem; color: var(--color-stone); margin-bottom: 0.35rem; padding: 0; }
+  .ee-feel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.8rem; }
+  .ee-meter { display: grid; gap: 0.15rem; font-size: 0.8125rem; }
+  .ee-meter select { font: inherit; padding: 0.3rem; min-width: 0; width: 100%; }
+  .ee-where__row { display: flex; gap: 0.5rem; }
+  .ee-where__row input { flex: 1; min-width: 0; font: inherit; padding: 0.4rem 0.5rem; }
+  .ee-find { white-space: nowrap; }
+  .ee-where__coords { margin: 0.35rem 0 0; font-size: 0.6875rem; color: var(--color-rime-on-light); text-transform: none; letter-spacing: 0; }
+  .ee-linkbtn { font: inherit; background: none; border: 0; padding: 0; color: var(--color-stone); text-decoration: underline; cursor: pointer; }
+  .ee-hint { margin: 0.3rem 0 0; font-size: 0.8125rem; color: var(--color-stone); }
+  .ee-found { list-style: none; margin: 0.4rem 0 0; padding: 0; border: 1px solid var(--color-rule); max-height: 14rem; overflow: auto; }
+  .ee-found[hidden] { display: none; }
+  .ee-found li { border-bottom: 1px solid var(--color-rule); padding: 0.3rem 0.5rem; font-size: 0.8125rem; }
+  .ee-found button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.2rem 0; cursor: pointer; font: inherit; }
+  .ee-found button:hover b { text-decoration: underline; }
+  .ee-found button span { display: block; color: var(--color-stone); font-size: 0.75rem; }
+  .ee-tag i { font-style: normal; }
   .ee-tag { position: relative; }
   .ee-tag input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
   .ee-tag span {

@@ -17,6 +17,7 @@ import {
   chronological, tripIdOf, entrySlug, routeNodes, fmtDate,
   AUTHOR_NAMES, excerpt,
 } from '../../lib/entries.ts';
+import { TAG_ICONS, TAG_LABELS, METERS, METER_ICONS, METER_LABELS, METER_LEVELS } from '../../data/tags.ts';
 
 export async function getStaticPaths() {
   const all = await getCollection('entries', ({ data }) => !data.draft);
@@ -107,10 +108,24 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       <p class={`byline byline--${d.authors[0] ?? 'beth'}`}>
         <span class="mono byline__who">{d.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}</span>
         <span class="mono byline__when">{fmtDate(d.date)}</span>
+        {d.location && <span class="mono byline__where">📍 {d.location.name}</span>}
         {d.bethCried && (
-          <a href="/beth-cried-here/" class="mono byline__cried">Beth cried here</a>
+          <a href="/beth-cried-here/" class="mono byline__cried">😢 Beth cried here</a>
         )}
       </p>
+
+      {METERS.some((m) => d.meters[m]) && (
+        <ul class="feel" aria-label="How it felt" data-pagefind-ignore>
+          {METERS.filter((m) => d.meters[m]).map((m) => (
+            <li title={`${METER_LABELS[m]}: ${METER_LEVELS[d.meters[m]!]}`}>
+              <span aria-hidden="true">{METER_ICONS[m]}</span>
+              <span class="mono feel__label">{METER_LABELS[m]}</span>
+              <span class="sr-only">{METER_LEVELS[d.meters[m]!]}</span>
+              <span class="feel__pips" aria-hidden="true">{[1, 2, 3].map((n) => <i class:list={{ on: n <= d.meters[m]! }} />)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {d.leg && <LegStats leg={d.leg} />}
       {d.leg && trip && <TrekProfile siblings={siblings} current={me} tripSlug={trip.id} />}
@@ -122,7 +137,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       {d.tags.length > 0 && (
         <ul class="tags">
           {d.tags.map((t) => (
-            <li><a href={`/tags/${t}/`} class="mono">{t}</a></li>
+            <li><a href={`/tags/${t}/`} class="mono"><span aria-hidden="true">{TAG_ICONS[t]}</span> {TAG_LABELS[t]}</a></li>
           ))}
         </ul>
       )}
@@ -228,6 +243,14 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
     text-decoration-style: dotted;
   }
 
+  .byline__where { color: var(--color-rime-on-light); }
+  .feel { list-style: none; margin: 0.4rem 0 1.4rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; }
+  .feel li { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .feel__label { font-size: 0.625rem; color: var(--color-stone); }
+  .feel__pips { display: inline-flex; gap: 3px; }
+  .feel__pips i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-rule); }
+  .feel__pips i.on { background: var(--color-rime-on-light); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .tags {
     display: flex;
     flex-wrap: wrap;

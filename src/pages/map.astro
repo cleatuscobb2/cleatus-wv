@@ -15,6 +15,13 @@
  * bar to the countries that trip visited. It is pure enhancement — with it off,
  * the map and the timeline are both still complete and clickable. §3 excepts the
  * maps from the no-JS rule, and this is the whole of what that exception buys.
+ *
+ * Since 2026-11-02 that static map is the fallback. Where WebGL is available,
+ * src/scripts/world-globe.ts replaces it with a full-screen globe (tiles,
+ * relief, an icon wherever an entry says something happened, a filtering
+ * legend, a tour) fed by /map-data.json. Entry places now exist — pinned to the
+ * town or camp each entry names — so the "no coordinates" reason above is
+ * history; the SVG stays because it costs nothing and never fails.
  */
 import { getCollection } from 'astro:content';
 import { feature } from 'topojson-client';
@@ -24,6 +31,8 @@ import Base from '../layouts/Base.astro';
 import Timeline from '../components/Timeline.astro';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
 import { beenTo, yearSpans } from '../data/been-to.ts';
+import { KIND_ORDER, KIND_ICONS, KIND_LABELS, kindsOf, type Kind } from '../lib/journey.ts';
+import { tripIdOf } from '../lib/entries.ts';
 
 const allTrips = await getCollection('trips');
 const now = new Date();
@@ -141,20 +150,83 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
   const sortedCodes = [...codes].sort((a, b) => (COUNTRY_NAMES[a] ?? a).localeCompare(COUNTRY_NAMES[b] ?? b));
   return { month, countries: sortedCodes, label: listOf(sortedCodes.map((c) => COUNTRY_NAMES[c] ?? c)) };
 });
+
+/*
+ * The globe's legend: one row per kind of event, with how many located entries
+ * carry it. The everyday kinds start switched off so the globe opens on the
+ * stories — dives, summits, near misses, Beth crying — not on every lunch.
+ */
+const located = (await getCollection('entries', ({ data }) => !data.draft && data.location?.lat != null))
+  .filter((e) => trips.some((t) => t.id === tripIdOf(e)));
+const kindCount = (k: Kind) => located.filter((e) => kindsOf(e).includes(k)).length;
+const QUIET: Kind[] = ['food', 'culture', 'history', 'water', 'weather', 'people', 'city', 'transport', 'logistics', 'rest-day'];
+const kinds = KIND_ORDER.map((k) => ({ k, icon: KIND_ICONS[k], label: KIND_LABELS[k], n: kindCount(k), on: !QUIET.includes(k) }))
+  .filter((x) => x.n > 0 || x.k === 'diving');
+const globeConfig = {
+  icons: KIND_ICONS,
+  labels: KIND_LABELS,
+  order: KIND_ORDER,
+  defaultOff: QUIET,
+};
 ---
 
 <Base
   title="Map"
   description={`Every country Andy and Beth have been to — ${allCodes.length} of them, ${writtenCodes.length} written about across ${trips.length} trips.`}
 >
-  <header class="head">
-    <h1 class="display">Map</h1>
-    <p class="head__note">
-      {allCodes.length} countries so far, {writtenCodes.length} of them written up
-      across {trips.length} trips. Hover a country to see when they were there, or
-      a trip on the timeline to see everywhere it went.
-    </p>
-  </header>
+  {/*
+    The globe stage. Without JavaScript (or WebGL) only the header shows here and
+    the static SVG map below does the work; once the globe is live the stage
+    fills the screen and the SVG steps aside (see [data-live] in the styles).
+  */}
+  <section class="stage" data-globe aria-label="Interactive globe">
+    <script type="application/json" id="globe-config" set:html={JSON.stringify(globeConfig)} />
+    <div class="stage__map" data-globe-map></div>
+
+    <header class="head">
+      <h1 class="display">Map</h1>
+      <p class="head__note">
+        <strong>{allCodes.length} countries</strong> so far, {writtenCodes.length} of them written up
+        across {trips.length} trips.
+        <span class="head__live"> Spin the globe, click a country, tap an icon to read what happened there —
+        or hover a trip on the timeline below.</span>
+        <span class="head__static"> Hover a country to see when they were there, or a trip on the
+        timeline to see everywhere it went.</span>
+      </p>
+      <p class="stage__buttons">
+        <button type="button" class="mono stage__btn" data-globe-tour>▶ Tour the trips</button>
+        <button type="button" class="mono stage__btn stage__btn--quiet" data-globe-reset>Reset view</button>
+      </p>
+    </header>
+
+    <div class="key-panel">
+      <p class="mono key-panel__head">Countries</p>
+      <ul class="key-panel__cc">
+        <li><span class="key__swatch key__swatch--written"></span>Written up</li>
+        <li><span class="key__swatch key__swatch--been"></span>Been, no entries yet</li>
+      </ul>
+      <p class="mono key-panel__head">
+        What happened where
+        <button type="button" class="key-panel__all" data-kinds-all>all / none</button>
+      </p>
+      <ul class="key-panel__kinds">
+        {kinds.map((x) => (
+          <li>
+            <label>
+              <input type="checkbox" value={x.k} data-kind-toggle checked={x.on} />
+              <span class="key-panel__icon" aria-hidden="true">{x.icon}</span>
+              <span class="key-panel__label">{x.label}</span>
+              <span class="mono key-panel__n">{x.k === 'diving' && !x.n ? '' : x.n}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p class="key-panel__note">Places are where each entry says it happened, pinned to the town, camp or park — not a GPS track.</p>
+    </div>
+
+    <aside class="gpanel" data-globe-panel hidden aria-live="polite"></aside>
+    <p class="mono gcaption" data-globe-caption hidden aria-live="polite"></p>
+  </section>
 
   <figure class="mapwrap" data-map-wrap>
     {/* Sized to the wrapper in pixels by the script; empty and invisible without it. */}
@@ -275,6 +347,10 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
   </section>
 </Base>
 
+<script>
+  import '../scripts/world-globe.ts';
+</script>
+
 <script is:inline>
   /*
    * Leader lines from a timeline bar to the countries that trip visited.
@@ -310,6 +386,8 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
     }
 
     function draw(bar) {
+      // Once the globe is up it flies to the trip instead; the SVG is hidden.
+      if (wrap.hasAttribute('data-globe-live')) return;
       if (active === bar) return;
       clear();
       active = bar;
@@ -402,25 +480,184 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
 </script>
 
 <style>
-  .head {
-    max-width: 68rem;
-    margin: 0 auto;
-    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+  /* --- the stage: header only without JS; the whole screen once the globe is live --- */
+  .stage {
+    position: relative;
+    background: var(--color-ink);
+    color: var(--color-snow);
   }
-  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; }
-  .head__note { color: var(--color-stone); margin: 0.6rem 0 0; max-width: 56ch; }
+  .head {
+    padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 4vw, 3rem) 0;
+  }
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; color: var(--color-snow); }
+  .head__note { color: var(--color-stone-on-dark); margin: 0.6rem 0 0; max-width: 56ch; }
+  .head__note strong { color: var(--color-snow); font-weight: 600; }
+  .head__live, .stage__buttons, .key-panel, .stage__map { display: none; }
+
+  .stage[data-live] {
+    height: calc(100svh - 3.75rem);
+    min-height: 34rem;
+    overflow: hidden;
+  }
+  .stage[data-live] .stage__map { display: block; position: absolute; inset: 0; }
+  .stage[data-live] .head__static { display: none; }
+  .stage[data-live] .head__live { display: inline; }
+
+  /* Overlay cards: frosted ink, so the globe shows through at the edges. */
+  .stage[data-live] .head,
+  .stage[data-live] .key-panel,
+  .gpanel,
+  .gcaption {
+    background: rgb(18 22 28 / 0.84);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--color-rule-dark);
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.35);
+  }
+  .stage[data-live] .head {
+    position: absolute;
+    z-index: 2;
+    top: 1rem;
+    left: 1rem;
+    max-width: min(24rem, calc(100% - 5rem));
+    padding: 1rem 1.2rem 1.1rem;
+  }
+  .stage[data-live] .head h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
+  .stage[data-live] .head__note { font-size: 0.9375rem; }
+  .stage[data-live] .stage__buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.9rem 0 0; }
+  .stage__btn {
+    font-size: 0.6875rem;
+    padding: 0.45rem 0.8rem;
+    border: 0;
+    background: var(--color-headlamp);
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+  .stage__btn--quiet { background: transparent; color: var(--color-snow); box-shadow: inset 0 0 0 1px var(--color-rule-dark); }
+  .stage__btn:hover { filter: brightness(1.08); }
+
+  .stage[data-live] .key-panel {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    left: 1rem;
+    bottom: 1.6rem;
+    width: 15.5rem;
+    max-height: calc(100% - 17rem);
+    overflow: auto;
+    padding: 0.8rem 0.9rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-rule-dark) transparent;
+  }
+  .key-panel__head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin: 0 0 0.45rem; font-size: 0.5625rem; color: var(--color-stone-on-dark);
+  }
+  .key-panel__head + ul + .key-panel__head { margin-top: 0.8rem; }
+  .key-panel__all {
+    font: inherit; font-size: 0.5625rem; background: none; border: 0; padding: 0;
+    color: var(--color-rime); cursor: pointer; text-transform: none; letter-spacing: 0;
+  }
+  .key-panel ul { list-style: none; margin: 0; padding: 0; }
+  .key-panel__cc li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; padding: 0.1rem 0; }
+  .key-panel__kinds label {
+    display: grid;
+    grid-template-columns: auto 1.4rem 1fr auto;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.18rem 0;
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+  .key-panel__kinds input { accent-color: var(--color-headlamp); margin: 0; }
+  .key-panel__kinds input:not(:checked) ~ .key-panel__icon,
+  .key-panel__kinds input:not(:checked) ~ .key-panel__label { opacity: 0.4; }
+  .key-panel__icon { font-size: 1rem; text-align: center; }
+  .key-panel__n { font-size: 0.625rem; color: var(--color-stone-on-dark); }
+  .key-panel__note { margin: 0.7rem 0 0; font-size: 0.6875rem; color: var(--color-stone-on-dark); line-height: 1.4; }
+
+  .gpanel {
+    position: absolute;
+    z-index: 3;
+    top: 1rem;
+    right: 3.6rem;
+    width: min(20rem, calc(100% - 5rem));
+    max-height: calc(100% - 2rem);
+    overflow: auto;
+    padding: 1rem 1.2rem 1.2rem;
+  }
+  .gpanel[hidden] { display: none; }
+  .gpanel :global(.gp__close) {
+    position: absolute; top: 0.4rem; right: 0.6rem;
+    background: none; border: 0; color: var(--color-snow); font-size: 1.4rem; cursor: pointer;
+  }
+  .gpanel :global(.gp__kicker) { margin: 0; font-family: var(--font-mono, monospace); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-rime); }
+  .gpanel :global(.gp__name) { margin: 0.2rem 0 0; font-family: var(--font-display); font-size: 1.6rem; }
+  .gpanel :global(.gp__years) { margin: 0.2rem 0 0; color: var(--color-stone-on-dark); font-size: 0.875rem; }
+  .gpanel :global(.gp__kinds) { list-style: none; margin: 0.8rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; font-size: 0.8125rem; }
+  .gpanel :global(.gp__kinds b) { color: var(--color-headlamp); font-weight: 600; }
+  .gpanel :global(.gp__trips) { list-style: none; margin: 0.9rem 0 0; padding: 0.6rem 0 0; border-top: 1px solid var(--color-rule-dark); }
+  .gpanel :global(.gp__trips li) { padding: 0.2rem 0; font-size: 0.9375rem; }
+  .gpanel :global(.gp__trips span) { color: var(--color-stone-on-dark); font-size: 0.75rem; }
+  .gpanel :global(a) { color: var(--color-rime); }
+  .gpanel :global(.gp__more) { display: inline-block; margin-top: 0.7rem; font-size: 0.875rem; }
+
+  .gcaption {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 1.6rem;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.75rem;
+    max-width: calc(100% - 2rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gcaption[hidden] { display: none; }
+  .gcaption :global(b), .gcaption :global(a) { color: var(--color-headlamp); }
+  .gcaption :global(.gc__year) { color: var(--color-stone-on-dark); margin-right: 0.4rem; }
+
+  :global(.globe-pop .maplibregl-popup-content) {
+    background: var(--color-ink);
+    color: var(--color-snow);
+    border: 1px solid var(--color-rule-dark);
+    border-radius: 0;
+    padding: 0.7rem 0.85rem;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+  }
+  :global(.globe-pop .maplibregl-popup-tip) { display: none; }
+  :global(.globe-pop .gpop__icons) { margin: 0; font-size: 1.1rem; }
+  :global(.globe-pop .gpop__title) { margin: 0.25rem 0 0; font-family: var(--font-display); font-size: 1.05rem; line-height: 1.25; }
+  :global(.globe-pop .gpop__title a) { color: var(--color-rime); }
+  :global(.globe-pop .gpop__meta) { margin: 0.3rem 0 0; font-size: 0.75rem; color: var(--color-stone-on-dark); }
+
+  /* On a phone the legend folds under the header and the panel takes the bottom. */
+  @media (max-width: 700px) {
+    .stage[data-live] .head { right: 3.4rem; max-width: none; padding: 0.8rem 0.9rem; }
+    .stage[data-live] .head__live { display: none; }
+    .stage[data-live] .key-panel { width: auto; right: 1rem; max-height: 9.5rem; bottom: 1rem; }
+    .key-panel__kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.6rem; }
+    .key-panel__note { display: none; }
+    .gpanel { top: auto; bottom: 1rem; right: 1rem; left: 1rem; width: auto; max-height: 55%; }
+    .gcaption { bottom: 11.5rem; }
+  }
 
   .mapwrap {
     position: relative;
-    margin: clamp(1.5rem, 4vw, 2.5rem) 0 0;
-    padding: clamp(1rem, 3vw, 2rem) clamp(0.5rem, 2vw, 2rem);
+    margin: 0;
+    padding: clamp(1rem, 3vw, 2rem) clamp(0.75rem, 2.5vw, 2.5rem);
     background: var(--color-ink);
   }
+  /* The globe replaces the flat map; the timeline below stays. */
+  .mapwrap[data-globe-live] > nav,
+  .mapwrap[data-globe-live] > figcaption { display: none; }
   .worldmap {
     display: block;
     width: 100%;
     height: auto;
-    max-width: 68rem;
+    max-height: 82vh;
     margin-inline: auto;
   }
 
@@ -527,8 +764,7 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
   .mapwrap__callout[hidden] { display: none; }
 
   .mapwrap figcaption {
-    max-width: 68rem;
-    margin: 1rem auto 0;
+    margin: 1rem 0 0;
     color: var(--color-stone-on-dark);
     font-size: 0.625rem;
   }
@@ -539,11 +775,13 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
   .key__swatch--been { background: var(--color-been); }
 
   .tlwrap {
-    max-width: 68rem;
-    margin: clamp(2rem, 4vw, 3rem) auto 0;
+    margin: clamp(1rem, 3vw, 2rem) 0 0;
     padding-top: clamp(1.5rem, 3vw, 2rem);
     border-top: 1px solid var(--color-rule-dark);
   }
+  /* The timeline runs the full width too, so the years get room to breathe. */
+  .tlwrap :global(.tl) { max-width: none; }
+  .mapwrap[data-globe-live] .tlwrap { margin-top: 0; padding-top: 0; border-top: 0; }
   .tlwrap__head {
     color: var(--color-stone-on-dark);
     margin: 0 0 1rem;

@@ -99,18 +99,34 @@ export interface User {
  * Commit identities. The repo is public, so the author address written into its
  * history is a display address, never the one a sign-in link is mailed to —
  * except Andy's, which is already on every commit he has made here. Beth's real
- * address appears nowhere in this repo; it lives only in ADMIN_EMAILS.
+ * address appears nowhere in this repo; it lives only in the BETH_EMAIL and
+ * ADMIN_EMAILS env vars.
  *
- * With two people, "not Andy" is Beth. A third person would need an entry here.
+ * Anyone recognised as neither is credited to the website itself: better an
+ * honest "Site admin" in the history than the wrong person's name.
  */
 const ANDY: Author = { name: 'Andrew Tisdale', email: 'cleatus.cobb@gmail.com' };
 const BETH: Author = { name: 'Beth Tisdale', email: 'beth@cleatusandthewestvirginian.com' };
+const SITE: Author = { name: 'Site admin', email: 'admin@cleatusandthewestvirginian.com' };
+
+/** Gmail ignores dots and +tags, so compare the mailbox rather than the spelling. */
+export function mailbox(email: string): string {
+  const e = normalise(email);
+  const at = e.lastIndexOf('@');
+  if (at < 0) return e;
+  const local = e.slice(0, at);
+  const domain = e.slice(at + 1);
+  if (domain !== 'gmail.com' && domain !== 'googlemail.com') return e;
+  return `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
+}
 
 export function userFor(email: string): User {
   const e = normalise(email);
-  return e === ANDY.email
-    ? { email: e, name: 'Andy', author: ANDY }
-    : { email: e, name: 'Beth', author: BETH };
+  const box = mailbox(e);
+  if (box === mailbox(ANDY.email)) return { email: e, name: 'Andy', author: ANDY };
+  const beth = env('BETH_EMAIL');
+  if (beth && box === mailbox(beth)) return { email: e, name: 'Beth', author: BETH };
+  return { email: e, name: e, author: SITE };
 }
 
 export function currentUser(request: Request): User | null {

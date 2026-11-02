@@ -168,7 +168,7 @@ Nothing here can be done from code; each is a few minutes in a dashboard.
 | 2 | **WordPress.com DNS** | The records Resend gives for a `send.` subdomain. They live on the subdomain, so **Titan's MX and SPF on the main domain are untouched** — the same records that must never move. |
 | 3 | **GitHub** | A fine-grained token for `cleatuscobb2/cleatus-wv` only, permission *Contents: read and write*. |
 | 4 | **Vercel Marketplace** | Upstash Redis (free), connected to the project — it adds its own env vars. |
-| 5 | **Vercel env vars** | `RESEND_API_KEY`, `GITHUB_TOKEN`, `SESSION_SECRET` (I generate it), `ADMIN_EMAILS` (both your sign-in addresses). |
+| 5 | **Vercel env vars** | `RESEND_API_KEY`, `GITHUB_TOKEN`, `SESSION_SECRET` (I generate it), `ADMIN_EMAILS` (both your sign-in addresses), `BETH_EMAIL` (Beth's sign-in address, so her saves are credited to her — anyone the admin doesn't recognise is credited to "Site admin"). |
 
 ### Rails, because this writes to an irreplaceable archive
 

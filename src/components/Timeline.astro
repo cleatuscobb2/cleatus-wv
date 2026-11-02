@@ -25,6 +25,8 @@ interface Trip {
   entries: number;
   /** ISO alpha-2 codes, so the map can draw leader lines to them on hover. */
   countries?: string[];
+  /** Not started yet — drawn outlined. */
+  upcoming?: boolean;
 }
 interface Visit {
   /** 'YYYY-MM' */
@@ -56,9 +58,9 @@ const main = visits.filter((v) => mid(v.month) >= firstMain);
 
 // From 1 January, so the first year gets its tick and label.
 const t0 = Date.UTC(new Date(firstMain).getUTCFullYear(), 0, 1);
-// To 31 December of the last year, so its label has room inside the track.
+// A little past the last thing on it, so the last dot isn't on the edge.
 const tLast = Math.max(+sorted[sorted.length - 1].dateEnd, ...main.map((v) => mid(v.month)));
-const t1 = Date.UTC(new Date(tLast).getUTCFullYear(), 11, 31);
+const t1 = tLast + 45 * 864e5;
 const span = Math.max(1, t1 - t0);
 
 const pct = (t: number) => ((t - t0) / span) * 100;
@@ -81,7 +83,7 @@ const bars = sorted.map((t) => {
 // Year ticks across the whole span.
 const firstYear = new Date(t0).getUTCFullYear();
 const lastYear = new Date(t1).getUTCFullYear();
-const ticks: { year: number; at: number; major: boolean; flip: boolean }[] = [];
+const ticks: { year: number; at: number; major: boolean; flip: boolean; label: boolean }[] = [];
 for (let y = firstYear; y <= lastYear; y++) {
   const at = pct(Date.UTC(y, 0, 1));
   if (at >= -2 && at <= 102) {
@@ -89,7 +91,9 @@ for (let y = firstYear; y <= lastYear; y++) {
     // On a phone only every fifth year keeps its label, and one near the right
     // edge would push the page wider than the viewport, so it hangs to the left
     // of its tick there instead (the flip only applies in the narrow layout).
-    ticks.push({ year: y, at: clamped, major: y % 5 === 0, flip: clamped > 85 });
+    // A year that starts in the last few percent keeps its tick but no label:
+    // there's no room for one, and it would crash into the year before.
+    ticks.push({ year: y, at: clamped, major: y % 5 === 0, flip: clamped > 85, label: clamped <= 97 });
   }
 }
 
@@ -137,7 +141,7 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
   <div class="tl__axis" aria-hidden="true">
     {ticks.map((t) => (
       <span class="tl__tick" style={`left:${t.at}%`}>
-        <span class:list={['mono tl__year', { 'tl__year--flip': t.flip, 'tl__year--minor': !t.major }]}>{t.year}</span>
+        {t.label && <span class:list={['mono tl__year', { 'tl__year--flip': t.flip, 'tl__year--minor': !t.major }]}>{t.year}</span>}
       </span>
     ))}
   </div>
@@ -145,16 +149,16 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
   <div class="tl__track" style={`--rows:${rowCount}`}>
     {placed.map((b) => (
       <a
-        class="tl__bar"
+        class:list={['tl__bar', { 'tl__bar--upcoming': b.upcoming }]}
         href={`/${b.id}/`}
         style={`left:${b.left}%; width:${b.width}%; --row:${b.row}`}
         data-countries={(b.countries ?? []).join(',')}
         data-title={b.shortTitle}
-        data-when={`${fmt(b.dateStart)} – ${fmt(b.dateEnd)}`}
+        data-when={`${b.upcoming ? 'Coming up, ' : ''}${fmt(b.dateStart)} – ${fmt(b.dateEnd)}`}
       >
         <span class="tl__label mono">{b.shortTitle}</span>
         <span class="sr-only">
-          {b.title}, {fmt(b.dateStart)} to {fmt(b.dateEnd)}, {b.entries} entries
+          {b.title}, {b.upcoming ? 'coming up, ' : ''}{fmt(b.dateStart)} to {fmt(b.dateEnd)}, {b.entries} entries
         </span>
       </a>
     ))}
@@ -272,6 +276,13 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
     background: var(--color-headlamp);
     z-index: 2;
   }
+  .tl__bar--upcoming {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--color-rime);
+  }
+  .tl__bar--upcoming .tl__label { color: var(--color-rime); }
+  .tl__bar--upcoming:hover .tl__label,
+  .tl__bar--upcoming:focus-visible .tl__label { color: var(--color-ink); }
   /* When the connectors are drawn the name moves onto the leader line, so the
      in-bar label would only duplicate it. */
   .tl__bar[data-linked] .tl__label {

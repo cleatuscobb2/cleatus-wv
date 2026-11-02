@@ -193,7 +193,8 @@ first editing screen exists — rather than after every screen is built locally.
 3. ✅ **Phase B**: adapter, magic-link sign-in, `GitHubStore` — puts 2 in a browser.
    Test it locally with `npm run dev:hosted -- <throwaway-branch>`: links print to
    the terminal and saves commit to that branch, never main.
-4. `/admin/trips` (clears `TRIPS-TODO.md`)
+4. ✅ `/admin/trips` (clears `TRIPS-TODO.md` — and shows the same list live, so
+   the file is now only a snapshot from the last `gen:trips` run)
 5. `/admin/entry/…` prose editor
 6. `/admin/new` + photo upload
 

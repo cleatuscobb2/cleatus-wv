@@ -49,7 +49,7 @@ if (!signIn) {
 
   rows = [
     { label: 'Entries tagged', done: tagged, of: metas.length, href: '/admin/curate', action: 'Tag entries' },
-    { label: 'Trip summaries written', done: summaries, of: tripTexts.length, href: null, action: 'Coming next' },
+    { label: 'Trip summaries written', done: summaries, of: tripTexts.length, href: '/admin/trips', action: 'Write summaries' },
     { label: 'Beth cried (marked)', done: cried, of: null, href: '/admin/curate', action: 'Mark entries' },
     { label: 'People recorded', done: people.length, of: null, href: null, action: 'Coming later' },
   ];

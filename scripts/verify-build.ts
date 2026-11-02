@@ -33,7 +33,10 @@ for (const f of readdirSync(STATIC).filter((f) => /^sitemap.*\.xml$/.test(f))) {
 
 // Every injected admin path must go to the function, where the session check lives.
 const routes: { src?: string; dest?: string }[] = JSON.parse(readFileSync(join(OUT, 'config.json'), 'utf8')).routes;
-const expected = ['/admin', '/admin/curate', '/admin/verify', '/api/admin/curate', '/api/auth/request', '/api/auth/verify', '/api/auth/signout'];
+const expected = [
+  '/admin', '/admin/curate', '/admin/verify', '/admin/trips', '/admin/trips/japan-2022',
+  '/api/admin/curate', '/api/admin/trip', '/api/auth/request', '/api/auth/verify', '/api/auth/signout',
+];
 for (const path of expected) {
   const r = routes.find((r) => r.src && new RegExp(r.src).test(path));
   if (!r || r.dest !== '_render') problems.push(`${path} is not routed to the server function`);

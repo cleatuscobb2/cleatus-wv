@@ -9,7 +9,7 @@ import type { User } from './session.ts';
 
 interface Props {
   title: string;
-  current?: 'home' | 'curate';
+  current?: 'home' | 'curate' | 'trips';
   /** Hosted only: who is signed in. Absent on the sign-in screens. */
   user?: User | null;
 }
@@ -21,6 +21,7 @@ const showNav = !HOSTED || !!user;
 const nav = [
   { href: '/admin', label: 'Overview', id: 'home' },
   { href: '/admin/curate', label: 'Tags & bylines', id: 'curate' },
+  { href: '/admin/trips', label: 'Trips', id: 'trips' },
 ];
 ---
 
@@ -126,4 +127,59 @@ const nav = [
     margin: 0;
   }
   .ad-lede { color: var(--color-stone); margin: 0.4rem 0 0; max-width: 70ch; }
+
+  /* Shared by every admin screen: buttons and the review-before-save dialog. */
+  .btn {
+    font: inherit;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--color-stone-on-dark);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--color-headlamp); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .btn--primary { background: var(--color-headlamp); color: var(--color-ink); border-color: var(--color-headlamp); }
+
+  dialog {
+    margin: auto; /* the site's reset zeroes it, which pins a modal top-left */
+    width: min(46rem, 92vw);
+    max-height: 85vh;
+    padding: 1.25rem 1.4rem;
+    border: 0;
+    border-top: 3px solid var(--color-headlamp);
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  dialog::backdrop { background: rgb(18 22 28 / 0.55); }
+  .dlg-h { font-size: 1.3rem; }
+  .dlg-list {
+    list-style: none;
+    margin: 0.9rem 0;
+    padding: 0;
+    max-height: 40vh;
+    overflow: auto;
+    border-top: 1px solid var(--color-rule);
+  }
+  .dlg-list li { padding: 0.45rem 0; border-bottom: 1px solid var(--color-rule); }
+  .dlg-title { display: block; }
+  .dlg-diff { display: block; color: var(--color-stone); font-size: 0.6875rem; margin-top: 0.1rem; }
+  .dlg-msg { display: block; color: var(--color-stone); font-size: 0.6875rem; }
+  .dlg-msg textarea {
+    display: block;
+    width: 100%;
+    margin-top: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--color-rule);
+  }
+  .dlg-err { color: #9b1c1c; font-size: 0.8125rem; min-height: 1em; }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+  .dlg-actions .btn:not(.btn--primary) { color: var(--color-ink); border-color: var(--color-rule); }
 </style>

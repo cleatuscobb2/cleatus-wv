@@ -29,6 +29,8 @@ const trips = defineCollection({
     startHere: z.string().optional(),
     /** Set where a summary is still auto-derived and wants a human rewrite. */
     summaryNeedsReview: z.boolean().default(false),
+    /** A person has edited this trip (via /admin/trips); gen-trips keeps their edits. */
+    handEdited: z.boolean().default(false),
   }),
 });
 

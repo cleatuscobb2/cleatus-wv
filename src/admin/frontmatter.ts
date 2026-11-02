@@ -28,17 +28,17 @@ export interface Curation {
 }
 
 /** Split at the closing `---`. Everything before it is frontmatter. */
-function splitFrontmatter(text: string) {
+export function splitFrontmatter(text: string) {
   if (!text.startsWith('---')) throw new Error('no frontmatter');
   const close = text.indexOf('\n---', 3);
   if (close < 0) throw new Error('unterminated frontmatter');
   return { head: text.slice(0, close), rest: text.slice(close) };
 }
 
-const line = (head: string, key: string) =>
+export const line = (head: string, key: string) =>
   head.match(new RegExp(`^${key}:[ \\t]*(.*?)[ \\t]*$`, 'm'))?.[1] ?? null;
 
-function jsonOr<T>(raw: string | null, fallback: T): T {
+export function jsonOr<T>(raw: string | null, fallback: T): T {
   if (raw == null) return fallback;
   try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
@@ -60,9 +60,9 @@ export function readMeta(text: string): EntryMeta {
   };
 }
 
-const list = (xs: string[]) => `[${xs.map((x) => JSON.stringify(x)).join(', ')}]`;
+export const list = (xs: string[]) => `[${xs.map((x) => JSON.stringify(x)).join(', ')}]`;
 
-function replaceLine(head: string, key: string, value: string) {
+export function replaceLine(head: string, key: string, value: string) {
   const re = new RegExp(`^${key}:.*$`, 'm');
   if (!re.test(head)) throw new Error(`no \`${key}:\` line to edit`);
   return head.replace(re, `${key}: ${value}`);

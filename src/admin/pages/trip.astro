@@ -1,0 +1,422 @@
+---
+/**
+ * /admin/trips/[trip] — edit one trip: summary, names, dates, countries,
+ * "start here", and the hero, picked from every photograph in the trip.
+ *
+ * Nothing is saved until "Review & save"; the review lists exactly what will
+ * change. The whole edit is one commit.
+ */
+import AdminLayout from '../AdminLayout.astro';
+import { getStore } from '../store/index.ts';
+import { guard, notFound, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
+import { loadTrips, outstanding, SUSPICIOUS_DAYS } from '../trips-data.ts';
+import { isShowableImage } from '../trip-edit.ts';
+import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
+
+export const prerender = false;
+
+const blocked = guard(Astro.request);
+if (blocked) return blocked;
+const user = HOSTED ? userOf(Astro.request) : null;
+
+const id = Astro.params.trip ?? '';
+if (!/^[a-z0-9-]+$/.test(id)) return notFound();
+const [trip] = await loadTrips(getStore(), id);
+if (!trip) return notFound();
+
+const m = trip.meta;
+const todo = outstanding(trip);
+const countries = Object.entries(COUNTRY_NAMES).sort((a, b) => a[1].localeCompare(b[1]));
+const saveLabel = HOSTED ? 'Review & publish' : 'Review & save';
+const photoCount = trip.entries.reduce((n, e) => n + e.photos.length, 0);
+
+// `<` escaped so nothing in the content can close the script tag early.
+const payload = JSON.stringify({
+  hosted: HOSTED,
+  id: trip.id,
+  version: trip.version,
+  names: COUNTRY_NAMES,
+  suspiciousDays: SUSPICIOUS_DAYS,
+  entries: trip.entries.map((e) => ({ slug: e.slug, title: e.title })),
+  initial: {
+    title: m.title, shortTitle: m.shortTitle, dateStart: m.dateStart, dateEnd: m.dateEnd,
+    countries: m.countries, regions: m.regions, summary: m.summary,
+    summaryNeedsReview: m.summaryNeedsReview, hero: m.hero, startHere: m.startHere,
+  },
+}).replace(/</g, '\\u003c');
+---
+
+<AdminLayout title={`${m.shortTitle} — Trips`} current="trips" user={user}>
+  <p class="mono te-back"><a href="/admin/trips">← All trips</a></p>
+  <h1 class="ad-h1">{m.title}</h1>
+  <p class="ad-lede">
+    <a href={`/${trip.id}/`} target="_blank" rel="noopener">See the trip page ↗</a>
+    · {trip.entries.length} entries · {photoCount} photographs
+  </p>
+
+  {todo.length > 0 && (
+    <ul class="te-todo">{todo.map((x) => <li class="mono">{x}</li>)}</ul>
+  )}
+
+  <form id="te" class="te" novalidate>
+    <section class="te-sec">
+      <h2 class="te-h" id="h-summary">Summary</h2>
+      <p class="te-help">Two sentences in your own voice. It sits under the trip's title on its page and on the trips list.</p>
+      {m.summaryNeedsReview && (
+        <p class="te-flag mono" id="te-placeholder-note">This is the placeholder the import wrote — replace it.</p>
+      )}
+      <textarea id="f-summary" name="summary" rows="4" maxlength="600" aria-labelledby="h-summary" aria-describedby="te-count">{m.summary}</textarea>
+      <div class="te-row">
+        <label class="mono te-check"><input type="checkbox" id="f-needs" checked={m.summaryNeedsReview} /> Still a placeholder</label>
+        <span class="mono te-count" id="te-count"></span>
+      </div>
+    </section>
+
+    <section class="te-sec">
+      <h2 class="te-h">Names</h2>
+      <div class="te-grid">
+        <label class="te-field"><span class="mono">Title</span>
+          <input id="f-title" value={m.title} maxlength="120" required />
+        </label>
+        <label class="te-field"><span class="mono">Short title <em>(cards, map, timeline)</em></span>
+          <input id="f-short" value={m.shortTitle} maxlength="40" required />
+        </label>
+      </div>
+    </section>
+
+    <section class="te-sec">
+      <h2 class="te-h">When</h2>
+      <p class="te-help">The days you were actually travelling — not when the posts went up.</p>
+      <div class="te-grid te-grid--dates">
+        <label class="te-field"><span class="mono">First day</span><input type="date" id="f-start" value={m.dateStart} required /></label>
+        <label class="te-field"><span class="mono">Last day</span><input type="date" id="f-end" value={m.dateEnd} required /></label>
+        <p class="mono te-days" id="te-days" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="te-sec">
+      <h2 class="te-h">Where</h2>
+      <div class="te-field"><span class="mono" id="countries-l">Countries</span>
+        <ul class="te-chips" id="te-countries" aria-labelledby="countries-l"></ul>
+        <select id="f-add-country" aria-label="Add a country">
+          <option value="">Add a country…</option>
+          {countries.map(([code, name]) => <option value={code}>{name}</option>)}
+        </select>
+      </div>
+      <label class="te-field"><span class="mono">Regions <em>(comma between each)</em></span>
+        <input id="f-regions" value={m.regions.join(', ')} />
+      </label>
+    </section>
+
+    <section class="te-sec">
+      <h2 class="te-h" id="h-start-here">Start here</h2>
+      <p class="te-help">The one entry to read if someone only reads one.</p>
+      <select id="f-start-here" class="te-select" aria-labelledby="h-start-here">
+        <option value="">(none)</option>
+        {trip.entries.map((e) => (
+          <option value={e.slug} selected={e.slug === m.startHere}>{e.date} — {e.title}</option>
+        ))}
+      </select>
+    </section>
+
+    <section class="te-sec">
+      <h2 class="te-h">Hero photograph</h2>
+      <p class="te-help">The picture that carries the trip — top of its page and on the trips list.</p>
+      <fieldset class="te-heroes">
+        <legend class="mono">Choose one</legend>
+        <label class="te-nohero mono"><input type="radio" name="hero" value="" checked={!m.hero} /> No hero</label>
+        {trip.entries.filter((e) => e.photos.length).map((e) => (
+          <div class="te-entry">
+            <p class="te-entry__h">{e.title} <span class="mono">{e.date}</span></p>
+            <div class="te-photos">
+              {e.photos.map((src) => isShowableImage(src) ? (
+                <label class="te-photo">
+                  <input type="radio" name="hero" value={src} checked={src === m.hero} aria-label={`${e.title}: ${src.split('/').pop()}`} />
+                  <img src={src} alt="" loading="lazy" decoding="async" />
+                </label>
+              ) : (
+                <span class="te-photo te-photo--off mono" title="This format doesn't show in most browsers">
+                  {src.split('.').pop()?.toUpperCase()}<br />can't show
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+        {photoCount === 0 && <p class="te-help">This trip has no photographs.</p>}
+      </fieldset>
+    </section>
+  </form>
+
+  <div class="te-foot">
+    <span class="mono" id="te-dirty">No unsaved changes</span>
+    <button type="button" id="te-review" class="btn btn--primary" disabled>{saveLabel}</button>
+    <span class="te-sep"></span>
+    <span class="mono te-note" id="te-note" aria-live="polite"></span>
+  </div>
+
+  <dialog id="te-dialog" aria-labelledby="te-dialog-h">
+    <h2 id="te-dialog-h" class="ad-h1 dlg-h">Save changes to {m.shortTitle}</h2>
+    <ul id="te-changes" class="dlg-list"></ul>
+    <p class="dlg-err" id="te-error" role="alert"></p>
+    <div class="dlg-actions">
+      <button type="button" id="te-cancel" class="btn">Keep editing</button>
+      <button type="button" id="te-commit" class="btn btn--primary">{HOSTED ? 'Publish' : 'Save as one commit'}</button>
+    </div>
+  </dialog>
+
+  <script type="application/json" id="trip-data" set:html={payload}></script>
+</AdminLayout>
+
+<script>
+  interface State {
+    title: string; shortTitle: string; dateStart: string; dateEnd: string;
+    countries: string[]; regions: string[]; summary: string; summaryNeedsReview: boolean;
+    hero: string | null; startHere: string | null;
+  }
+  const data = JSON.parse(document.getElementById('trip-data')!.textContent!) as {
+    hosted: boolean; id: string; version: string; names: Record<string, string>;
+    suspiciousDays: number; entries: { slug: string; title: string }[]; initial: State;
+  };
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+  let orig: State = structuredClone(data.initial);
+  let countries = [...orig.countries];
+
+  const f = {
+    summary: $<HTMLTextAreaElement>('f-summary'),
+    needs: $<HTMLInputElement>('f-needs'),
+    title: $<HTMLInputElement>('f-title'),
+    short: $<HTMLInputElement>('f-short'),
+    start: $<HTMLInputElement>('f-start'),
+    end: $<HTMLInputElement>('f-end'),
+    regions: $<HTMLInputElement>('f-regions'),
+    startHere: $<HTMLSelectElement>('f-start-here'),
+    addCountry: $<HTMLSelectElement>('f-add-country'),
+  };
+
+  const daysBetween = (a: string, b: string) =>
+    Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) + 1;
+
+  function current(): State {
+    // Nothing selected means the current hero isn't one that can be picked (e.g.
+    // HEIC): keep it. Choosing "No hero" is an explicit, separate option.
+    const picked = document.querySelector('input[name="hero"]:checked') as HTMLInputElement | null;
+    const hero = picked ? picked.value || null : orig.hero;
+    return {
+      title: f.title.value.trim(),
+      shortTitle: f.short.value.trim(),
+      dateStart: f.start.value,
+      dateEnd: f.end.value,
+      countries: [...countries],
+      regions: f.regions.value.split(',').map((r) => r.trim()).filter(Boolean),
+      summary: f.summary.value.replace(/\s+/g, ' ').trim(),
+      summaryNeedsReview: f.needs.checked,
+      hero,
+      startHere: f.startHere.value || null,
+    };
+  }
+
+  const LABEL: Record<keyof State, string> = {
+    title: 'Title', shortTitle: 'Short title', dateStart: 'First day', dateEnd: 'Last day',
+    countries: 'Countries', regions: 'Regions', summary: 'Summary', summaryNeedsReview: 'Placeholder flag',
+    hero: 'Hero', startHere: 'Start here',
+  };
+  const show = (k: keyof State, v: unknown): string => {
+    if (v == null || v === '') return '(none)';
+    if (k === 'countries') return (v as string[]).map((c) => data.names[c] ?? c).join(', ');
+    if (k === 'regions') return (v as string[]).join(', ') || '(none)';
+    if (k === 'summaryNeedsReview') return v ? 'still a placeholder' : 'written';
+    if (k === 'hero') return String(v).split('/').slice(-2).join('/');
+    if (k === 'startHere') return data.entries.find((e) => e.slug === v)?.title ?? String(v);
+    return String(v);
+  };
+
+  function changes() {
+    const c = current();
+    return (Object.keys(LABEL) as (keyof State)[])
+      .filter((k) => JSON.stringify(c[k]) !== JSON.stringify(orig[k]))
+      .map((k) => ({ k, label: LABEL[k], from: show(k, orig[k]), to: show(k, c[k]) }));
+  }
+
+  // ---- live feedback ---------------------------------------------------------
+  function renderCountries() {
+    $('te-countries').innerHTML = countries.map((c) =>
+      `<li class="te-chip"><span>${esc(data.names[c] ?? c)}</span><button type="button" data-remove="${c}" aria-label="Remove ${esc(data.names[c] ?? c)}">×</button></li>`,
+    ).join('');
+    for (const o of f.addCountry.options) o.disabled = !!o.value && countries.includes(o.value);
+  }
+
+  function refresh() {
+    const c = current();
+    $('te-count').textContent = `${c.summary.length} / 600`;
+    const days = c.dateStart && c.dateEnd ? daysBetween(c.dateStart, c.dateEnd) : NaN;
+    const dEl = $('te-days');
+    dEl.className = 'mono te-days';
+    if (Number.isNaN(days)) dEl.textContent = '';
+    else if (days < 1) { dEl.textContent = 'The last day is before the first.'; dEl.classList.add('is-bad'); }
+    else {
+      dEl.textContent = `${days} ${days === 1 ? 'day' : 'days'}`;
+      if (days > data.suspiciousDays) { dEl.textContent += ' — that looks like publish dates, not travel'; dEl.classList.add('is-warn'); }
+    }
+    const n = changes().length;
+    $('te-dirty').textContent = n ? `${n} unsaved ${n === 1 ? 'change' : 'changes'}` : 'No unsaved changes';
+    $<HTMLButtonElement>('te-review').disabled = n === 0;
+  }
+
+  // Editing the placeholder text is the strongest signal it's been rewritten.
+  f.summary.addEventListener('input', () => {
+    if (f.needs.checked && f.summary.value.replace(/\s+/g, ' ').trim() !== orig.summary) f.needs.checked = false;
+    refresh();
+  });
+  $('te').addEventListener('input', refresh);
+  $('te').addEventListener('change', refresh);
+  f.addCountry.addEventListener('change', () => {
+    if (f.addCountry.value && !countries.includes(f.addCountry.value)) countries.push(f.addCountry.value);
+    f.addCountry.value = '';
+    renderCountries();
+    refresh();
+  });
+  $('te-countries').addEventListener('click', (ev) => {
+    const code = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-remove]')?.dataset.remove;
+    if (!code) return;
+    countries = countries.filter((c) => c !== code);
+    renderCountries();
+    refresh();
+  });
+
+  // ---- review & save ---------------------------------------------------------
+  const dialog = $<HTMLDialogElement>('te-dialog');
+  const err = $('te-error');
+  const commitBtn = $<HTMLButtonElement>('te-commit');
+
+  $('te-review').addEventListener('click', () => {
+    $('te-changes').innerHTML = changes().map((c) =>
+      `<li><span class="mono dlg-title te-label">${esc(c.label)}</span><span class="dlg-diff te-diff"><s>${esc(c.from)}</s> → ${esc(c.to)}</span></li>`,
+    ).join('');
+    err.textContent = '';
+    dialog.showModal();
+  });
+  $('te-cancel').addEventListener('click', () => dialog.close());
+
+  commitBtn.addEventListener('click', async () => {
+    commitBtn.disabled = true;
+    err.textContent = '';
+    try {
+      const edit = current();
+      const res = await fetch('/api/admin/trip', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
+        body: JSON.stringify({ id: data.id, version: data.version, edit }),
+      });
+      const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (res.status === 409) {
+        err.textContent = 'Nothing was saved: someone else changed this trip since the page loaded. Note what you changed, reload the page, and make your changes again.';
+        return;
+      }
+      if (!res.ok) { err.textContent = `Nothing was saved: ${out.error}`; return; }
+      const v = out.versions?.[`src/content/trips/${data.id}.mdx`];
+      if (v) data.version = v;
+      orig = structuredClone(edit);
+      dialog.close();
+      refresh();
+      $('te-note').textContent = !out.commit
+        ? 'Nothing needed saving.'
+        : data.hosted
+          ? `Published as ${out.commit}. The live site updates in a minute or two.`
+          : `Saved on this laptop as ${out.commit}. Publish from the Tags page.`;
+      document.getElementById('te-placeholder-note')?.toggleAttribute('hidden', !edit.summaryNeedsReview);
+    } catch (e) {
+      err.textContent = `Nothing was saved: ${(e as Error).message}`;
+    } finally {
+      commitBtn.disabled = false;
+    }
+  });
+
+  addEventListener('beforeunload', (e) => {
+    if (changes().length) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  renderCountries();
+  refresh();
+</script>
+
+<style>
+  .te-back { margin: 0 0 0.75rem; font-size: 0.6875rem; }
+  .te-back a { text-decoration: none; }
+  .te-todo { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.25rem; max-width: 52rem; }
+  .te-todo li {
+    font-size: 0.6875rem; text-transform: none; letter-spacing: 0;
+    padding-left: 0.6rem; border-left: 2px solid var(--color-ember);
+  }
+  .te { max-width: 60rem; padding-bottom: 5rem; }
+  .te-sec { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--color-rule); }
+  .te-h { font-family: var(--font-display); font-size: 1.15rem; margin: 0; }
+  .te-help { color: var(--color-stone); margin: 0.3rem 0 0.75rem; font-size: 0.9375rem; }
+  .te-flag {
+    margin: 0 0 0.5rem; padding: 0.45rem 0.7rem; font-size: 0.6875rem; text-transform: none; letter-spacing: 0;
+    background: color-mix(in srgb, var(--color-ember) 10%, var(--color-paper)); border-left: 3px solid var(--color-ember);
+  }
+  .te textarea, .te input:not([type='checkbox']):not([type='radio']), .te select {
+    font: inherit; width: 100%; padding: 0.55rem 0.65rem;
+    border: 1px solid var(--color-rule); background: var(--color-paper); color: var(--color-ink);
+  }
+  .te textarea { line-height: 1.5; resize: vertical; }
+  .te-row { display: flex; justify-content: space-between; gap: 1rem; margin-top: 0.4rem; }
+  .te-check { display: inline-flex; gap: 0.4rem; align-items: center; font-size: 0.6875rem; color: var(--color-stone); }
+  .te-count { font-size: 0.6875rem; color: var(--color-stone); }
+  .te-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .te-grid--dates { grid-template-columns: 12rem 12rem 1fr; align-items: end; }
+  .te-field { display: grid; gap: 0.3rem; margin-top: 0.75rem; }
+  .te-field > .mono { font-size: 0.6875rem; color: var(--color-stone); }
+  .te-field em { font-style: normal; text-transform: none; letter-spacing: 0; }
+  .te-days { margin: 0 0 0.6rem; font-size: 0.75rem; }
+  .te-days.is-warn { color: var(--color-ember); }
+  .te-days.is-bad { color: #9b1c1c; }
+  .te-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0; }
+  /* :global — the chips are built client-side, so scoped styles wouldn't reach them. */
+  .te-chips :global(.te-chip) {
+    display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+    background: var(--color-paper); border: 1px solid var(--color-rule); font-size: 0.875rem;
+  }
+  .te-chips :global(.te-chip button) {
+    border: 0; background: none; cursor: pointer; font-size: 1rem; line-height: 1;
+    padding: 0.1rem 0.3rem; color: var(--color-stone);
+  }
+  .te-chips :global(.te-chip button:hover) { color: #9b1c1c; }
+  #f-add-country { max-width: 16rem; }
+  .te-select { max-width: 40rem; }
+  .te-heroes { border: 0; margin: 0; padding: 0; }
+  .te-heroes legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .te-nohero { display: inline-flex; gap: 0.4rem; align-items: center; font-size: 0.6875rem; margin-bottom: 0.75rem; }
+  .te-entry { margin-top: 1rem; }
+  .te-entry__h { margin: 0 0 0.4rem; font-size: 0.9375rem; }
+  .te-entry__h .mono { font-size: 0.625rem; color: var(--color-stone); margin-left: 0.4rem; }
+  .te-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.5rem; }
+  .te-photo { position: relative; display: block; aspect-ratio: 3 / 2; background: var(--color-rule); cursor: pointer; overflow: hidden; }
+  .te-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .te-photo input { position: absolute; top: 0.4rem; left: 0.4rem; width: 1.1rem; height: 1.1rem; accent-color: var(--color-headlamp); z-index: 1; }
+  .te-photo:has(input:checked) { outline: 4px solid var(--color-headlamp); outline-offset: -4px; }
+  .te-photo:has(input:focus-visible) { outline: 3px solid var(--color-rime-on-light); outline-offset: 2px; }
+  .te-photo--off {
+    display: grid; place-items: center; text-align: center; cursor: not-allowed;
+    font-size: 0.625rem; color: var(--color-stone); line-height: 1.4;
+  }
+  .te-foot {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
+    padding: 0.7rem clamp(1rem, 3vw, 2rem);
+    background: var(--color-ink); color: var(--color-snow); font-size: 0.75rem;
+  }
+  .te-sep { flex: 1; }
+  /* :global — the review list is built client-side. Normal case, so a summary reads as prose. */
+  #te-changes :global(.te-label) { font-size: 0.6875rem; color: var(--color-stone); }
+  #te-changes :global(.te-diff) { font-size: 0.9375rem; color: var(--color-ink); margin-top: 0.2rem; }
+  #te-changes :global(.te-diff s) { color: var(--color-stone); }
+  .te-note { color: var(--color-stone-on-dark); }
+  @media (max-width: 700px) {
+    .te-grid, .te-grid--dates { grid-template-columns: 1fr; }
+  }
+</style>

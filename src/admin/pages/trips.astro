@@ -1,0 +1,101 @@
+---
+/**
+ * /admin/trips — the 13 trips and what each still needs. Replaces TRIPS-TODO.md:
+ * this list is read live from the content, so it can't go stale.
+ */
+import AdminLayout from '../AdminLayout.astro';
+import { getStore } from '../store/index.ts';
+import { guard, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
+import { loadTrips, outstanding } from '../trips-data.ts';
+
+export const prerender = false;
+
+const blocked = guard(Astro.request);
+if (blocked) return blocked;
+const user = HOSTED ? userOf(Astro.request) : null;
+
+const trips = await loadTrips(getStore());
+const done = trips.filter((t) => !outstanding(t).length).length;
+const fmt = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+---
+
+<AdminLayout title="Trips" current="trips" user={user}>
+  <div class="tr-top">
+    <div>
+      <h1 class="ad-h1">Trips</h1>
+      <p class="ad-lede">
+        Each trip's summary, hero photograph, dates and countries. Anything still
+        listed under a trip is waiting for one of you.
+      </p>
+    </div>
+    <p class="mono tr-stat"><span>{done}</span> / {trips.length} done</p>
+  </div>
+
+  <ul class="tr-list">
+    {trips.map((t) => {
+      const todo = outstanding(t);
+      return (
+        <li class:list={['tr', { 'tr--done': !todo.length }]}>
+          <a href={`/admin/trips/${t.id}`} class="tr__link">
+            <span class="tr__thumb">
+              {t.meta.hero && /\.(jpe?g|png|gif|webp|avif)$/i.test(t.meta.hero)
+                ? <img src={t.meta.hero} alt="" loading="lazy" decoding="async" />
+                : <span class="mono tr__nothumb">no hero</span>}
+            </span>
+            <span class="tr__body">
+              <span class="tr__title">{t.meta.title}</span>
+              <span class="mono tr__meta">{fmt(t.meta.dateStart)} – {fmt(t.meta.dateEnd)} · {t.entries.length} entries</span>
+              <span class="tr__summary">{t.meta.summary}</span>
+              {todo.length
+                ? <ul class="tr__todo">{todo.map((x) => <li class="mono">{x}</li>)}</ul>
+                : <span class="mono tr__ok">Nothing outstanding</span>}
+            </span>
+            <span class="mono tr__go" aria-hidden="true">Edit →</span>
+          </a>
+        </li>
+      );
+    })}
+  </ul>
+</AdminLayout>
+
+<style>
+  .tr-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 1rem; }
+  .tr-stat { margin: 0; font-size: 0.875rem; }
+  .tr-stat span { color: var(--color-ink); font-weight: 600; }
+  .tr-list { list-style: none; margin: 1.5rem 0 0; padding: 0; max-width: 60rem; border-top: 1px solid var(--color-rule); }
+  .tr { border-bottom: 1px solid var(--color-rule); }
+  .tr__link {
+    display: grid;
+    grid-template-columns: 9rem 1fr auto;
+    gap: 1.1rem;
+    align-items: start;
+    padding: 1rem 0.5rem;
+    color: inherit;
+    text-decoration: none;
+  }
+  .tr__link:hover { background: var(--color-paper); }
+  .tr__link:hover .tr__title { text-decoration: underline; }
+  .tr__thumb { display: block; aspect-ratio: 3 / 2; background: var(--color-rule); overflow: hidden; }
+  .tr__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tr__nothumb { display: grid; place-items: center; height: 100%; font-size: 0.625rem; color: var(--color-stone); }
+  .tr__body { display: grid; gap: 0.25rem; min-width: 0; }
+  .tr__title { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; }
+  .tr__meta { font-size: 0.6875rem; color: var(--color-stone); }
+  .tr__summary { color: var(--color-stone); font-size: 0.9375rem; }
+  .tr__todo { list-style: none; margin: 0.35rem 0 0; padding: 0; display: grid; gap: 0.2rem; }
+  .tr__todo li {
+    font-size: 0.6875rem;
+    text-transform: none;
+    letter-spacing: 0;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--color-ember);
+  }
+  .tr__ok { font-size: 0.6875rem; color: var(--color-rime-on-light); margin-top: 0.35rem; }
+  .tr__go { font-size: 0.6875rem; color: var(--color-stone); align-self: center; }
+  @media (max-width: 640px) {
+    .tr__link { grid-template-columns: 6rem 1fr; }
+    .tr__go { display: none; }
+  }
+</style>

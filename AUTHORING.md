@@ -100,22 +100,31 @@ That's the only part nothing else can do for you.
 
 ### Editing a trip
 
-Open `src/content/trips/<slug>.mdx` and change it. Everything is editable:
-summary, hero image, dates, countries, `startHere`, `featured`.
+**From any browser:** <https://cleatusandthewestvirginian.com/admin/trips> lists
+the trips and what each still needs. Open one to write its summary, fix its
+names and dates, set its countries and "start here" entry, and pick its hero from
+every photograph in the trip. **Review & publish** shows exactly what will change;
+**Publish** saves it as one change and the live site updates a minute or two later.
+Fixing the dates fixes the day count with them.
+
+**By hand:** open `src/content/trips/<slug>.mdx` and change it. Everything is
+editable: summary, hero image, dates, countries, `startHere`, `featured`.
 
 **One thing to know.** `npm run gen:trips` recalculates the derived numbers —
-day count, entry count, trek miles, highest point — for every trip. On a trip you
-have edited by hand it refreshes *only those numbers* and leaves your summary,
-hero and dates alone. It knows because of this line:
+day count, entry count, trek miles, highest point — for every trip. On a trip a
+person has edited it refreshes *only those numbers* (the day count from the
+trip's own dates) and leaves the summary, hero and dates alone. It knows from
+either of these lines:
 
 ```
 summaryNeedsReview: false
+handEdited: true
 ```
 
-`false` means a human has been here — don't overwrite. The thirteen imported trips
-still say `true`, because their summaries are auto-derived placeholders. **Once you
-write a real summary, set it to `false`**, or the next run will replace what you
-wrote.
+The admin writes `handEdited: true` on every save. **If you edit a trip file by
+hand, add `handEdited: true` yourself**, or the next run will replace what you
+wrote. `summaryNeedsReview: true` just means the summary is still the imported
+placeholder.
 
 (`--force` overrides all of that and regenerates everything. There is rarely a
 reason to use it.)

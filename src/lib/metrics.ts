@@ -1,6 +1,7 @@
 import { getCollection } from 'astro:content';
-import { COUNTRY_CONTINENT, COUNTRY_NAMES } from '../data/trip-meta.ts';
 import { tripIdOf, entrySlug } from './entries.ts';
+import { beenTo } from '../data/been-to.ts';
+import { travelMetrics, type TravelMetrics } from './travel.ts';
 
 /**
  * Everything on the overview page is computed here, from the content itself.
@@ -19,9 +20,8 @@ export interface Metrics {
   longestEntry: { title: string; words: number; href: string } | null;
   shortestEntry: { title: string; words: number; href: string } | null;
   photos: number;
-  countries: number;
-  continents: { name: string; countries: string[] }[];
-  repeatCountries: { code: string; name: string; visits: number; years: number[] }[];
+  /** Everywhere they've been, from the travel log and the trips together. */
+  travel: TravelMetrics;
   firstYear: number;
   lastYear: number;
   yearsSpanned: number;
@@ -52,7 +52,9 @@ const wordCount = (body: string | undefined): number =>
     .filter(Boolean).length;
 
 export async function computeMetrics(): Promise<Metrics> {
-  const trips = await getCollection('trips');
+  const now = new Date();
+  // A trip started in the admin ahead of time isn't one they've taken yet.
+  const trips = (await getCollection('trips')).filter((t) => t.data.dateStart <= now);
   const entries = await getCollection('entries', ({ data }) => !data.draft);
   const caveats: string[] = [];
 
@@ -71,31 +73,15 @@ export async function computeMetrics(): Promise<Metrics> {
   const photos = entries.reduce(
     (n, e) => n + ((e.body ?? '').match(/<Photo\s/g)?.length ?? 0), 0);
 
-  // --- places -------------------------------------------------------------
-  const visits = new Map<string, number[]>();
-  for (const t of trips) {
-    for (const c of t.data.countries) {
-      visits.set(c, [...(visits.get(c) ?? []), t.data.year]);
-    }
+  // --- places: the writing and the travel log together ---------------------
+  const travel = travelMetrics(trips.map((t) => t.data), beenTo(now), now);
+  if (travel.countries > travel.writtenUp) {
+    caveats.push(
+      `The country figures come from their travel log as well as the writing: ${travel.countries - travel.writtenUp} ` +
+      `of the ${travel.countries} countries have no entries yet. A visit is a country in a month, so a long trip ` +
+      'through one country counts once and a weekend across a border counts twice.',
+    );
   }
-  const continentMap = new Map<string, Set<string>>();
-  for (const c of visits.keys()) {
-    const k = COUNTRY_CONTINENT[c] ?? 'Elsewhere';
-    continentMap.set(k, (continentMap.get(k) ?? new Set()).add(COUNTRY_NAMES[c] ?? c));
-  }
-  const continents = [...continentMap.entries()]
-    .map(([name, set]) => ({ name, countries: [...set].sort() }))
-    .sort((a, b) => b.countries.length - a.countries.length);
-
-  const repeatCountries = [...visits.entries()]
-    .filter(([, ys]) => ys.length > 1)
-    .map(([code, ys]) => ({
-      code,
-      name: COUNTRY_NAMES[code] ?? code,
-      visits: ys.length,
-      years: [...new Set(ys)].sort(),
-    }))
-    .sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name));
 
   // --- time ---------------------------------------------------------------
   const byStart = [...trips].sort((a, b) => +a.data.dateStart - +b.data.dateStart);
@@ -175,9 +161,7 @@ export async function computeMetrics(): Promise<Metrics> {
     longestEntry: top ? { title: top.e.data.title, words: top.words, href: top.href } : null,
     shortestEntry: bottom ? { title: bottom.e.data.title, words: bottom.words, href: bottom.href } : null,
     photos,
-    countries: visits.size,
-    continents,
-    repeatCountries,
+    travel,
     firstYear,
     lastYear,
     yearsSpanned: lastYear - firstYear + 1,

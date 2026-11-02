@@ -75,6 +75,29 @@ export const BEEN_TO: Record<string, string[]> = {
   VN: ['2026-12'],
 };
 
+/**
+ * The spreadsheet's tick-box columns, for the Numbers page. Only countries that
+ * have been visited count, so a booked trip's ticks wait like its months do.
+ */
+export const FLAGS = {
+  /** Scuba: dived there. */
+  scuba: ['BZ', 'FJ', 'ID', 'MX', 'TH', 'EC', 'HN', 'IS', 'MV', 'CO', 'TZ'],
+  /** Muslim-majority countries. */
+  muslim: ['ID', 'MA', 'MV', 'EG', 'AE', 'TR', 'PK', 'MY'],
+  /** Communist when they were there — hence Czechoslovakia, 1988. */
+  communist: ['LA', 'CN', 'RU', 'CZ', 'VN'],
+} as const satisfies Record<string, readonly string[]>;
+
+/** How a country reads in a FLAGS list when its modern name would mislead. */
+export const FLAG_NAMES: Partial<Record<keyof typeof FLAGS, Record<string, string>>> = {
+  communist: { CZ: 'Czechoslovakia (1988)', CN: 'China & Tibet' },
+};
+
+/** Countries that were called something else when they went: [renamed in, old name]. */
+export const NAME_THEN: Record<string, [string, string]> = {
+  CZ: ['1993-01', 'Czechoslovakia'],
+};
+
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 for (const [code, months] of Object.entries(BEEN_TO)) {
   for (const m of months) if (!MONTH.test(m)) throw new Error(`been-to.ts: ${code} has a bad month "${m}" (want YYYY-MM)`);

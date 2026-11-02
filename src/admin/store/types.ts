@@ -15,6 +15,8 @@ export interface Edit {
   text?: string;
   /** A photograph uploaded earlier with `stage()`: the token it returned. */
   staged?: string;
+  /** Delete the file (published comments only — see editKind). */
+  remove?: boolean;
   /**
    * The version the editor read; the write is refused if the file has changed
    * since. `null` creates a file, and is refused if one is already there.
@@ -87,8 +89,17 @@ export function assertWritable(path: string, kind: 'text' | 'photo' = 'text'): v
   if (!WRITABLE.some((w) => path.startsWith(w)) && !COORDS_PATH.test(path)) throw new Error(`not a content path: ${path}`);
 }
 
-/** Checks the shape of an edit and returns what kind of file it writes. */
-export function editKind(e: Edit): 'text' | 'photo' {
+/** A published comment: the only kind of file the admin may delete. */
+export const COMMENT_PATH = /^src\/content\/comments\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9-]+\.json$/;
+
+/** Checks the shape of an edit and returns what kind of change it is. */
+export function editKind(e: Edit): 'text' | 'photo' | 'remove' {
+  if (e.remove) {
+    if (e.text != null || e.staged != null || !e.baseVersion) throw new Error(`a removal can only name a file and its version: ${e.path}`);
+    assertWritable(e.path);
+    if (!COMMENT_PATH.test(e.path)) throw new Error(`only published comments can be removed: ${e.path}`);
+    return 'remove';
+  }
   const isText = typeof e.text === 'string';
   const isPhoto = typeof e.staged === 'string';
   if (isText === isPhoto) throw new Error(`an edit needs exactly one of text or staged: ${e.path}`);

@@ -1,0 +1,157 @@
+---
+/**
+ * Readers' comments under an entry, and the form to leave one (ADMIN-PLAN.md §7b).
+ *
+ * Shown: only comments one of you has approved — they are committed files, read
+ * at build time. A stranger's words are always rendered as plain text.
+ *
+ * The form works with no JavaScript at all: it posts, and the answer redirects
+ * back here to #comment-sent / -later / -invalid, which CSS reveals. With
+ * JavaScript, a few lines send it in place so the text survives an error, and
+ * Cloudflare Turnstile (if configured) loads only once someone starts typing —
+ * a reader who never comments never talks to Cloudflare.
+ */
+import { getCollection } from 'astro:content';
+
+interface Props {
+  /** `trip/entry-slug` */
+  entry: string;
+}
+const { entry } = Astro.props;
+
+const comments = (await getCollection('comments', ({ data }) => data.entry === entry))
+  .sort((a, b) => +a.data.date - +b.data.date);
+const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const paragraphs = (s: string) => s.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+const turnstileKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+---
+
+<section class="comments" id="comments" aria-labelledby="comments-h" data-pagefind-ignore>
+  <h2 id="comments-h" class="comments__h">
+    {comments.length ? `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}` : 'Comments'}
+  </h2>
+
+  {comments.length > 0 && (
+    <ol class="comments__list">
+      {comments.map((c) => (
+        <li class="comment" id={`c-${c.id.split('/').pop()}`}>
+          <p class="comment__who">
+            <span class="comment__name">{c.data.name}</span>
+            <span class="mono comment__when">{fmt(c.data.date)}{c.data.archival && ' · from the old site'}</span>
+          </p>
+          <div class="comment__body">{paragraphs(c.data.body).map((p) => <p>{p}</p>)}</div>
+        </li>
+      ))}
+    </ol>
+  )}
+
+  <p class="comments__outcome" id="comment-sent" tabindex="-1">Thanks — it will appear here once Beth or Andy has read it. They are sometimes up a mountain, so it may be a little while.</p>
+  <p class="comments__outcome" id="comment-later" tabindex="-1">Too many comments are arriving just now. Please try again later.</p>
+  <p class="comments__outcome" id="comment-invalid" tabindex="-1">That didn't go through — please check your name and comment and try again.</p>
+
+  <form class="comments__form" id="comment-form" method="post" action="/api/comment" data-turnstile={turnstileKey || undefined}>
+    <h3 class="comments__formh">Leave a comment</h3>
+    <input type="hidden" name="entry" value={entry} />
+    <input type="hidden" name="t" value="" />
+    <label class="comments__field">
+      <span>Your name</span>
+      <input name="name" required maxlength="60" autocomplete="name" />
+    </label>
+    <label class="comments__field">
+      <span>Comment</span>
+      <textarea name="body" required maxlength="4000" rows="5"></textarea>
+    </label>
+    <!-- Left empty by people; filled in by bots that fill in everything. -->
+    <div class="comments__hp" aria-hidden="true">
+      <label>Leave this empty <input name="website" tabindex="-1" autocomplete="off" /></label>
+    </div>
+    {turnstileKey && <div class="comments__check" id="cf-box"></div>}
+    <p class="comments__fine">
+      Comments are read by Beth or Andy before they appear. Only your name and what you
+      write are kept — no email address, nothing else.
+    </p>
+    <button type="submit" class="mono">Send comment</button>
+    <p class="comments__status" id="comment-status" role="status"></p>
+  </form>
+</section>
+
+<script is:inline>
+  (function () {
+    var form = document.getElementById('comment-form');
+    if (!form || !window.fetch || !window.FormData) return;
+    var status = document.getElementById('comment-status');
+    var key = form.getAttribute('data-turnstile');
+    form.elements.t.value = String(Date.now());
+
+    // Turnstile only once someone starts writing.
+    var loading = false;
+    if (key) form.addEventListener('focusin', function () {
+      if (loading) return;
+      loading = true;
+      window.cwTurnstileReady = function () { window.turnstile.render('#cf-box', { sitekey: key }); };
+      var s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=cwTurnstileReady';
+      s.async = true;
+      document.head.appendChild(s);
+    });
+
+    var words = {
+      sent: document.getElementById('comment-sent').textContent,
+      later: document.getElementById('comment-later').textContent,
+      invalid: document.getElementById('comment-invalid').textContent,
+    };
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var button = form.querySelector('button[type=submit]');
+      button.disabled = true;
+      status.textContent = 'Sending…';
+      fetch(form.action, { method: 'POST', body: new FormData(form), headers: { accept: 'application/json' } })
+        .then(function (r) { return r.json().catch(function () { return { outcome: 'later' }; }); })
+        .then(function (o) {
+          status.textContent = words[o.outcome] || words.later;
+          status.className = 'comments__status is-' + (o.outcome === 'sent' ? 'ok' : 'bad');
+          if (o.outcome === 'sent') {
+            form.reset();
+            form.elements.t.value = String(Date.now());
+          }
+          if (window.turnstile && key) window.turnstile.reset('#cf-box');
+        })
+        .catch(function () { status.textContent = words.later; status.className = 'comments__status is-bad'; })
+        .then(function () { button.disabled = false; });
+    });
+  })();
+</script>
+
+<style>
+  .comments { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--color-rule); max-width: var(--measure); }
+  .comments__h { font-family: var(--font-display); font-size: 1.3rem; margin: 0 0 1rem; }
+  .comments__list { list-style: none; margin: 0 0 2rem; padding: 0; display: grid; gap: 1.25rem; }
+  .comment__who { margin: 0 0 0.3rem; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: baseline; }
+  .comment__name { font-weight: 600; }
+  .comment__when { font-size: 0.6875rem; color: var(--color-stone); }
+  .comment__body p { margin: 0 0 0.6em; white-space: pre-line; overflow-wrap: anywhere; }
+
+  .comments__outcome { display: none; padding: 0.7rem 0.9rem; margin: 0 0 1rem; background: var(--color-paper); border-left: 3px solid var(--color-rime-on-light); }
+  .comments__outcome:target { display: block; }
+  #comment-later:target, #comment-invalid:target { border-left-color: var(--color-ember); }
+
+  .comments__form { display: grid; gap: 0.8rem; padding: 1.1rem 1.2rem; background: var(--color-paper); border: 1px solid var(--color-rule); }
+  .comments__formh { font-family: var(--font-display); font-size: 1.05rem; margin: 0; }
+  .comments__field { display: grid; gap: 0.3rem; }
+  .comments__field span { font-size: 0.875rem; color: var(--color-stone); }
+  .comments__field input, .comments__field textarea {
+    font: inherit; padding: 0.55rem 0.65rem; border: 1px solid var(--color-rule); background: #fff; color: var(--color-ink);
+  }
+  .comments__field textarea { resize: vertical; line-height: 1.5; }
+  .comments__hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  .comments__fine { margin: 0; font-size: 0.8125rem; color: var(--color-stone); }
+  .comments__form button {
+    justify-self: start; padding: 0.6rem 1.1rem; font-size: 0.8125rem; border: 0; cursor: pointer;
+    background: var(--color-ink); color: var(--color-snow);
+  }
+  .comments__form button:hover:not(:disabled) { background: var(--color-rime-on-light); }
+  .comments__form button:disabled { opacity: 0.5; cursor: default; }
+  .comments__status { margin: 0; font-size: 0.875rem; min-height: 1.2em; }
+  .comments__status.is-ok { color: var(--color-rime-on-light); }
+  .comments__status.is-bad { color: var(--color-ember); }
+</style>

@@ -92,13 +92,14 @@ export class FsStore implements ContentStore {
     try {
       for (const [i, e] of edits.entries()) {
         await mkdir(dirname(this.abs(e.path)), { recursive: true });
-        if (kinds[i] === 'photo') await copyFile(join(STAGING, `${e.staged}.jpg`), this.abs(e.path));
+        if (kinds[i] === 'remove') await unlink(this.abs(e.path));
+        else if (kinds[i] === 'photo') await copyFile(join(STAGING, `${e.staged}.jpg`), this.abs(e.path));
         else await writeFile(this.abs(e.path), e.text!, 'utf8');
         written.push(e.path);
       }
       const args = ['commit', '--quiet', '-m', message];
       if (author) args.push(`--author=${author.name} <${author.email}>`);
-      // `add` first so new files are tracked; `-- paths` then commits exactly
+      // `add` first so new files are tracked (and removals staged); `-- paths` then commits exactly
       // these files and nothing else that happens to be staged on this laptop.
       await run('git', ['add', '--', ...paths], { cwd: this.root });
       await run('git', [...args, '--', ...paths], { cwd: this.root });

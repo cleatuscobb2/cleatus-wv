@@ -50,19 +50,28 @@ export async function claimOnce(key: string, seconds: number): Promise<boolean> 
 // ---- general pipeline (the readers counter) ---------------------------------
 
 type Cmd = (string | number)[];
-const hashes = new Map<string, Map<string, number>>();
+const hashes = new Map<string, Map<string, string>>();
 const sets = new Map<string, Set<string>>();
 
-/** The handful of commands the readers counter uses, for `astro dev` without Upstash. */
+/** The handful of commands the readers counter and comment queue use, for `astro dev` without Upstash. */
 function memoryRun([op, key, ...args]: Cmd): unknown {
   const k = String(key);
+  const hash = () => { const h = hashes.get(k) ?? new Map<string, string>(); hashes.set(k, h); return h; };
   switch (String(op).toUpperCase()) {
     case 'HINCRBY': {
-      const h = hashes.get(k) ?? new Map<string, number>();
-      h.set(String(args[0]), (h.get(String(args[0])) ?? 0) + Number(args[1]));
-      hashes.set(k, h);
-      return h.get(String(args[0]));
+      const h = hash();
+      const next = Number(h.get(String(args[0])) ?? 0) + Number(args[1]);
+      h.set(String(args[0]), String(next));
+      return next;
     }
+    case 'HSET': {
+      const h = hash();
+      let added = 0;
+      for (let i = 0; i < args.length; i += 2) { if (!h.has(String(args[i]))) added++; h.set(String(args[i]), String(args[i + 1])); }
+      return added;
+    }
+    case 'HDEL': { const h = hash(); return args.filter((f) => h.delete(String(f))).length; }
+    case 'HLEN': return hashes.get(k)?.size ?? 0;
     case 'HGETALL': return [...(hashes.get(k) ?? new Map())].flat().map(String);
     case 'PFADD': {
       const s = sets.get(k) ?? new Set<string>();

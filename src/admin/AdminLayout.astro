@@ -9,7 +9,7 @@ import type { User } from './session.ts';
 
 interface Props {
   title: string;
-  current?: 'home' | 'curate' | 'trips' | 'new' | 'readers';
+  current?: 'home' | 'curate' | 'trips' | 'new' | 'readers' | 'comments';
   /** Hosted only: who is signed in. Absent on the sign-in screens. */
   user?: User | null;
 }
@@ -24,6 +24,7 @@ const nav = [
   { href: '/admin/trips', label: 'Trips', id: 'trips' },
   { href: '/admin/new', label: 'New entry', id: 'new' },
   { href: '/admin/readers', label: 'Readers', id: 'readers' },
+  { href: '/admin/comments', label: 'Comments', id: 'comments' },
 ];
 ---
 

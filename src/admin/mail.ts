@@ -38,10 +38,27 @@ export async function sendSignInLink(to: string, url: string): Promise<void> {
     <p style="margin:0;font-size:14px;line-height:1.5;color:#5b6573">It works once, for the next ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email — nobody can sign in without the link.</p>
   </div></body></html>`;
 
+  await post(key, { to: [to], subject: 'Your sign-in link', text, html });
+}
+
+/** A plain-text note to the two of you — e.g. a comment waiting for approval. */
+export async function sendMail(to: string[], subject: string, text: string): Promise<void> {
+  const key = env('RESEND_API_KEY');
+  if (!key) {
+    if (import.meta.env?.DEV) {
+      console.log(`[admin] email to ${to.join(', ')} — ${subject}\n${text}`);
+      return;
+    }
+    throw new Error('RESEND_API_KEY is not set');
+  }
+  await post(key, { to, subject, text });
+}
+
+async function post(key: string, mail: { to: string[]; subject: string; text: string; html?: string }) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [to], subject: 'Your sign-in link', text, html }),
+    body: JSON.stringify({ from: FROM, ...mail }),
   });
   if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
 }

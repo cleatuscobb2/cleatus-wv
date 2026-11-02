@@ -30,7 +30,8 @@ class GitHubError extends Error {
   }
 }
 
-// Two levels below the requested directory: collection → trip folder → entry.
+// Three levels below the requested directory: collection → trip → entry, and
+// comments one deeper (comments/<trip>/<entry>/<id>.json).
 const TREE_QUERY = `
 query($owner: String!, $name: String!, $ref: String!, $path: String!) {
   repository(owner: $owner, name: $name) {
@@ -41,7 +42,7 @@ query($owner: String!, $name: String!, $ref: String!, $path: String!) {
 }
 fragment File on Blob { text isTruncated isBinary }
 fragment Level on Tree {
-  entries { path object { ...File ... on Tree { entries { path object { ...File } } } } }
+  entries { path object { ...File ... on Tree { entries { path object { ...File ... on Tree { entries { path object { ...File } } } } } } } }
 }`;
 
 interface TreeEntry {
@@ -209,7 +210,9 @@ export class GitHubStore implements ContentStore {
           base_tree: base.tree.sha,
           tree: edits.map((e, i) => kinds[i] === 'photo'
             ? { path: e.path, mode: '100644', type: 'blob', sha: e.staged }
-            : { path: e.path, mode: '100644', type: 'blob', content: e.text }),
+            : kinds[i] === 'remove'
+              ? { path: e.path, mode: '100644', type: 'blob', sha: null } // sha null deletes
+              : { path: e.path, mode: '100644', type: 'blob', content: e.text }),
         },
       });
       const commit = await this.api(`${this.repoPath}/git/commits`, {
@@ -243,6 +246,7 @@ export class GitHubStore implements ContentStore {
       this.head = commit.sha;
       const texts = edits.filter((e) => e.text != null);
       for (const e of texts) this.files.set(e.path, e.text!);
+      for (const e of edits) if (e.remove) this.files.delete(e.path);
       return {
         commit: String(commit.sha).slice(0, 7),
         versions: Object.fromEntries(texts.map((e) => [e.path, versionOf(e.text!)])),

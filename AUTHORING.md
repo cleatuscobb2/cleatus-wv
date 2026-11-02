@@ -304,6 +304,20 @@ saving makes a local commit and **Publish to live site** pushes it — so run
 
 ---
 
+## Readers' comments
+
+Anyone can leave a comment under an entry. **None appears until one of you
+publishes it.** When something is waiting you get one email (at most one an hour)
+with a link to `/admin/comments`. There: tick the ones to keep, press
+**Publish selected** (they show on the site a minute or two later), and
+**Delete selected** for the rest — deleted ones aren't kept anywhere. A published
+comment can be taken down again with **Take down**.
+
+Only a name and the words are collected — no email addresses — and comments
+always show as plain text, so nothing a stranger types can change the page.
+
+---
+
 ## When something goes wrong
 
 **"Unknown trip"** — the `trip:` line doesn't match. Run `npm run new:entry` with no

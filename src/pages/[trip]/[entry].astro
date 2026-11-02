@@ -12,6 +12,7 @@ import PhotoPair from '../../components/PhotoPair.astro';
 import PhotoStrip from '../../components/PhotoStrip.astro';
 import Aside from '../../components/Aside.astro';
 import PullQuote from '../../components/PullQuote.astro';
+import Comments from '../../components/Comments.astro';
 import {
   chronological, tripIdOf, entrySlug, routeNodes, fmtDate,
   AUTHOR_NAMES, excerpt,
@@ -125,6 +126,8 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
           ))}
         </ul>
       )}
+
+      {trip && <Comments entry={`${trip.id}/${me}`} />}
 
       <nav class="pager" aria-label="Entries" data-pagefind-ignore>
         {prev ? (

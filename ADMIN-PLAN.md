@@ -288,6 +288,27 @@ readers, consent. The page says so, so the absence reads as deliberate.
 Decided: open to public readers as well as family. That is the more demanding of
 the two shapes, and it settles most of the design by itself.
 
+**✅ Built 2026-11-02** (everything below except recovering the old 176, which
+needs the Squarespace export). As built:
+
+- The form under every entry posts to `POST /api/comment` (works with no
+  JavaScript; with it, sends in place and keeps the text on an error). Name and
+  words only — **no email field at all**, the strongest form of "never display an
+  email".
+- Bot barrier: hidden honeypot field, a too-fast-to-be-human check, 5 comments an
+  hour per address, a 300-comment cap on the queue, and Cloudflare Turnstile once
+  `PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` are set (its script loads
+  only when someone starts typing). Bots are told "sent" and learn nothing.
+- Pending queue: an Upstash hash, nothing on disk. One email an hour at most to
+  `ADMIN_EMAILS` when comments are waiting.
+- `/admin/comments`: read, select, publish (one commit) or delete; published ones
+  can be taken down again (a commit deleting the file) — the deletion path.
+- Committed as **JSON**, not Markdown: `src/content/comments/<trip>/<entry>/<id>.json`
+  with entry, name, date, body. A stranger's words are always shown as plain text;
+  nothing in them is ever rendered as HTML or can affect the build.
+- Recovered comments go in the same collection with `"archival": true` and show
+  "from the old site".
+
 ### Before building anything: recover the 176 you already have
 
 The old site carries **176 comments across 103 posts** — eight on Day 9

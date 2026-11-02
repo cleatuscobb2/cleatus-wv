@@ -92,4 +92,24 @@ const retrospectives = defineCollection({
   }),
 });
 
-export const collections = { trips, entries, people, retrospectives };
+/**
+ * Readers' comments, one JSON file each at comments/<trip>/<entry>/<id>.json.
+ * Committed only once approved in /admin/comments (ADMIN-PLAN.md §7b), so they
+ * live beside the writing and survive any platform — the old site's 176 died
+ * with its hosting. JSON rather than Markdown: a stranger's words are kept and
+ * shown exactly as plain text, and nothing in them is ever rendered as HTML.
+ */
+const comments = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/comments' }),
+  schema: z.object({
+    /** `trip/entry-slug` */
+    entry: z.string(),
+    name: z.string(),
+    date: z.coerce.date(),
+    body: z.string(),
+    /** Recovered from the old Squarespace site. */
+    archival: z.boolean().default(false),
+  }),
+});
+
+export const collections = { trips, entries, people, retrospectives, comments };

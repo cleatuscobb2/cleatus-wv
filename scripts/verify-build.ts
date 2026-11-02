@@ -36,7 +36,7 @@ const routes: { src?: string; dest?: string }[] = JSON.parse(readFileSync(join(O
 const expected = [
   '/admin', '/admin/curate', '/admin/verify', '/admin/trips', '/admin/trips/japan-2022',
   '/admin/entry/japan-2022/all-food-122822', '/api/admin/preview', '/api/admin/entry',
-  '/admin/new', '/api/admin/new', '/api/admin/photo', '/admin/readers', '/api/hit',
+  '/admin/new', '/api/admin/new', '/api/admin/photo', '/admin/readers', '/api/hit', '/admin/comments', '/api/admin/comments', '/api/comment',
   '/api/admin/curate', '/api/admin/trip', '/api/auth/request', '/api/auth/verify', '/api/auth/signout',
 ];
 for (const path of expected) {

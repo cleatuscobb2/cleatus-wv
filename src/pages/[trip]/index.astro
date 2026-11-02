@@ -88,7 +88,7 @@ const stats = [
   ...(d.stats.trekMiles ? [{ label: 'Trek', value: `${d.stats.trekMiles} mi` }] : []),
   ...(d.stats.maxElevationFt
     ? [{ label: 'High point', value: `${d.stats.maxElevationFt.toLocaleString('en-US')} ft` }] : []),
-  { label: 'Countries', value: String(d.stats.countriesCount) },
+  { label: 'Countries', value: String(d.countries.length) },
   ...(cried.length ? [{ label: 'Beth cried', value: `${cried.length}×` }] : []),
 ];
 

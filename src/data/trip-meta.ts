@@ -25,7 +25,6 @@ export const TRIP_META: Record<string, TripMeta> = {
     shortTitle: 'K2 & SE Asia',
     countries: ['PK', 'TH', 'SG', 'MY', 'KR'],
     regions: ['Karakoram', 'Baltoro', 'Borneo'],
-    confirm: 'SE Asia legs read from post titles: Bangkok, Singapore, Borneo (Sabah), Seoul.',
   },
   'japan-2022': {
     shortTitle: 'Japan',
@@ -34,16 +33,13 @@ export const TRIP_META: Record<string, TripMeta> = {
   },
   'africa-and-egypt-2018': {
     shortTitle: 'Africa & Egypt',
-    countries: ['TZ', 'EG', 'AT'],
+    countries: ['CH', 'FR', 'KE', 'TZ', 'RW', 'UG', 'AE', 'EG', 'AT'],
     regions: ['Kilimanjaro', 'Nile'],
-    confirm:
-      'Austria inferred from the Innsbruck posts at the end of the trip. Confirm whether that belongs to this trip or should be split out.',
   },
   seasiamikerachwedding2017: {
     shortTitle: 'Mike & Rach Wedding',
-    countries: ['ID'],
+    countries: ['ID', 'TH'],
     regions: ['Bali'],
-    confirm: 'Only Bali is named in the post titles. Were there other stops?',
   },
   patagoniapt2andcolumbia2017: {
     shortTitle: 'Patagonia II & Colombia',
@@ -52,10 +48,8 @@ export const TRIP_META: Record<string, TripMeta> = {
   },
   'nepal-tibet-india-golden-triangle-2015': {
     shortTitle: 'Nepal, Tibet & India',
-    countries: ['NP', 'CN', 'IN', 'DE'],
+    countries: ['NP', 'CN', 'IN', 'LK', 'MV', 'DE', 'FR'],
     regions: ['Himalaya', 'Tibetan Plateau', 'Golden Triangle'],
-    confirm:
-      'Germany comes from the Schnapps/Rotwurst posts that close the trip. Confirm it belongs here.',
   },
   patagoniaspectacular2015: {
     shortTitle: 'Patagonia',
@@ -69,7 +63,7 @@ export const TRIP_META: Record<string, TripMeta> = {
   },
   'iceland-germany-austria-croatia-bosnia-2013': {
     shortTitle: 'Iceland to Bosnia',
-    countries: ['IS', 'DE', 'AT', 'HR', 'BA'],
+    countries: ['IS', 'DE', 'CH', 'AT', 'IT', 'HR', 'BA'],
     regions: [],
   },
   guatemalabelize2012: {
@@ -81,7 +75,6 @@ export const TRIP_META: Record<string, TripMeta> = {
     shortTitle: 'China',
     countries: ['CN', 'HK', 'TH'],
     regions: ['Yangtze'],
-    confirm: 'Hong Kong and Bangkok both appear in post titles at the end of the trip.',
   },
   'ecuador-galapagos-bolivia-peru-macchu-picchu-2011': {
     shortTitle: 'Andes & Galápagos',
@@ -92,7 +85,6 @@ export const TRIP_META: Record<string, TripMeta> = {
     shortTitle: 'India (where it started)',
     countries: ['IN', 'ID', 'SG'],
     regions: ['Karnataka'],
-    confirm: 'Indonesia (Bintan) and Singapore appear at the end of the trip.',
   },
 };
 

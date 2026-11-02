@@ -32,6 +32,9 @@ export default function cleatusAdmin(): AstroIntegration {
         route('/admin/new', './pages/entry.astro');
         route('/api/admin/new', './api/entry-new.ts');
         route('/api/admin/photo', './api/photo.ts');
+        route('/admin/readers', './pages/readers.astro');
+        // Public: the reader counter's beacon. Counts only; answers nothing.
+        route('/api/hit', './api/hit.ts');
         route('/api/admin/git', './api/git.ts');
         route('/api/auth/request', './api/auth-request.ts');
         route('/api/auth/verify', './api/auth-verify.ts');

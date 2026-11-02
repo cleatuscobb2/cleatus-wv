@@ -47,6 +47,50 @@ export async function claimOnce(key: string, seconds: number): Promise<boolean> 
   return out.result === 'OK';
 }
 
+// ---- general pipeline (the readers counter) ---------------------------------
+
+type Cmd = (string | number)[];
+const hashes = new Map<string, Map<string, number>>();
+const sets = new Map<string, Set<string>>();
+
+/** The handful of commands the readers counter uses, for `astro dev` without Upstash. */
+function memoryRun([op, key, ...args]: Cmd): unknown {
+  const k = String(key);
+  switch (String(op).toUpperCase()) {
+    case 'HINCRBY': {
+      const h = hashes.get(k) ?? new Map<string, number>();
+      h.set(String(args[0]), (h.get(String(args[0])) ?? 0) + Number(args[1]));
+      hashes.set(k, h);
+      return h.get(String(args[0]));
+    }
+    case 'HGETALL': return [...(hashes.get(k) ?? new Map())].flat().map(String);
+    case 'PFADD': {
+      const s = sets.get(k) ?? new Set<string>();
+      const before = s.size;
+      for (const a of args) s.add(String(a));
+      sets.set(k, s);
+      return s.size > before ? 1 : 0;
+    }
+    case 'PFCOUNT': {
+      const all = new Set<string>();
+      for (const name of [k, ...args.map(String)]) for (const v of sets.get(name) ?? []) all.add(v);
+      return all.size;
+    }
+    case 'EXPIRE': return 1;
+    default: throw new Error(`memory store doesn't do ${op}`);
+  }
+}
+
+/** Runs several commands in one round trip; returns each one's result in order. */
+export async function kvPipeline(cmds: Cmd[]): Promise<unknown[]> {
+  if (!cmds.length) return [];
+  if (!rest()) return cmds.map(memoryRun);
+  const out = (await call('/pipeline', cmds.map((c) => c.map(String)))) as { result?: unknown; error?: string }[];
+  const failed = out.find((r) => r.error);
+  if (failed) throw new Error(`Upstash: ${failed.error}`);
+  return out.map((r) => r.result);
+}
+
 /** Counts a hit in a fixed window of `seconds`; returns the count so far. */
 export async function countHit(key: string, seconds: number): Promise<number> {
   if (!rest()) {

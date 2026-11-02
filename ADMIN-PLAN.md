@@ -245,42 +245,43 @@ they get resolved rather than living in a file nobody opens.
 
 ## 7a. `/admin/readers` — who is actually reading this
 
-Decided: Vercel Web Analytics for collection, and the page lives **behind the
-login**, querying live rather than baking numbers in at deploy.
+✅ Built 2026-11-02. Behind the login, read live on each visit.
 
 Behind the login because the data is about other people. An unlinked page is
 obscurity, not protection — anyone the URL reaches would see where your readers
 are and what they read. That is worth a session cookie, not a secret URL.
 
-**Collection is already in place.** `@vercel/analytics` ships on every page in
-production (~2.9 KB inline, no bundle). It is cookieless and aggregate-only, so
-there is no consent banner and nothing stored on a reader's machine.
+**Counted by the site itself, not read from Vercel Analytics.** Vercel's query
+API needs an access token, and Vercel tokens can't be limited to one project or
+to reading — one in this site's function could change or read every project on
+the account (Tisdale Finance's database credentials included). So the site keeps
+its own count in the Upstash store the admin already uses (`src/admin/readers.ts`).
+Vercel Analytics still runs alongside and keeps its own dashboard copy.
 
-**One thing only you can do:** Web Analytics has to be switched on in the Vercel
-dashboard — Project → Analytics → Enable. Until then the API returns 404 and
-nothing is recorded. Data starts from the moment it is enabled; none of it is
-retrospective.
+- Every public page sends one beacon per view (`POST /api/hit`, a few lines in
+  `Base.astro`, production only): path and referrer. No cookie, nothing stored on
+  the reader's machine; browsers sending Global Privacy Control or DNT send nothing.
+- Stored by day, aggregate only: one hash of counters per day — views, and views
+  per page, country (Vercel's edge header), referring site, device, browser,
+  system — kept 400 days. No row per visit.
+- Visitors: a hash of address + browser under a secret that changes daily, put into
+  a HyperLogLog, which keeps only an estimate of distinct values. No hash is stored
+  and no visitor can be followed from one day to the next.
+- Bots, non-page paths, other sites' requests and more than 300 hits an hour from
+  one address are ignored. The beacon always answers 204 either way.
 
-What the page shows, all from `get_web_analytics`:
-
-| Panel | Dimension |
+| Panel | From |
 |---|---|
-| Visitors and pageviews | count, with the previous period beside it |
-| Most read | `requestPath`, ranked — which entries people actually finish |
-| Where they are | `country`, against the trips' own countries |
-| How they arrived | `referrerHostname` |
-| What on | `deviceType`, `browserName`, `osName` |
-| Over time | `day` / `week`, so a trip's spike is visible |
+| Views, visitors (estimate), countries | with the previous period beside it |
+| Page views per day | columns + a table view |
+| Most read | page paths, named from the content |
+| Where they are | country, marked where the trips have been |
+| How they arrived | referrer hostname |
+| What they read on | device, browser, system |
 
-**What it will not show, and cannot.** You asked how often people come back.
-Cookieless analytics deliberately cannot link one visit to the next — that needs
-an identifier on the reader's device and, for European readers, consent. New vs
-returning in aggregate is available; per-person histories are not. That is a
-consequence of the choice not to track individuals, and worth restating on the
-page itself so the absence reads as deliberate rather than broken.
-
-Page clicks beyond navigation need explicit `track()` calls on specific elements
-— worth adding only for something specific, like how often "Start here" is used.
+**What it will not show, and cannot:** how often one person comes back, or what one
+person read. That needs an identifier on the reader's device and, for European
+readers, consent. The page says so, so the absence reads as deliberate.
 
 ## 7b. Comments — public, not just family
 

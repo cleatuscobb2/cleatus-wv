@@ -78,6 +78,22 @@ const ogUrl = ogImage ? new URL(ogImage, canonical).toString() : null;
     {import.meta.env.PROD && <Analytics />}
 
     <!--
+      The site's own count, for /admin/readers (src/admin/readers.ts): the page
+      path and the referrer, once per view. Same terms as above — no cookie, no
+      identifier — and skipped entirely for browsers that ask not to be tracked.
+    -->
+    {import.meta.env.PROD && (
+      <script is:inline>
+        (function () {
+          try {
+            if (navigator.globalPrivacyControl || navigator.doNotTrack === '1') return;
+            navigator.sendBeacon('/api/hit', JSON.stringify({ p: location.pathname, r: document.referrer }));
+          } catch (e) {}
+        })();
+      </script>
+    )}
+
+    <!--
       §7.5 — `/` focuses search from anywhere. A few hundred bytes, and nothing
       depends on it running.
     -->

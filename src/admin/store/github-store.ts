@@ -14,7 +14,7 @@
  */
 import {
   type Author, type ContentStore, type Edit, type WriteResult,
-  ConflictError, assertWritable, versionOf,
+  ConflictError, assertWritable, editKind, versionOf,
 } from './types.ts';
 
 interface Options {
@@ -149,30 +149,67 @@ export class GitHubStore implements ContentStore {
     return [...this.files.keys()].filter((p) => p.startsWith(`${dir}/`) && p.endsWith(ext)).sort();
   }
 
+  /** File names directly in `dir` at `ref` (default: the tip this store read). */
+  private async dirAt(dir: string, ref: string) {
+    try {
+      const out = await this.api(`${this.repoPath}/contents/${dir.split('/').map(encodeURIComponent).join('/')}?ref=${ref}`);
+      return Array.isArray(out) ? out.filter((x: { type: string }) => x.type === 'file').map((x: { name: string }) => x.name).sort() : [];
+    } catch (err) {
+      if (err instanceof GitHubError && err.status === 404) return [];
+      throw err;
+    }
+  }
+
+  async listDir(dir: string) {
+    return this.dirAt(dir.replace(/\/$/, ''), this.head ?? this.o.branch);
+  }
+
+  /**
+   * Uploads the bytes as a git blob. Nothing points at it until a write puts it
+   * in a commit; GitHub discards blobs that never get used.
+   */
+  async stage(bytes: Uint8Array) {
+    const out = await this.api(`${this.repoPath}/git/blobs`, {
+      method: 'POST',
+      body: { content: Buffer.from(bytes).toString('base64'), encoding: 'base64' },
+    });
+    return String(out.sha);
+  }
+
   async write(edits: Edit[], message: string, author?: Author): Promise<WriteResult> {
     if (!edits.length) throw new Error('nothing to write');
     if (!message.trim()) throw new Error('a commit message is required');
-    for (const e of edits) assertWritable(e.path);
+    const kinds = edits.map(editKind);
 
     for (let attempt = 1; ; attempt++) {
       const ref = await this.api(`${this.repoPath}/git/ref/heads/${this.o.branch}`);
       if (ref.object.sha !== this.head) this.forget();
 
-      // Check every version against the tip before writing anything.
+      // Check every version against the tip before writing anything — and that
+      // every file being created doesn't exist yet.
       const stale: string[] = [];
-      for (const e of edits) {
+      const dirs = new Map<string, string[]>();
+      for (const [i, e] of edits.entries()) {
+        if (kinds[i] === 'photo') {
+          const dir = e.path.slice(0, e.path.lastIndexOf('/'));
+          if (!dirs.has(dir)) dirs.set(dir, await this.dirAt(dir, ref.object.sha));
+          if (dirs.get(dir)!.includes(e.path.slice(dir.length + 1))) stale.push(e.path);
+          continue;
+        }
         const cur = await this.read(e.path).catch(() => null);
-        if (!cur || cur.version !== e.baseVersion) stale.push(e.path);
+        if (e.baseVersion === null ? cur !== null : !cur || cur.version !== e.baseVersion) stale.push(e.path);
       }
       if (stale.length) throw new ConflictError(stale);
 
-      const parent = this.head!;
+      const parent = this.head ?? ref.object.sha;
       const base = await this.api(`${this.repoPath}/git/commits/${parent}`);
       const tree = await this.api(`${this.repoPath}/git/trees`, {
         method: 'POST',
         body: {
           base_tree: base.tree.sha,
-          tree: edits.map((e) => ({ path: e.path, mode: '100644', type: 'blob', content: e.text })),
+          tree: edits.map((e, i) => kinds[i] === 'photo'
+            ? { path: e.path, mode: '100644', type: 'blob', sha: e.staged }
+            : { path: e.path, mode: '100644', type: 'blob', content: e.text }),
         },
       });
       const commit = await this.api(`${this.repoPath}/git/commits`, {
@@ -204,10 +241,11 @@ export class GitHubStore implements ContentStore {
       }
 
       this.head = commit.sha;
-      for (const e of edits) this.files.set(e.path, e.text);
+      const texts = edits.filter((e) => e.text != null);
+      for (const e of texts) this.files.set(e.path, e.text!);
       return {
         commit: String(commit.sha).slice(0, 7),
-        versions: Object.fromEntries(edits.map((e) => [e.path, versionOf(e.text)])),
+        versions: Object.fromEntries(texts.map((e) => [e.path, versionOf(e.text!)])),
       };
     }
   }

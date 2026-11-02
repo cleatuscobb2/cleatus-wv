@@ -80,6 +80,8 @@ if (!signIn) {
 
     {message && <p class="mono note" role="status">{message}</p>}
 
+    <p class="start"><a href="/admin/new" class="mono start__new">Write a new entry →</a></p>
+
     {ahead ? (
       <p class="mono pending">
         {ahead} saved {ahead === 1 ? 'change' : 'changes'} not yet published —
@@ -136,6 +138,12 @@ if (!signIn) {
     cursor: pointer;
   }
   .signin__form button:hover { background: var(--color-rime-on-light); }
+  .start { margin: 1.5rem 0 0; }
+  .start__new {
+    display: inline-block; padding: 0.7rem 1.1rem; font-size: 0.8125rem; text-decoration: none;
+    background: var(--color-ink); color: var(--color-snow);
+  }
+  .start__new:hover { background: var(--color-rime-on-light); }
   .pending {
     margin: 1.25rem 0 0;
     padding: 0.6rem 0.8rem;

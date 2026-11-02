@@ -1,11 +1,17 @@
 ---
 /**
- * /admin/entry/[trip]/[slug] — edit an entry's title and prose.
+ * /admin/entry/[trip]/[slug] — edit an entry's title, prose, photos, draft state.
+ * /admin/new                 — write a new one (same editor, plus trip, date,
+ *                              day, byline and web address).
  *
  * The text as it's stored (Markdown, plus <Photo>, <PullQuote> and <Aside>) in a
  * plain textarea, with the page preview beside it, checked as you type. Not
  * contenteditable on the rendered page: saving edited HTML back to MDX is a
  * lossy conversion, and the prose is the asset (ADMIN-PLAN.md §4).
+ *
+ * Photographs are shrunk and re-encoded in the browser (which also drops their
+ * EXIF, GPS included), cleaned again by the server, held until save, and
+ * committed in the same commit as the text.
  */
 import AdminLayout from '../AdminLayout.astro';
 import { getStore } from '../store/index.ts';
@@ -20,32 +26,82 @@ export const prerender = false;
 const blocked = guard(Astro.request);
 if (blocked) return blocked;
 const user = HOSTED ? userOf(Astro.request) : null;
-
-const { trip, slug } = Astro.params;
-if (!trip || !slug || !/^[a-z0-9-]+$/.test(trip) || !/^[a-z0-9-]+$/.test(slug)) return notFound();
-const path = `src/content/entries/${trip}/${slug}.mdx`;
-
 const store = getStore();
-let file;
-try { file = await store.read(path); } catch { return notFound(); }
-const meta = readMeta(file.text);
-const { body } = splitEntry(file.text);
-const tripShort = await store.read(`src/content/trips/${trip}.mdx`).then((t) => readTrip(t.text).shortTitle).catch(() => trip);
+
+const { trip: tripParam, slug: slugParam } = Astro.params;
+const isNew = !tripParam && !slugParam;
+if (!isNew && (!tripParam || !slugParam || !/^[a-z0-9-]+$/.test(tripParam) || !/^[a-z0-9-]+$/.test(slugParam))) return notFound();
+
+const tripPaths = await store.list('src/content/trips', '.mdx');
+const trips = (await Promise.all(tripPaths.map(async (p) => {
+  const m = readTrip((await store.read(p)).text);
+  return { id: p.split('/').pop()!.replace(/\.mdx$/, ''), short: m.shortTitle, start: m.dateStart };
+}))).sort((a, b) => b.start.localeCompare(a.start));
+
+let path = '';
+let version = '';
+let meta = { title: '', date: new Date().toISOString().slice(0, 10), day: null as number | null, draft: false, authors: ['beth'] as string[] };
+let body = '';
+let existingPhotos: string[] = [];
+const takenSlugs: Record<string, string[]> = {};
+
+if (isNew) {
+  // Every web address already used, per trip, so a new one is unique before it's saved.
+  for (const p of await store.list('src/content/entries', '.mdx')) {
+    const [, , , t, f] = p.split('/');
+    (takenSlugs[t] ??= []).push(f.replace(/\.mdx$/, ''));
+  }
+} else {
+  path = `src/content/entries/${tripParam}/${slugParam}.mdx`;
+  let file;
+  try { file = await store.read(path); } catch { return notFound(); }
+  version = file.version;
+  const m = readMeta(file.text);
+  meta = { title: m.title, date: m.date, day: m.day, draft: m.draft, authors: m.authors };
+  body = splitEntry(file.text).body;
+  existingPhotos = await store.listDir(`assets/photos/${tripParam}/${slugParam}`);
+}
+
+const tripShort = trips.find((t) => t.id === tripParam)?.short ?? tripParam;
 const first = checkBody(body);
 const saveLabel = HOSTED ? 'Review & publish' : 'Review & save';
+const byKey = meta.authors.includes('andy') && meta.authors.includes('beth') ? 'both' : meta.authors.includes('andy') ? 'andy' : 'beth';
 
 const payload = JSON.stringify({
-  hosted: HOSTED, path, version: file.version, title: meta.title, body,
+  hosted: HOSTED, isNew, path, version, title: meta.title, body, draft: meta.draft,
+  trip: tripParam ?? trips[0]?.id ?? '', slug: slugParam ?? '', existingPhotos, takenSlugs,
 }).replace(/</g, '\\u003c');
 ---
 
-<AdminLayout title={`${meta.title} — Edit`} current="curate" user={user}>
-  <p class="mono ee-back"><a href="/admin/curate">← Tags &amp; bylines</a> · {tripShort} · {meta.date}{meta.day != null && ` · Day ${meta.day}`}</p>
+<AdminLayout title={isNew ? 'New entry' : `${meta.title} — Edit`} current={isNew ? 'new' : 'curate'} user={user}>
+  {isNew ? (
+    <h1 class="ad-h1 ee-h1">New entry</h1>
+  ) : (
+    <p class="mono ee-back"><a href="/admin/curate">← Tags &amp; bylines</a> · {tripShort} · {meta.date}{meta.day != null && ` · Day ${meta.day}`}</p>
+  )}
 
   <label class="ee-title">
     <span class="mono">Title</span>
     <input id="f-title" value={meta.title} maxlength="200" />
   </label>
+
+  {isNew && (
+    <div class="ee-meta">
+      <label class="ee-field"><span class="mono">Trip</span>
+        <select id="f-trip">{trips.map((t) => <option value={t.id}>{t.short}</option>)}</select>
+      </label>
+      <label class="ee-field"><span class="mono">Date</span><input type="date" id="f-date" value={meta.date} /></label>
+      <label class="ee-field ee-field--day"><span class="mono">Trek day <em>(optional)</em></span><input type="number" id="f-day" min="1" max="999" /></label>
+      <label class="ee-field"><span class="mono">By</span>
+        <select id="f-by">
+          <option value="beth">Beth</option><option value="andy">Andy</option><option value="both">Both</option>
+        </select>
+      </label>
+      <label class="ee-field ee-field--slug"><span class="mono">Web address</span>
+        <span class="ee-slug"><span class="mono" id="slug-prefix"></span><input id="f-slug" pattern="[a-z0-9-]+" maxlength="80" /></span>
+      </label>
+    </div>
+  )}
 
   <div class="ee-panes">
     <section class="ee-pane" aria-labelledby="ee-src-h">
@@ -58,25 +114,33 @@ const payload = JSON.stringify({
             <dt><code>## Heading</code></dt><dd>A heading (own line)</dd>
             <dt><code>&gt; text</code></dt><dd>An indented quote</dd>
             <dt><code>[words](https://…)</code></dt><dd>A link</dd>
-            <dt><code>&lt;Photo src="/photos/…" caption="…" /&gt;</code></dt><dd>A photograph — copy an existing line and change the file name. <code>size="text|wide|full"</code> is optional.</dd>
+            <dt><code>&lt;Photo src="/photos/…" caption="…" /&gt;</code></dt><dd>A photograph — easiest with <strong>Add photos</strong> below. <code>size="text|wide|full"</code> is optional.</dd>
             <dt><code>&lt;PullQuote attribution="Beth"&gt;…&lt;/PullQuote&gt;</code></dt><dd>A big pulled-out quote</dd>
             <dt><code>&lt;Aside term="Porter"&gt;…&lt;/Aside&gt;</code></dt><dd>A boxed side note</dd>
             <dt><code>\{</code> <code>\}</code> <code>\&lt;</code></dt><dd>To show a brace or a &lt; as plain text</dd>
           </dl>
-          <p>A blank line starts a new paragraph.</p>
         </details>
       </div>
-      <textarea id="f-body" spellcheck="true" aria-labelledby="ee-src-h" aria-describedby="ee-problems">{body}</textarea>
+      <textarea id="f-body" spellcheck="true" aria-labelledby="ee-src-h" aria-describedby="ee-problems" placeholder={isNew ? 'Write here. A blank line starts a new paragraph.' : undefined}>{body}</textarea>
       <ul class="ee-problems" id="ee-problems" aria-live="polite"></ul>
+
+      <div class="ee-photos" id="ee-drop">
+        <label class="btn ee-add">
+          Add photos
+          <input type="file" id="f-photos" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple />
+        </label>
+        <span class="ee-photos__help">or drop them here. They go in where the cursor is, in the order they were taken.</span>
+        <ul class="ee-uploads" id="ee-uploads" aria-live="polite"></ul>
+      </div>
     </section>
 
     <section class="ee-pane" aria-labelledby="ee-prev-h">
       <div class="ee-pane__bar">
         <h2 class="mono" id="ee-prev-h">Preview</h2>
-        <a class="mono" href={`/${trip}/${slug}/`} target="_blank" rel="noopener">Live page ↗</a>
+        {!isNew && !meta.draft && <a class="mono" href={`/${tripParam}/${slugParam}/`} target="_blank" rel="noopener">Live page ↗</a>}
       </div>
       <div class="ee-preview" tabindex="0" role="region" aria-label="How the page will look (scrollable)">
-        <h1 class="ee-preview__title" id="ee-preview-title">{meta.title}</h1>
+        <h1 class="ee-preview__title" id="ee-preview-title">{meta.title || 'Untitled'}</h1>
         <div class="prose-entry" id="ee-preview" set:html={first.tree ? renderPreview(first.tree) : ''}></div>
       </div>
     </section>
@@ -84,6 +148,7 @@ const payload = JSON.stringify({
 
   <div class="ee-foot">
     <span class="mono" id="ee-dirty">No unsaved changes</span>
+    <label class="mono ee-draft"><input type="checkbox" id="f-draft" checked={meta.draft} /> Draft — not on the site</label>
     <button type="button" id="ee-review" class="btn btn--primary" disabled>{saveLabel}</button>
     <span class="ee-sep"></span>
     <span class="mono ee-note" id="ee-note" aria-live="polite"></span>
@@ -91,7 +156,7 @@ const payload = JSON.stringify({
 
   <dialog id="ee-dialog" aria-labelledby="ee-dialog-h">
     <h2 id="ee-dialog-h" class="ad-h1 dlg-h">Check your changes</h2>
-    <p class="mono ee-legend"><span class="ee-add">added</span> <span class="ee-del">removed</span></p>
+    <p class="mono ee-legend"><span class="ee-add-l">added</span> <span class="ee-del-l">removed</span></p>
     <div id="ee-diff" class="ee-diff"></div>
     <p class="dlg-err" id="ee-error" role="alert"></p>
     <div class="dlg-actions">
@@ -105,31 +170,107 @@ const payload = JSON.stringify({
 
 <script>
   import { diffLines, diffWordsWithSpace } from 'diff';
+  import { prepare, captureTime, stemOf } from '../photo-client.ts';
 
   interface Problem { line: number | null; message: string }
   const data = JSON.parse(document.getElementById('entry-data')!.textContent!) as {
-    hosted: boolean; path: string; version: string; title: string; body: string;
+    hosted: boolean; isNew: boolean; path: string; version: string; title: string; body: string; draft: boolean;
+    trip: string; slug: string; existingPhotos: string[]; takenSlugs: Record<string, string[]>;
   };
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const esc = (s: string) =>
     s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const FLASH = 'ee-flash';
 
   const titleEl = $<HTMLInputElement>('f-title');
   const bodyEl = $<HTMLTextAreaElement>('f-body');
-  let orig = { title: data.title, body: data.body };
+  const draftEl = $<HTMLInputElement>('f-draft');
+  let orig = { title: data.title, body: data.body, draft: data.draft };
   let problems: Problem[] = [];
   let pending = 0;
+  let uploading = 0;
+  let leaving = false;
+
+  /** Photographs uploaded but not yet saved, by their final src. */
+  const staged = new Map<string, { token: string; url: string }>();
 
   const norm = (s: string) => `${s.replace(/\r\n/g, '\n').replace(/\s+$/, '')}\n`;
   const titleNow = () => titleEl.value.replace(/\s+/g, ' ').trim();
-  const dirty = () => titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body);
+  const stagedInBody = () => [...staged.keys()].filter((src) => bodyEl.value.includes(`src="${src}"`));
+  const dirty = () => data.isNew
+    ? !!(titleNow() || bodyEl.value.trim())
+    : titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body) || draftEl.checked !== orig.draft || stagedInBody().length > 0;
+
+  // ---- where this entry lives (new entries: from trip + web address) -------
+  const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  const f = data.isNew ? {
+    trip: $<HTMLSelectElement>('f-trip'), date: $<HTMLInputElement>('f-date'), day: $<HTMLInputElement>('f-day'),
+    by: $<HTMLSelectElement>('f-by'), slug: $<HTMLInputElement>('f-slug'),
+  } : null;
+  let slugTouched = false;
+
+  const tripNow = () => (f ? f.trip.value : data.trip);
+  const slugNow = () => (f ? f.slug.value : data.slug);
+  const prefix = () => `/photos/${tripNow()}/${slugNow()}/`;
+  let lastPrefix = prefix();
+
+  /** A web address not yet used in this trip. */
+  function uniqueSlug(base: string) {
+    const taken = new Set(data.takenSlugs[tripNow()] ?? []);
+    let s = base || 'entry';
+    for (let n = 2; taken.has(s); n++) s = `${base}-${n}`;
+    return s;
+  }
+
+  // Photo paths follow the entry; if the address changes, so do they.
+  function followPrefix() {
+    const next = prefix();
+    if (next === lastPrefix) return;
+    if (staged.size) {
+      bodyEl.value = bodyEl.value.split(`src="${lastPrefix}`).join(`src="${next}`);
+      for (const [src, v] of [...staged]) {
+        staged.delete(src);
+        staged.set(next + src.slice(lastPrefix.length), v);
+      }
+      schedulePreview();
+    }
+    lastPrefix = next;
+  }
+
+  if (f) {
+    const syncSlug = () => {
+      if (!slugTouched) f.slug.value = uniqueSlug(slugify(titleNow()));
+      $('slug-prefix').textContent = `/${tripNow()}/`;
+      followPrefix();
+      refresh();
+    };
+    titleEl.addEventListener('input', syncSlug);
+    f.trip.addEventListener('change', syncSlug);
+    f.slug.addEventListener('input', () => {
+      slugTouched = true;
+      f.slug.value = f.slug.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      followPrefix();
+      refresh();
+    });
+    syncSlug();
+  }
+
+  function slugProblem(): string | null {
+    if (!f) return null;
+    const s = slugNow();
+    if (!s) return 'Give it a title (or a web address).';
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(s)) return 'The web address can only use a–z, 0–9 and single hyphens.';
+    if ((data.takenSlugs[tripNow()] ?? []).includes(s)) return 'That web address is already used in this trip.';
+    return null;
+  }
 
   function refresh() {
     const d = dirty();
-    $('ee-dirty').textContent = problems.length
+    const blocker = problems.length
       ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} to fix before saving`
-      : d ? 'Unsaved changes' : 'No unsaved changes';
-    $<HTMLButtonElement>('ee-review').disabled = !d || problems.length > 0 || pending > 0 || !titleNow();
+      : slugProblem();
+    $('ee-dirty').textContent = blocker ?? (d ? 'Unsaved changes' : 'No unsaved changes');
+    $<HTMLButtonElement>('ee-review').disabled = !d || !!blocker || pending > 0 || uploading > 0 || !titleNow() || (data.isNew && !bodyEl.value.trim());
   }
 
   function showProblems() {
@@ -151,7 +292,15 @@ const payload = JSON.stringify({
     bodyEl.scrollTop = Math.max(0, (line - 4) * lh);
   });
 
-  // Check and preview as you type, a moment after you stop.
+  // ---- preview -------------------------------------------------------------
+  /** Photos not saved yet aren't on the server: show the browser's own copy. */
+  function showStagedPhotos() {
+    for (const img of $('ee-preview').querySelectorAll('img')) {
+      const s = staged.get(img.getAttribute('src') ?? '');
+      if (s) img.src = s.url;
+    }
+  }
+
   let timer = 0;
   let seq = 0;
   async function runPreview() {
@@ -168,7 +317,7 @@ const payload = JSON.stringify({
       if (mine !== seq) return; // a newer check is already on its way
       problems = out.problems ?? [];
       showProblems();
-      if (out.html != null) $('ee-preview').innerHTML = out.html;
+      if (out.html != null) { $('ee-preview').innerHTML = out.html; showStagedPhotos(); }
       $('ee-preview').classList.toggle('is-stale', out.html == null);
     } catch {
       if (mine === seq) $('ee-problems').innerHTML = '<li>Couldn’t check the text just now — it will try again as you type.</li>';
@@ -177,15 +326,102 @@ const payload = JSON.stringify({
       refresh();
     }
   }
-  bodyEl.addEventListener('input', () => {
+  function schedulePreview() {
     clearTimeout(timer);
     timer = window.setTimeout(runPreview, 450);
     refresh();
-  });
+  }
+  bodyEl.addEventListener('input', schedulePreview);
   titleEl.addEventListener('input', () => {
-    $('ee-preview-title').textContent = titleNow();
+    $('ee-preview-title').textContent = titleNow() || 'Untitled';
     refresh();
   });
+  draftEl.addEventListener('change', refresh);
+
+  // ---- photographs ---------------------------------------------------------
+
+  /** Next free two-digit number in this entry's folder. */
+  function nextNumber() {
+    const used = [
+      ...data.existingPhotos,
+      ...[...bodyEl.value.matchAll(/\/(\d{2,3})-[^/"]+\.(?:jpe?g|png|gif|webp)"/gi)].map((m) => `${m[1]}-`),
+      ...[...staged.keys()].map((s) => s.split('/').pop()!),
+    ].map((n) => parseInt(n, 10)).filter((n) => !Number.isNaN(n));
+    return Math.max(0, ...used) + 1;
+  }
+
+  function insertAtCursor(text: string) {
+    const v = bodyEl.value;
+    const at = document.activeElement === bodyEl || bodyEl.selectionStart ? bodyEl.selectionEnd : v.length;
+    const before = v.slice(0, at).replace(/\s*$/, '');
+    const after = v.slice(at).replace(/^\s*/, '');
+    bodyEl.value = `${before}${before ? '\n\n' : ''}${text}${after ? `\n\n${after}` : '\n'}`;
+    const caret = (before ? before.length + 2 : 0) + text.length;
+    bodyEl.setSelectionRange(caret, caret);
+    schedulePreview();
+  }
+
+  async function addPhotos(files: File[]) {
+    if (slugProblem()) { $('ee-note').textContent = 'Give the entry a title first — photos are filed under its web address.'; return; }
+    const list = $('ee-uploads');
+    // Capture order, as the laptop importer does; file date when there's no EXIF.
+    const timed = await Promise.all(files.map(async (file) => ({ file, at: (await captureTime(file)) ?? file.lastModified })));
+    timed.sort((a, b) => a.at - b.at);
+
+    const lines: string[] = [];
+    let n = nextNumber();
+    for (const { file } of timed) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="ee-up__name">${esc(file.name)}</span> <span class="mono ee-up__state">shrinking…</span>`;
+      list.append(li);
+      const state = li.querySelector('.ee-up__state')!;
+      uploading++;
+      refresh();
+      try {
+        const jpeg = await prepare(file);
+        state.textContent = 'uploading…';
+        const res = await fetch('/api/admin/photo', {
+          method: 'POST',
+          headers: { 'content-type': 'image/jpeg', 'x-cleatus-admin': '1' },
+          body: jpeg,
+        });
+        const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        if (!res.ok) throw new Error(out.error);
+        const src = `${prefix()}${String(n++).padStart(2, '0')}-${stemOf(file.name)}.jpg`;
+        const url = URL.createObjectURL(jpeg);
+        staged.set(src, { token: out.token, url });
+        lines.push(`<Photo src="${src}" caption="" />`);
+        li.innerHTML = `<img src="${url}" alt="" /> <span class="ee-up__name">${esc(file.name)}</span> <span class="mono ee-up__state is-ok">added · ${Math.round(out.bytes / 1024)} KB, location data removed</span>`;
+      } catch (e) {
+        li.classList.add('is-bad');
+        state.textContent = (e as Error).message;
+      } finally {
+        uploading--;
+        refresh();
+      }
+    }
+    if (lines.length) insertAtCursor(lines.join('\n\n'));
+  }
+
+  $<HTMLInputElement>('f-photos').addEventListener('change', (ev) => {
+    const input = ev.target as HTMLInputElement;
+    void addPhotos([...(input.files ?? [])]);
+    input.value = '';
+  });
+  const drop = $('ee-drop');
+  for (const t of [drop, bodyEl]) {
+    t.addEventListener('dragover', (ev) => {
+      if (ev.dataTransfer?.types.includes('Files')) { ev.preventDefault(); drop.classList.add('is-over'); }
+    });
+    t.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+    t.addEventListener('drop', (ev) => {
+      const files = [...(ev.dataTransfer?.files ?? [])].filter((x) => x.type.startsWith('image/') || /\.(heic|heif)$/i.test(x.name));
+      if (!files.length) return;
+      ev.preventDefault();
+      drop.classList.remove('is-over');
+      void addPhotos(files);
+    });
+  }
 
   // ---- review & save -------------------------------------------------------
   function diffHtml(a: string, b: string) {
@@ -229,9 +465,21 @@ const payload = JSON.stringify({
 
   $('ee-review').addEventListener('click', () => {
     const t = titleNow();
-    $('ee-diff').innerHTML =
-      (t !== orig.title ? `<p class="ee-titlechg"><span class="mono">Title</span> <del>${esc(orig.title)}</del> → <ins>${esc(t)}</ins></p>` : '') +
-      (norm(bodyEl.value) !== norm(orig.body) ? diffHtml(orig.body, bodyEl.value) : '');
+    const photos = stagedInBody();
+    const bits: string[] = [];
+    if (data.isNew) {
+      bits.push(`<p class="ee-titlechg"><span class="mono">New</span> <ins>${esc(t)}</ins> at /${esc(tripNow())}/${esc(slugNow())}/</p>`);
+    } else if (t !== orig.title) {
+      bits.push(`<p class="ee-titlechg"><span class="mono">Title</span> <del>${esc(orig.title)}</del> → <ins>${esc(t)}</ins></p>`);
+    }
+    if (draftEl.checked !== orig.draft || data.isNew) {
+      bits.push(`<p class="ee-titlechg"><span class="mono">Status</span> ${draftEl.checked ? 'Draft — kept off the site' : '<ins>Published on the site</ins>'}</p>`);
+    }
+    if (photos.length) {
+      bits.push(`<p class="ee-titlechg"><span class="mono">Photos</span> <ins>${photos.length} new</ins></p><div class="ee-thumbs">${photos.map((s) => `<img src="${staged.get(s)!.url}" alt="" />`).join('')}</div>`);
+    }
+    if (norm(bodyEl.value) !== norm(orig.body)) bits.push(diffHtml(orig.body, bodyEl.value));
+    $('ee-diff').innerHTML = bits.join('');
     err.textContent = '';
     dialog.showModal();
   });
@@ -241,15 +489,27 @@ const payload = JSON.stringify({
     commitBtn.disabled = true;
     err.textContent = '';
     try {
-      const sent = { title: titleNow(), body: bodyEl.value };
-      const res = await fetch('/api/admin/entry', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
-        body: JSON.stringify({ path: data.path, version: data.version, ...sent }),
-      });
+      const sent = { title: titleNow(), body: bodyEl.value, draft: draftEl.checked };
+      const photos = stagedInBody().map((src) => ({ src, token: staged.get(src)!.token }));
+      const res = data.isNew
+        ? await fetch('/api/admin/new', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
+            body: JSON.stringify({
+              ...sent, photos, trip: tripNow(), slug: slugNow(), date: f!.date.value, day: f!.day.value || null,
+              authors: f!.by.value === 'both' ? ['andy', 'beth'] : [f!.by.value],
+            }),
+          })
+        : await fetch('/api/admin/entry', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
+            body: JSON.stringify({ path: data.path, version: data.version, ...sent, photos }),
+          });
       const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
       if (res.status === 409) {
-        err.textContent = 'Nothing was saved: someone else changed this entry since the page loaded. Copy your text somewhere safe, reload the page, and make your changes again.';
+        err.textContent = data.isNew
+          ? 'Nothing was saved: an entry with that web address — or one of those photo names — already exists. Change the web address and try again.'
+          : 'Nothing was saved: someone else changed this entry since the page loaded. Copy your text somewhere safe, reload the page, and make your changes again.';
         return;
       }
       if (res.status === 422) {
@@ -260,16 +520,30 @@ const payload = JSON.stringify({
         return;
       }
       if (!res.ok) { err.textContent = `Nothing was saved: ${out.error}`; return; }
+
+      const note = !out.commit
+        ? 'Nothing needed saving.'
+        : sent.draft
+          ? `Saved as a draft (${out.commit}). It isn't on the site until you untick Draft.`
+          : data.hosted
+            ? `Published as ${out.commit}. The live site updates in a minute or two.`
+            : `Saved on this laptop as ${out.commit}. Publish from the Tags page.`;
+
+      if (data.isNew) {
+        // Carry on in the ordinary editor for the entry that now exists.
+        try { sessionStorage.setItem(FLASH, `${Date.now()}|${note}`); } catch {}
+        leaving = true;
+        location.href = out.href;
+        return;
+      }
       const v = out.versions?.[data.path];
       if (v) data.version = v;
+      for (const p of photos) { data.existingPhotos.push(p.src.split('/').pop()!); }
       orig = sent;
+      for (const src of photos.map((p) => p.src)) staged.delete(src);
       dialog.close();
       refresh();
-      $('ee-note').textContent = !out.commit
-        ? 'Nothing needed saving.'
-        : data.hosted
-          ? `Published as ${out.commit}. The live site updates in a minute or two.`
-          : `Saved on this laptop as ${out.commit}. Publish from the Tags page.`;
+      $('ee-note').textContent = note;
     } catch (e) {
       err.textContent = `Nothing was saved: ${(e as Error).message}`;
     } finally {
@@ -278,13 +552,21 @@ const payload = JSON.stringify({
   });
 
   addEventListener('beforeunload', (e) => {
-    if (dirty()) { e.preventDefault(); e.returnValue = ''; }
+    if (!leaving && dirty()) { e.preventDefault(); e.returnValue = ''; }
   });
 
+  // Kept briefly rather than read once: under `astro dev` the page reloads
+  // itself again just after a save, which would wipe a one-shot message.
+  try {
+    const [at, ...rest] = (sessionStorage.getItem(FLASH) ?? '').split('|');
+    if (at && Date.now() - Number(at) < 15_000) $('ee-note').textContent = rest.join('|');
+    else sessionStorage.removeItem(FLASH);
+  } catch {}
   refresh();
 </script>
 
 <style>
+  .ee-h1 { margin-bottom: 1rem; }
   .ee-back { margin: 0 0 0.9rem; font-size: 0.6875rem; color: var(--color-stone); }
   .ee-back a { text-decoration: none; }
   .ee-title { display: grid; gap: 0.3rem; max-width: 48rem; }
@@ -293,6 +575,17 @@ const payload = JSON.stringify({
     font: inherit; font-family: var(--font-display); font-weight: 700; font-size: 1.35rem;
     padding: 0.45rem 0.6rem; border: 1px solid var(--color-rule); background: var(--color-paper); color: var(--color-ink);
   }
+  .ee-meta { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; margin-top: 0.9rem; align-items: end; }
+  .ee-field { display: grid; gap: 0.3rem; }
+  .ee-field > .mono { font-size: 0.6875rem; color: var(--color-stone); }
+  .ee-field em { font-style: normal; text-transform: none; letter-spacing: 0; }
+  .ee-field input, .ee-field select {
+    font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--color-rule); background: var(--color-paper); color: var(--color-ink);
+  }
+  .ee-field--day input { width: 6rem; }
+  .ee-slug { display: flex; align-items: center; border: 1px solid var(--color-rule); background: var(--color-paper); }
+  .ee-slug .mono { font-size: 0.75rem; color: var(--color-stone); padding-left: 0.5rem; white-space: nowrap; }
+  .ee-slug input { border: 0; min-width: 16rem; }
   .ee-panes {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -305,7 +598,7 @@ const payload = JSON.stringify({
   .ee-pane__bar h2 { margin: 0; font-size: 0.6875rem; color: var(--color-stone); font-weight: 500; }
   .ee-pane__bar a { font-size: 0.6875rem; }
   #f-body {
-    height: calc(100vh - 19rem);
+    height: calc(100vh - 22rem);
     min-height: 22rem;
     resize: vertical;
     padding: 0.8rem 0.9rem;
@@ -318,7 +611,7 @@ const payload = JSON.stringify({
     tab-size: 2;
   }
   .ee-preview {
-    height: calc(100vh - 19rem);
+    height: calc(100vh - 22rem);
     min-height: 22rem;
     overflow: auto;
     padding: 1.25rem 1.5rem;
@@ -326,7 +619,7 @@ const payload = JSON.stringify({
     border: 1px solid var(--color-rule);
   }
   .ee-preview__title { font-family: var(--font-display); font-size: 1.8rem; line-height: 1.15; margin: 0 0 1.25rem; }
-  .ee-preview :global(.is-stale), #ee-preview.is-stale { opacity: 0.45; }
+  #ee-preview.is-stale { opacity: 0.45; }
 
   /* The components' own styles are scoped to them, so the preview restates them. */
   .ee-preview :global(.photo) { margin-block: 1.5rem; }
@@ -348,9 +641,24 @@ const payload = JSON.stringify({
     border: 1px solid currentColor; background: none; color: #9b1c1c; cursor: pointer; padding: 0.05rem 0.35rem;
   }
 
+  .ee-photos {
+    margin-top: 0.6rem; padding: 0.7rem 0.8rem; border: 1px dashed var(--color-rule);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem;
+  }
+  .ee-photos.is-over { border-color: var(--color-rime-on-light); background: color-mix(in srgb, var(--color-rime) 10%, transparent); }
+  .ee-add { position: relative; color: var(--color-ink); border-color: var(--color-rule); }
+  .ee-add input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .ee-add:focus-within { outline: 3px solid var(--color-rime-on-light); outline-offset: 2px; }
+  .ee-photos__help { font-size: 0.875rem; color: var(--color-stone); }
+  .ee-uploads { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 0.3rem; }
+  .ee-uploads :global(li) { display: flex; align-items: center; gap: 0.6rem; font-size: 0.875rem; }
+  .ee-uploads :global(img) { width: 3rem; height: 2rem; object-fit: cover; }
+  .ee-uploads :global(.ee-up__state) { font-size: 0.6875rem; color: var(--color-stone); text-transform: none; letter-spacing: 0; }
+  .ee-uploads :global(.is-ok) { color: var(--color-rime-on-light); }
+  .ee-uploads :global(li.is-bad .ee-up__state) { color: #9b1c1c; }
+
   .ee-help { position: relative; }
   .ee-help summary { font-size: 0.6875rem; cursor: pointer; color: var(--color-rime-on-light); }
-  .ee-help[open] > :not(summary) { max-width: 34rem; }
   .ee-help dl {
     position: absolute; right: 0; z-index: 6; width: min(34rem, 80vw); margin: 0.4rem 0 0;
     padding: 0.9rem 1rem; background: var(--color-paper); border: 1px solid var(--color-rule);
@@ -359,7 +667,6 @@ const payload = JSON.stringify({
   }
   .ee-help dt { font-family: var(--font-mono); font-size: 0.75rem; }
   .ee-help dd { margin: 0; color: var(--color-stone); }
-  .ee-help p { display: none; }
 
   .ee-foot {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
@@ -367,13 +674,14 @@ const payload = JSON.stringify({
     padding: 0.7rem clamp(1rem, 3vw, 2rem);
     background: var(--color-ink); color: var(--color-snow); font-size: 0.75rem;
   }
+  .ee-draft { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.6875rem; color: var(--color-stone-on-dark); }
   .ee-sep { flex: 1; }
   .ee-note { color: var(--color-stone-on-dark); }
 
   .ee-legend { font-size: 0.6875rem; margin: 0.4rem 0 0.6rem; }
   .ee-legend span { padding: 0.05rem 0.35rem; margin-right: 0.4rem; }
-  .ee-add, .ee-diff :global(ins) { background: color-mix(in srgb, var(--color-rime-on-light) 18%, transparent); text-decoration: none; }
-  .ee-del, .ee-diff :global(del) { background: color-mix(in srgb, #9b1c1c 14%, transparent); }
+  .ee-add-l, .ee-diff :global(ins) { background: color-mix(in srgb, var(--color-rime-on-light) 18%, transparent); text-decoration: none; }
+  .ee-del-l, .ee-diff :global(del) { background: color-mix(in srgb, #9b1c1c 14%, transparent); }
   .ee-diff {
     max-height: 55vh; overflow: auto; border: 1px solid var(--color-rule); background: var(--color-snow);
     padding: 0.6rem 0.8rem; font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.55;
@@ -384,6 +692,8 @@ const payload = JSON.stringify({
   .ee-diff :global(.ee-chg) { margin: 0.15rem 0; }
   .ee-diff :global(.ee-titlechg) { font-family: var(--font-body); font-size: 0.9375rem; margin: 0 0 0.6rem; white-space: normal; }
   .ee-diff :global(.ee-titlechg .mono) { font-size: 0.6875rem; color: var(--color-stone); margin-right: 0.4rem; }
+  .ee-diff :global(.ee-thumbs) { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: -0.2rem 0 0.8rem; white-space: normal; }
+  .ee-diff :global(.ee-thumbs img) { width: 4.5rem; height: 3rem; object-fit: cover; }
 
   @media (max-width: 900px) {
     .ee-panes { grid-template-columns: 1fr; }

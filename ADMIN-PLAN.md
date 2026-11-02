@@ -202,7 +202,13 @@ first editing screen exists — rather than after every screen is built locally.
    imports/exports, no raw HTML, no non-http(s)/mailto links. Import lines are
    managed automatically. The save endpoint re-checks on its own, so a body that
    would break the build — and with it every deploy — can't be committed.
-6. `/admin/new` + photo upload
+6. ✅ `/admin/new` + photo upload (the entry editor in "new" mode; photos can also
+   be added to existing entries). The browser shrinks each photo to ≤ 2500 px and
+   re-encodes it — under Vercel's 4.5 MB request cap, and with EXIF (GPS
+   included) gone. The server re-checks it's a JPEG and strips every metadata
+   segment again (`src/admin/jpeg.ts`), then stages it as an unreferenced git
+   blob; the save commits entry and photos together. Draft is a checkbox in the
+   same editor.
 
 1–2 need nothing from anyone. 3 needs the five set-up steps in §5, which can happen
 in parallel with 1–2.

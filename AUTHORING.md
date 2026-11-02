@@ -144,6 +144,21 @@ shows every word you changed before anything is saved.
 
 ### Start a new entry
 
+**From any browser:** sign in at `/admin` and press **Write a new entry** (or
+**New entry** in the bar). Choose the trip, check the date, add a trek day if it
+is one, write. **Add photos** (or drag them onto the page) puts them in where the
+cursor is, in the order they were taken — straight off a phone is fine. They are
+shrunk to the site's size and **their location data is removed** before they
+leave the browser, and again on the server.
+
+Tick **Draft — not on the site** to save it without publishing; untick it later
+in the same editor to publish. Photos and text land together, as one change.
+
+(Photos from an iPhone in HEIC format open in Safari; in other browsers, export
+them as JPEG first.)
+
+**On the laptop with the repo:**
+
 ```bash
 npm run new:entry -- --title "Day 12 Home"
 ```

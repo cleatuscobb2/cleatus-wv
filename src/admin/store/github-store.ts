@@ -53,7 +53,8 @@ interface TreeEntry {
 const collectionOf = (path: string) => path.split('/').slice(0, 3).join('/');
 
 const MAX_ATTEMPTS = 3;
-const WEB_COMMITTER = { name: 'Site admin', email: 'admin@cleatusandthewestvirginian.com' };
+// Used only when a save arrives without a known person (see session.ts userFor).
+const SITE_IDENTITY = { name: 'Site admin', email: 'admin@cleatusandthewestvirginian.com' };
 
 export class GitHubStore implements ContentStore {
   readonly kind = 'github' as const;
@@ -180,9 +181,10 @@ export class GitHubStore implements ContentStore {
           message,
           tree: tree.sha,
           parents: [parent],
-          ...(author ? { author: { ...author, date: new Date().toISOString() } } : {}),
-          // Author is the person; committer says it came through the website.
-          committer: { ...WEB_COMMITTER, date: new Date().toISOString() },
+          // Author and committer are both the signed-in person, so the history
+          // credits them alone. Only an unidentified save falls back to the site.
+          author: { ...(author ?? SITE_IDENTITY), date: new Date().toISOString() },
+          committer: { ...(author ?? SITE_IDENTITY), date: new Date().toISOString() },
         },
       });
 

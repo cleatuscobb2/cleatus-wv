@@ -148,8 +148,9 @@ shows every word you changed before anything is saved.
 **New entry** in the bar). Choose the trip, check the date, add a trek day if it
 is one, write. **Add photos** (or drag them onto the page) puts them in where the
 cursor is, in the order they were taken — straight off a phone is fine. They are
-shrunk to the site's size and **their location data is removed** before they
-leave the browser, and again on the server.
+shrunk to the site's size, and **where each was taken is kept for the map**: it is
+saved to the entry's `_coords.json`, exactly as `import:photos` does, while the
+photo file itself is cleaned of all its hidden data.
 
 Tick **Draft — not on the site** to save it without publishing; untick it later
 in the same editor to publish. Photos and text land together, as one change.

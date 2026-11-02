@@ -72,6 +72,8 @@ const WRITABLE = ['src/content/'];
 
 /** Photographs: new JPEGs in an entry's own folder, nothing else. */
 export const PHOTO_PATH = /^assets\/photos\/[a-z0-9-]+\/[a-z0-9-]+\/\d{2,3}-[a-z0-9][a-z0-9-]*\.jpg$/;
+/** Where each photo in an entry's folder was taken, for the map (as import:photos writes it). */
+export const COORDS_PATH = /^assets\/photos\/[a-z0-9-]+\/[a-z0-9-]+\/_coords\.json$/;
 
 export function assertWritable(path: string, kind: 'text' | 'photo' = 'text'): void {
   if (typeof path !== 'string' || !path) throw new Error('empty path');
@@ -82,7 +84,7 @@ export function assertWritable(path: string, kind: 'text' | 'photo' = 'text'): v
     if (!PHOTO_PATH.test(path)) throw new Error(`not a photo path: ${path}`);
     return;
   }
-  if (!WRITABLE.some((w) => path.startsWith(w))) throw new Error(`not a content path: ${path}`);
+  if (!WRITABLE.some((w) => path.startsWith(w)) && !COORDS_PATH.test(path)) throw new Error(`not a content path: ${path}`);
 }
 
 /** Checks the shape of an edit and returns what kind of file it writes. */

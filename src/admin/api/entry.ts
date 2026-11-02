@@ -69,7 +69,7 @@ export const save: APIRoute = async ({ request }) => {
   const [, , , trip, file] = path.split('/');
   const slug = file.replace(/\.mdx$/, '');
   let photos;
-  try { photos = photoEdits(input?.photos, trip, slug, newBody); } catch (e) { return json({ error: (e as Error).message }, 400); }
+  try { photos = await photoEdits(input?.photos, trip, slug, newBody); } catch (e) { return json({ error: (e as Error).message }, 400); }
 
   const { head, imported } = splitEntry(current.text);
   const { head: fm, rest } = splitFrontmatter(head);
@@ -78,7 +78,8 @@ export const save: APIRoute = async ({ request }) => {
   const text = joinEntry(nextFm + rest, newBody, [...new Set([...checked.components, ...imported])]);
   if (text === current.text && !photos.length) return json({ commit: null, versions: {} });
 
-  const what = photos.length ? ` (+${photos.length} ${photos.length === 1 ? 'photo' : 'photos'})` : '';
+  const n = photos.filter((e) => e.staged).length;
+  const what = n ? ` (+${n} ${n === 1 ? 'photo' : 'photos'})` : '';
   return commit(
     [...(text === current.text ? [] : [{ path, text, baseVersion: current.version }]), ...photos],
     `Edit entry ${trip}/${slug}: “${title}”${what}`, user?.author,
@@ -88,16 +89,21 @@ export const save: APIRoute = async ({ request }) => {
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_PHOTOS = 60;
 
+/** One line of an entry's `_coords.json` — the format `npm run import:photos` writes. */
+interface Point { file: string; lat: number; lng: number; taken?: string }
+
 /**
  * The photographs uploaded for this save: each must live in this entry's own
- * folder, carry an upload token, and actually appear in the text.
+ * folder, carry an upload token, and actually appear in the text. Where the
+ * camera recorded a position, it comes back as a point for `_coords.json`.
  */
-function photoEdits(raw: unknown, trip: string, slug: string, body: string): Edit[] {
+async function photoEdits(raw: unknown, trip: string, slug: string, body: string): Promise<Edit[]> {
   if (raw == null) return [];
   if (!Array.isArray(raw) || raw.length > MAX_PHOTOS) throw new Error(`at most ${MAX_PHOTOS} new photographs at a time`);
   const seen = new Set<string>();
   const out: Edit[] = [];
-  for (const p of raw as { src?: unknown; token?: unknown }[]) {
+  const points: Point[] = [];
+  for (const p of raw as { src?: unknown; token?: unknown; lat?: unknown; lng?: unknown; taken?: unknown }[]) {
     const src = String(p?.src ?? '');
     const prefix = `/photos/${trip}/${slug}/`;
     if (!src.startsWith(prefix)) throw new Error(`a photograph is outside this entry's folder: ${src}`);
@@ -105,8 +111,36 @@ function photoEdits(raw: unknown, trip: string, slug: string, body: string): Edi
     if (seen.has(src)) continue;
     seen.add(src);
     out.push({ path: `assets${src}`, staged: String(p?.token ?? ''), baseVersion: null });
+
+    const lat = Number(p?.lat);
+    const lng = Number(p?.lng);
+    if (p?.lat != null && p?.lng != null && Number.isFinite(lat) && Number.isFinite(lng)
+        && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng)) {
+      const taken = typeof p?.taken === 'string' && !Number.isNaN(Date.parse(p.taken)) ? new Date(p.taken).toISOString() : undefined;
+      points.push({ file: src.slice(prefix.length), lat: +lat.toFixed(6), lng: +lng.toFixed(6), ...(taken ? { taken } : {}) });
+    }
   }
-  return out;
+  const coords = points.length ? await coordsEdit(trip, slug, points) : null;
+  return coords ? [...out, coords] : out;
+}
+
+/**
+ * Adds these points to the folder's `_coords.json` (creating it if needed),
+ * replacing any earlier line for the same file. Refuses rather than overwrite a
+ * file it can't read.
+ */
+async function coordsEdit(trip: string, slug: string, points: Point[]): Promise<Edit> {
+  const path = `assets/photos/${trip}/${slug}/_coords.json`;
+  const current = await getStore().read(path).catch(() => null);
+  let list: Point[] = [];
+  if (current) {
+    try { list = JSON.parse(current.text); } catch { throw new Error(`${path} isn't valid JSON — fix it before adding photos here`); }
+    if (!Array.isArray(list)) throw new Error(`${path} isn't a list — fix it before adding photos here`);
+  }
+  const fresh = new Set(points.map((p) => p.file));
+  const merged = [...list.filter((p) => !fresh.has(p.file)), ...points]
+    .sort((a, b) => (a.taken ?? '').localeCompare(b.taken ?? '') || a.file.localeCompare(b.file));
+  return { path, text: JSON.stringify(merged, null, 2), baseVersion: current?.version ?? null };
 }
 
 async function commit(edits: Edit[], message: string, author?: Author) {
@@ -154,7 +188,7 @@ export const create: APIRoute = async ({ request }) => {
   try { await store.read(`src/content/trips/${trip}.mdx`); } catch { return json({ error: 'that trip doesn’t exist' }, 400); }
 
   let photos;
-  try { photos = photoEdits(input?.photos, trip, slug, newBody); } catch (e) { return json({ error: (e as Error).message }, 400); }
+  try { photos = await photoEdits(input?.photos, trip, slug, newBody); } catch (e) { return json({ error: (e as Error).message }, 400); }
 
   const head = [
     '---',
@@ -172,7 +206,8 @@ export const create: APIRoute = async ({ request }) => {
   ].join('\n');
   const path = `src/content/entries/${trip}/${slug}.mdx`;
   const text = joinEntry(head, newBody, checked.components);
-  const what = photos.length ? ` (+${photos.length} ${photos.length === 1 ? 'photo' : 'photos'})` : '';
+  const n = photos.filter((e) => e.staged).length;
+  const what = n ? ` (+${n} ${n === 1 ? 'photo' : 'photos'})` : '';
   const res = await commit([{ path, text, baseVersion: null }, ...photos], `New entry ${trip}/${slug}: “${title}”${what}`, user?.author);
   if (res.status !== 200) return res;
   return json({ ...(await res.json()), path, href: `/admin/entry/${trip}/${slug}` });

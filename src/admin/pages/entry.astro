@@ -11,7 +11,9 @@
  *
  * Photographs are shrunk and re-encoded in the browser (which also drops their
  * EXIF, GPS included), cleaned again by the server, held until save, and
- * committed in the same commit as the text.
+ * committed in the same commit as the text. Where the camera recorded a
+ * position, it is read first and saved to the folder's _coords.json for the
+ * map, as `npm run import:photos` does — never back into the photo file.
  */
 import AdminLayout from '../AdminLayout.astro';
 import { getStore } from '../store/index.ts';
@@ -170,7 +172,7 @@ const payload = JSON.stringify({
 
 <script>
   import { diffLines, diffWordsWithSpace } from 'diff';
-  import { prepare, captureTime, stemOf } from '../photo-client.ts';
+  import { prepare, readExif, stemOf, type PhotoFacts } from '../photo-client.ts';
 
   interface Problem { line: number | null; message: string }
   const data = JSON.parse(document.getElementById('entry-data')!.textContent!) as {
@@ -192,7 +194,8 @@ const payload = JSON.stringify({
   let leaving = false;
 
   /** Photographs uploaded but not yet saved, by their final src. */
-  const staged = new Map<string, { token: string; url: string }>();
+  /** Position too, when the camera recorded one — it goes to _coords.json, not the file. */
+  const staged = new Map<string, { token: string; url: string; facts: PhotoFacts }>();
 
   const norm = (s: string) => `${s.replace(/\r\n/g, '\n').replace(/\s+$/, '')}\n`;
   const titleNow = () => titleEl.value.replace(/\s+/g, ' ').trim();
@@ -365,12 +368,15 @@ const payload = JSON.stringify({
     if (slugProblem()) { $('ee-note').textContent = 'Give the entry a title first — photos are filed under its web address.'; return; }
     const list = $('ee-uploads');
     // Capture order, as the laptop importer does; file date when there's no EXIF.
-    const timed = await Promise.all(files.map(async (file) => ({ file, at: (await captureTime(file)) ?? file.lastModified })));
+    const timed = await Promise.all(files.map(async (file) => {
+      const facts = await readExif(file);
+      return { file, facts, at: facts.taken ?? file.lastModified };
+    }));
     timed.sort((a, b) => a.at - b.at);
 
     const lines: string[] = [];
     let n = nextNumber();
-    for (const { file } of timed) {
+    for (const { file, facts } of timed) {
       const li = document.createElement('li');
       li.innerHTML = `<span class="ee-up__name">${esc(file.name)}</span> <span class="mono ee-up__state">shrinking…</span>`;
       list.append(li);
@@ -389,9 +395,9 @@ const payload = JSON.stringify({
         if (!res.ok) throw new Error(out.error);
         const src = `${prefix()}${String(n++).padStart(2, '0')}-${stemOf(file.name)}.jpg`;
         const url = URL.createObjectURL(jpeg);
-        staged.set(src, { token: out.token, url });
+        staged.set(src, { token: out.token, url, facts });
         lines.push(`<Photo src="${src}" caption="" />`);
-        li.innerHTML = `<img src="${url}" alt="" /> <span class="ee-up__name">${esc(file.name)}</span> <span class="mono ee-up__state is-ok">added · ${Math.round(out.bytes / 1024)} KB, location data removed</span>`;
+        li.innerHTML = `<img src="${url}" alt="" /> <span class="ee-up__name">${esc(file.name)}</span> <span class="mono ee-up__state is-ok">added · ${Math.round(out.bytes / 1024)} KB${facts.lat != null ? ' · position saved for the map' : ''}</span>`;
       } catch (e) {
         li.classList.add('is-bad');
         state.textContent = (e as Error).message;
@@ -476,7 +482,7 @@ const payload = JSON.stringify({
       bits.push(`<p class="ee-titlechg"><span class="mono">Status</span> ${draftEl.checked ? 'Draft — kept off the site' : '<ins>Published on the site</ins>'}</p>`);
     }
     if (photos.length) {
-      bits.push(`<p class="ee-titlechg"><span class="mono">Photos</span> <ins>${photos.length} new</ins></p><div class="ee-thumbs">${photos.map((s) => `<img src="${staged.get(s)!.url}" alt="" />`).join('')}</div>`);
+      bits.push(`<p class="ee-titlechg"><span class="mono">Photos</span> <ins>${photos.length} new</ins>${(() => { const k = photos.filter((s) => staged.get(s)!.facts.lat != null).length; return k ? ` · ${k} with a position for the map` : ''; })()}</p><div class="ee-thumbs">${photos.map((s) => `<img src="${staged.get(s)!.url}" alt="" />`).join('')}</div>`);
     }
     if (norm(bodyEl.value) !== norm(orig.body)) bits.push(diffHtml(orig.body, bodyEl.value));
     $('ee-diff').innerHTML = bits.join('');
@@ -490,7 +496,13 @@ const payload = JSON.stringify({
     err.textContent = '';
     try {
       const sent = { title: titleNow(), body: bodyEl.value, draft: draftEl.checked };
-      const photos = stagedInBody().map((src) => ({ src, token: staged.get(src)!.token }));
+      const photos = stagedInBody().map((src) => {
+        const { token, facts } = staged.get(src)!;
+        return {
+          src, token,
+          ...(facts.lat != null ? { lat: facts.lat, lng: facts.lng, ...(facts.taken ? { taken: new Date(facts.taken).toISOString() } : {}) } : {}),
+        };
+      });
       const res = data.isNew
         ? await fetch('/api/admin/new', {
             method: 'POST',
@@ -531,7 +543,7 @@ const payload = JSON.stringify({
 
       if (data.isNew) {
         // Carry on in the ordinary editor for the entry that now exists.
-        try { sessionStorage.setItem(FLASH, `${Date.now()}|${note}`); } catch {}
+        try { sessionStorage.setItem(FLASH, `${Date.now()}|${out.href}|${note}`); } catch {}
         leaving = true;
         location.href = out.href;
         return;
@@ -555,12 +567,21 @@ const payload = JSON.stringify({
     if (!leaving && dirty()) { e.preventDefault(); e.returnValue = ''; }
   });
 
-  // Kept briefly rather than read once: under `astro dev` the page reloads
-  // itself again just after a save, which would wipe a one-shot message.
+  // "<ms>|<href>|<note>", kept briefly rather than read once: under `astro dev`
+  // the page reloads itself just after a save — sometimes before the move to
+  // the new entry's editor happens, landing back on a blank "new" form.
   try {
-    const [at, ...rest] = (sessionStorage.getItem(FLASH) ?? '').split('|');
-    if (at && Date.now() - Number(at) < 15_000) $('ee-note').textContent = rest.join('|');
-    else sessionStorage.removeItem(FLASH);
+    const [at, href, ...rest] = (sessionStorage.getItem(FLASH) ?? '').split('|');
+    if (at && Date.now() - Number(at) < 15_000) {
+      if (data.isNew && href?.startsWith('/admin/entry/')) { leaving = true; location.replace(href); }
+      else {
+        $('ee-note').textContent = rest.join('|');
+        // Arrived: stop forwarding, so a fresh "New entry" right after stays put.
+        sessionStorage.setItem(FLASH, `${at}||${rest.join('|')}`);
+      }
+    } else {
+      sessionStorage.removeItem(FLASH);
+    }
   } catch {}
   refresh();
 </script>

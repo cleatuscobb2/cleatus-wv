@@ -4,7 +4,8 @@
  *
  * Drawing to a canvas and re-encoding throws away every byte of EXIF — the GPS
  * position of where it was taken included. The server strips metadata again on
- * its own (jpeg.ts); this is the first of the two.
+ * its own (jpeg.ts); this is the first of the two. The position is read first
+ * (readExif) and kept separately, in the entry's _coords.json, for the map.
  */
 import { MAX_PHOTO_BYTES, photoStem } from './jpeg.ts';
 
@@ -45,12 +46,22 @@ export async function prepare(file: File): Promise<Blob> {
   throw new Error('this photograph is too large to send, even shrunk');
 }
 
+export interface PhotoFacts {
+  /** When it was taken (EXIF DateTimeOriginal, else DateTime), ms. */
+  taken: number | null;
+  /** Where it was taken, if the camera recorded it. */
+  lat?: number;
+  lng?: number;
+}
+
 /**
- * When the photograph was taken, from EXIF DateTimeOriginal (or DateTime), in
- * ms. Null if the file has none — the caller falls back to the file's date.
+ * Capture time and GPS position from a photograph's EXIF, read before
+ * re-encoding throws the EXIF away. The position goes to the entry's
+ * `_coords.json` for the map (as `npm run import:photos` does) — never back
+ * into the published photo file.
  */
-export async function captureTime(file: File): Promise<number | null> {
-  if (!/jpe?g/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) return null;
+export async function readExif(file: File): Promise<PhotoFacts> {
+  if (!/jpe?g/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) return { taken: null };
   const b = new DataView(await file.slice(0, 256 * 1024).arrayBuffer());
   try {
     let i = 2;
@@ -62,10 +73,10 @@ export async function captureTime(file: File): Promise<number | null> {
       i += 2 + len;
     }
   } catch { /* unreadable EXIF: treat as none */ }
-  return null;
+  return { taken: null };
 }
 
-function fromExif(b: DataView, t: number): number | null {
+function fromExif(b: DataView, t: number): PhotoFacts {
   const le = b.getUint16(t) === 0x4949;
   const u16 = (o: number) => b.getUint16(t + o, le);
   const u32 = (o: number) => b.getUint32(t + o, le);
@@ -74,19 +85,44 @@ function fromExif(b: DataView, t: number): number | null {
     for (let k = 0; k < n - 1; k++) s += String.fromCharCode(b.getUint8(t + o + k));
     return s;
   };
+  /** An IFD entry: its count, its value/offset word, and where that word sits. */
   const find = (ifd: number, tag: number) => {
     const n = u16(ifd);
     for (let k = 0; k < n; k++) {
       const e = ifd + 2 + k * 12;
-      if (u16(e) === tag) return { count: u32(e + 4), value: u32(e + 8) };
+      if (u16(e) === tag) return { count: u32(e + 4), value: u32(e + 8), at: e + 8 };
     }
     return null;
   };
   const ifd0 = u32(4);
+  const out: PhotoFacts = { taken: null };
+
   const exifPtr = find(ifd0, 0x8769);
   const stamp = (exifPtr && find(exifPtr.value, 0x9003)) || find(ifd0, 0x0132);
-  if (!stamp) return null;
-  // "YYYY:MM:DD HH:MM:SS", read as local time like the laptop importer does.
-  const m = ascii(stamp.value, stamp.count).match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : null;
+  if (stamp) {
+    // "YYYY:MM:DD HH:MM:SS", read as local time like the laptop importer does.
+    const m = ascii(stamp.value, stamp.count).match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+    if (m) out.taken = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+  }
+
+  const gpsPtr = find(ifd0, 0x8825);
+  if (gpsPtr) {
+    const g = gpsPtr.value;
+    // Refs are 2-byte ASCII ("N\0"), stored inside the entry itself.
+    const ref = (tag: number) => { const e = find(g, tag); return e ? String.fromCharCode(b.getUint8(t + e.at)) : ''; };
+    const dms = (tag: number) => {
+      const e = find(g, tag);
+      if (!e || e.count !== 3) return null;
+      const r = (k: number) => u32(e.value + k * 8) / (u32(e.value + k * 8 + 4) || 1);
+      return r(0) + r(1) / 60 + r(2) / 3600;
+    };
+    const lat = dms(2);
+    const lng = dms(4);
+    // 0,0 is what some cameras write when they have no fix.
+    if (lat != null && lng != null && (lat || lng) && lat <= 90 && lng <= 180) {
+      out.lat = ref(1) === 'S' ? -lat : lat;
+      out.lng = ref(3) === 'W' ? -lng : lng;
+    }
+  }
+  return out;
 }

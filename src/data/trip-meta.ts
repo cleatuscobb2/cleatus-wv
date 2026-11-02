@@ -107,14 +107,17 @@ export const COUNTRY_NUMERIC: Record<string, string> = Object.fromEntries(
 );
 
 /**
- * Places with no drawable polygon at 110m resolution — Singapore is below the
- * dataset's threshold, Hong Kong is folded into China. Plotted as point markers
- * so the map is complete rather than quietly missing two countries.
- * [longitude, latitude].
+ * Places with no drawable polygon at 110m resolution — Singapore, Andorra,
+ * Liechtenstein and the Maldives are below the dataset's threshold, Hong Kong is
+ * folded into China. Plotted as point markers so the map is complete rather than
+ * quietly missing them. [longitude, latitude].
  */
 export const POINT_MARKERS: Record<string, [number, number]> = {
   SG: [103.8198, 1.3521],
   HK: [114.1694, 22.3193],
+  AD: [1.5218, 42.5063],
+  LI: [9.5554, 47.166],
+  MV: [73.5093, 4.1755],
 };
 
 /** Continent per country, for the overview page. */

@@ -101,7 +101,18 @@ add entries straight away. Options: `--short` (the name used in nav and on cards
 Countries are two-letter codes — `CL`, `AR`, `NP`. Every country in the world is
 already known to the site (`src/data/countries.ts`), so a new one appears on the
 map and in Places without anything else to do. A few that are too small for the
-map's outlines — the Maldives, say — are listed under the map instead.
+map's outlines — Andorra, Liechtenstein, the Maldives, Singapore — are drawn as
+dots instead.
+
+### Travel with no entries
+
+The map counts everywhere you've been, not only the trips written up here. That
+list — copied from Andy's "Countries I've Been" spreadsheet — lives in
+`src/data/been-to.ts`: one line per country, with the months you were there
+(`FR: ['2019-06', '2019-08']`). Countries in it with no entries are shaded a
+darker teal on the map, and each month shows as a dot under the trips on the
+timeline. To add a trip, add its month to the country's line (or a new line). A
+month still in the future is left off until the site is next rebuilt after it.
 
 Then open the trip file and write the **summary** — two sentences, your words.
 That's the only part nothing else can do for you.
@@ -356,6 +367,7 @@ original is always still in `raw/`, which is never touched.
 content/inbox/          drop plain .md files here
 src/content/entries/    the entries, one folder per trip
 src/content/trips/      one file per trip: title, dates, summary, hero
+src/data/been-to.ts     every country you've been, by month — for the map
 src/content/people/     guides, cooks, porters — empty until you fill it
 src/content/retrospectives/   looking back, years later
 assets/photos/          every photograph

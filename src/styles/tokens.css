@@ -36,6 +36,13 @@
   /* Same problem, cold side: --rime is 1.43:1 on --snow. This is 5.17:1. */
   --color-rime-on-light: #186e7f;
 
+  /*
+   * Map only: a country they've been to but haven't written about. Rime, dimmed —
+   * not a new accent. Sits between unvisited land (#4e5a69, ΔE 15.6) and --rime,
+   * and stays apart from land under deuteranopia (ΔE 13.9).
+   */
+  --color-been: #3a8f9c;
+
   --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
   --font-body: 'Source Serif 4', ui-serif, Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;

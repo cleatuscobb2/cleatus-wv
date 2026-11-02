@@ -9,6 +9,11 @@
  *
  * Bars are widened to a legible minimum, so a nine-day trip is still clickable;
  * position is always true, width is floored. Zero client JS.
+ *
+ * Below the bars, a lane of dots: travel with no entries (src/data/been-to.ts),
+ * one dot per month. A visit far older than everything else (Czechoslovakia,
+ * 1988) would squash the other twenty years into a corner, so it sits in a stub
+ * before a broken axis instead — position is true on either side of the break.
  */
 interface Trip {
   id: string;
@@ -21,15 +26,39 @@ interface Trip {
   /** ISO alpha-2 codes, so the map can draw leader lines to them on hover. */
   countries?: string[];
 }
+interface Visit {
+  /** 'YYYY-MM' */
+  month: string;
+  countries: string[];
+  /** "France, Germany & Switzerland" */
+  label: string;
+}
 interface Props {
   trips: Trip[];
+  visits?: Visit[];
   class?: string;
 }
-const { trips, class: klass = '' } = Astro.props;
+const { trips, visits = [], class: klass = '' } = Astro.props;
 
 const sorted = [...trips].sort((a, b) => +a.dateStart - +b.dateStart);
-const t0 = +sorted[0].dateStart;
-const t1 = +sorted[sorted.length - 1].dateEnd;
+const mid = (month: string) => Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 15);
+
+/** Years of silence before the axis breaks rather than stretches. */
+const BREAK_MS = 8 * 365.25 * 864e5;
+const visitTimes = visits.map((v) => mid(v.month)).sort((a, b) => a - b);
+// Walk back from the first written-up trip; a silence longer than BREAK_MS
+// starts the stub, and everything before it goes there.
+const lead = [...visitTimes.filter((t) => t < +sorted[0].dateStart), +sorted[0].dateStart];
+let firstMain = lead[0];
+for (let i = 1; i < lead.length; i++) if (lead[i] - lead[i - 1] > BREAK_MS) firstMain = lead[i];
+const early = visits.filter((v) => mid(v.month) < firstMain).sort((a, b) => a.month.localeCompare(b.month));
+const main = visits.filter((v) => mid(v.month) >= firstMain);
+
+// From 1 January, so the first year gets its tick and label.
+const t0 = Date.UTC(new Date(firstMain).getUTCFullYear(), 0, 1);
+// To 31 December of the last year, so its label has room inside the track.
+const tLast = Math.max(+sorted[sorted.length - 1].dateEnd, ...main.map((v) => mid(v.month)));
+const t1 = Date.UTC(new Date(tLast).getUTCFullYear(), 11, 31);
 const span = Math.max(1, t1 - t0);
 
 const pct = (t: number) => ((t - t0) / span) * 100;
@@ -52,36 +81,63 @@ const bars = sorted.map((t) => {
 // Year ticks across the whole span.
 const firstYear = new Date(t0).getUTCFullYear();
 const lastYear = new Date(t1).getUTCFullYear();
-const ticks: { year: number; at: number; flip: boolean }[] = [];
+const ticks: { year: number; at: number; major: boolean; flip: boolean }[] = [];
 for (let y = firstYear; y <= lastYear; y++) {
   const at = pct(Date.UTC(y, 0, 1));
   if (at >= -2 && at <= 102) {
     const clamped = Math.max(0, Math.min(100, at));
-    // A label near the right edge would push the page wider than the viewport,
-    // so the last few hang to the left of their tick instead.
-    ticks.push({ year: y, at: clamped, flip: clamped > 88 });
+    // On a phone only every fifth year keeps its label, and one near the right
+    // edge would push the page wider than the viewport, so it hangs to the left
+    // of its tick there instead (the flip only applies in the narrow layout).
+    ticks.push({ year: y, at: clamped, major: y % 5 === 0, flip: clamped > 85 });
   }
 }
 
 // Stack overlapping bars so nothing is hidden behind anything else.
-const rows: { end: number }[] = [];
-const placed = bars.map((b) => {
-  let row = rows.findIndex((r) => b.left > r.end + 0.6);
-  if (row === -1) { rows.push({ end: b.left + b.width }); row = rows.length - 1; }
-  else rows[row].end = b.left + b.width;
-  return { ...b, row };
-});
-const rowCount = Math.max(1, rows.length);
+function stack<T>(items: T[], from: (x: T) => number, to: (x: T) => number, gap: number) {
+  const rows: number[] = [];
+  const placed = items.map((x) => {
+    let row = rows.findIndex((end) => from(x) > end + gap);
+    if (row === -1) { rows.push(to(x)); row = rows.length - 1; }
+    else rows[row] = to(x);
+    return { ...x, row };
+  });
+  return { placed, rowCount: Math.max(1, rows.length) };
+}
+const { placed, rowCount } = stack(bars, (b) => b.left, (b) => b.left + b.width, 0.6);
+
+/*
+ * Dots: centred on mid-month, kept clear of the track's ends, and stacked when
+ * two months would overlap (a dot is ~0.9% of the widest track).
+ */
+const DOT = 0.9;
+const dots = stack(
+  [...main].sort((a, b) => a.month.localeCompare(b.month)).map((v) => ({
+    ...v,
+    at: Math.max(DOT / 2, Math.min(100 - DOT / 2, pct(mid(v.month)))),
+  })),
+  (d) => d.at - DOT / 2,
+  (d) => d.at + DOT / 2,
+  0.15,
+);
 
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fmtMonth = (month: string) =>
+  new Date(mid(month)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYear;
 ---
 
-<nav class={`tl ${klass}`} aria-label={`Timeline of ${sorted.length} trips, ${firstYear} to ${lastYear}`}>
+<nav class={`tl ${klass}`} aria-label={`Timeline of ${sorted.length} written-up trips, ${firstYear} to ${lastYear}`} style={early.length ? '' : '--stub:0'}>
+  {early.length > 0 && (
+    <div class="tl__stubaxis" aria-hidden="true">
+      <span class="mono tl__year">{earliestYear}</span>
+    </div>
+  )}
   <div class="tl__axis" aria-hidden="true">
     {ticks.map((t) => (
       <span class="tl__tick" style={`left:${t.at}%`}>
-        <span class={t.flip ? 'mono tl__year tl__year--flip' : 'mono tl__year'}>{t.year}</span>
+        <span class:list={['mono tl__year', { 'tl__year--flip': t.flip, 'tl__year--minor': !t.major }]}>{t.year}</span>
       </span>
     ))}
   </div>
@@ -103,17 +159,69 @@ const fmt = (d: Date) =>
       </a>
     ))}
   </div>
+
+  {visits.length > 0 && (
+    <>
+      {/* Dots carry no text of their own: the list under the map names every
+          country and year, so the lane is a picture of the rhythm, not the record. */}
+      <p class="mono tl__lanehead" aria-hidden="true">Other travel, no entries</p>
+      {early.length > 0 && (
+        <div class="tl__stub" aria-hidden="true">
+          {early.map((v) => (
+            <span class="tl__visit" data-countries={v.countries.join(',')} data-title={v.label} data-when={fmtMonth(v.month)}></span>
+          ))}
+        </div>
+      )}
+      <div class="tl__visits" style={`--rows:${dots.rowCount}`} aria-hidden="true">
+        {dots.placed.map((d) => (
+          <span
+            class="tl__visit"
+            style={`left:${d.at}%; --row:${d.row}`}
+            data-countries={d.countries.join(',')}
+            data-title={d.label}
+            data-when={fmtMonth(d.month)}
+          ></span>
+        ))}
+      </div>
+    </>
+  )}
 </nav>
 
 <style>
   .tl {
     max-width: 68rem;
     margin-inline: auto;
+    display: grid;
+    /* Column 1 is the stub before the broken axis; 0 when there is nothing in it. */
+    grid-template-columns: var(--stub, 3.25rem) minmax(0, 1fr);
   }
   .tl__axis {
+    grid-column: 2;
+    grid-row: 1;
     position: relative;
     height: 1.4rem;
     border-bottom: 1px solid var(--color-rule-dark);
+  }
+  .tl__stubaxis {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    height: 1.4rem;
+    margin-right: 1.1rem;
+    border-bottom: 1px solid var(--color-rule-dark);
+  }
+  .tl__stubaxis .tl__year { left: 0; }
+  /* The break: two short slashes where the axis stops and starts again. */
+  .tl__stubaxis::after {
+    content: '';
+    position: absolute;
+    right: -0.85rem;
+    bottom: -0.3rem;
+    width: 0.55rem;
+    height: 0.6rem;
+    border-left: 1px solid var(--color-stone-on-dark);
+    border-right: 1px solid var(--color-stone-on-dark);
+    transform: skewX(-30deg);
   }
   .tl__tick {
     position: absolute;
@@ -131,12 +239,10 @@ const fmt = (d: Date) =>
     color: var(--color-stone-on-dark);
     white-space: nowrap;
   }
-  .tl__year--flip {
-    left: auto;
-    right: 3px;
-  }
 
   .tl__track {
+    grid-column: 2;
+    grid-row: 2;
     position: relative;
     height: calc(var(--rows) * 2.05rem);
     margin-top: 0.5rem;
@@ -183,6 +289,56 @@ const fmt = (d: Date) =>
        the bar wider than its slot. */
     min-width: 0;
   }
+  .tl__lanehead {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 0.9rem 0 0.45rem;
+    font-size: 0.5625rem;
+    color: var(--color-stone-on-dark);
+  }
+  .tl__visits {
+    grid-column: 2;
+    grid-row: 4;
+    position: relative;
+    height: calc(var(--rows) * 0.8rem);
+  }
+  .tl__stub {
+    grid-column: 1;
+    grid-row: 4;
+    display: flex;
+    gap: 0.2rem;
+    align-items: flex-start;
+  }
+  .tl__visit {
+    display: block;
+    position: relative;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    /* "Been, not written up" — the same teal as those countries on the map. */
+    background: var(--color-been);
+    box-shadow: 0 0 0 1px var(--color-ink);
+    transition: background 150ms ease, opacity 150ms ease;
+  }
+  .tl__visits .tl__visit {
+    position: absolute;
+    top: calc(var(--row) * 0.8rem);
+    transform: translateX(-50%);
+  }
+  /* A hit target bigger than the mark. */
+  .tl__visit::before {
+    content: '';
+    position: absolute;
+    inset: -0.3rem;
+  }
+  .tl__visit:hover,
+  .tl__visit[data-linked] {
+    background: var(--color-headlamp);
+    z-index: 2;
+  }
+  [data-tracing] .tl__visit:not([data-linked]) {
+    opacity: 0.35;
+  }
   .sr-only {
     position: absolute;
     width: 1px; height: 1px;
@@ -205,5 +361,12 @@ const fmt = (d: Date) =>
       min-width: 3px;
     }
     .tl__track { height: calc(var(--rows) * 1.4rem); }
+    .tl__year--minor { display: none; }
+    .tl__year--flip { left: auto; right: 3px; }
+    .tl { grid-template-columns: var(--stub, 2.6rem) minmax(0, 1fr); }
+    .tl__stubaxis { margin-right: 0.9rem; }
+    .tl__visit { width: 0.45rem; height: 0.45rem; }
+    .tl__visits .tl__visit { top: calc(var(--row) * 0.6rem); }
+    .tl__visits { height: calc(var(--rows) * 0.6rem); }
   }
 </style>

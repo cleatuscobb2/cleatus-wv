@@ -23,8 +23,11 @@ import world from 'world-atlas/countries-110m.json';
 import Base from '../layouts/Base.astro';
 import Timeline from '../components/Timeline.astro';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
+import { beenTo, yearSpans } from '../data/been-to.ts';
 
 const trips = await getCollection('trips');
+/** Every country they've been to, from the travel log; trips with entries are a subset. */
+const been = beenTo();
 
 /** numeric id → the trips that touched it */
 const visited = new Map<string, typeof trips>();
@@ -36,6 +39,19 @@ for (const t of trips) {
   }
 }
 const alphaOf = new Map(Object.entries(COUNTRY_NUMERIC).map(([a, n]) => [n, a]));
+
+const tripsIn = (code: string) => trips.filter((t) => t.data.countries.includes(code));
+/** "been 2005, 2009, 2012–14" — or nothing, when the log has no dates for it. */
+const beenNote = (code: string) => (been[code]?.length ? `been ${yearSpans(been[code])}` : '');
+/** Hover text for a country: its trips with entries first, then every year they were there. */
+function titleOf(code: string, fallback = code) {
+  const name = COUNTRY_NAMES[code] ?? fallback;
+  const ts = tripsIn(code);
+  const parts = ts.length
+    ? [`${ts.length} ${ts.length === 1 ? 'trip' : 'trips'} written up: ${ts.map((t) => t.data.year).sort().join(', ')}`, beenNote(code)]
+    : [beenNote(code) || 'been, date not recorded', 'no entries yet'];
+  return `${name} — ${parts.filter(Boolean).join(' · ')}`;
+}
 
 const W = 1000;
 const H = 500;
@@ -49,12 +65,15 @@ const shapes = fc.features.map((f) => {
   const id = String(f.id ?? '');
   const ts = visited.get(id);
   const c = path.centroid(f as never);
+  const alpha = alphaOf.get(id) ?? null;
   return {
     id,
     d: path(f as never) ?? '',
     name: f.properties?.name ?? '',
     trips: ts ?? [],
-    alpha: alphaOf.get(id) ?? null,
+    alpha,
+    /** Been there, with no entries to link to. */
+    beenOnly: !ts && !!alpha && alpha in been,
     cx: Number.isFinite(c[0]) ? c[0] : null,
     cy: Number.isFinite(c[1]) ? c[1] : null,
   };
@@ -63,41 +82,68 @@ const shapes = fc.features.map((f) => {
 const graticule = path(geoGraticule10() as never) ?? '';
 const sphere = path({ type: 'Sphere' } as never) ?? '';
 
-const allCodes = [...new Set(trips.flatMap((t) => t.data.countries))];
+/** Countries with entries — the ones that link to a places page. */
+const writtenCodes = [...new Set(trips.flatMap((t) => t.data.countries))];
+const allCodes = [...new Set([...writtenCodes, ...Object.keys(been)])];
+const beenOnlyCodes = allCodes
+  .filter((c) => !writtenCodes.includes(c))
+  .sort((a, b) => (COUNTRY_NAMES[a] ?? a).localeCompare(COUNTRY_NAMES[b] ?? b));
 
 /*
- * Singapore is below the 110m dataset's size threshold and Hong Kong is folded
- * into China, so both would silently vanish. They get point markers instead.
+ * Singapore, Andorra, Liechtenstein and the Maldives are below the 110m
+ * dataset's size threshold and Hong Kong is folded into China, so they would
+ * silently vanish. They get point markers instead.
  */
-const drawn = new Set(shapes.filter((s) => s.trips.length > 0 && s.alpha).map((s) => s.alpha as string));
+const drawn = new Set(shapes.filter((s) => (s.trips.length > 0 || s.beenOnly) && s.alpha).map((s) => s.alpha as string));
 const points = allCodes
   .filter((c) => !drawn.has(c) && POINT_MARKERS[c])
   .map((c) => {
     const [x, y] = projection(POINT_MARKERS[c]) ?? [0, 0];
-    return { code: c, name: COUNTRY_NAMES[c] ?? c, x, y, trips: trips.filter((t) => t.data.countries.includes(c)) };
+    return { code: c, name: COUNTRY_NAMES[c] ?? c, x, y, trips: tripsIn(c) };
   });
 
 const stillMissing = allCodes.filter((c) => !drawn.has(c) && !POINT_MARKERS[c]);
 const visitedCount = drawn.size + points.length;
+const undated = allCodes.filter((c) => !tripsIn(c).length && !been[c]?.length);
 
 /** Anchor points the connector lines aim at, keyed by country code. */
 const anchors = [
   ...shapes
-    .filter((s) => s.trips.length > 0 && s.alpha && s.cx != null && s.cy != null)
+    .filter((s) => (s.trips.length > 0 || s.beenOnly) && s.alpha && s.cx != null && s.cy != null)
     .map((s) => ({ code: s.alpha as string, x: s.cx as number, y: s.cy as number })),
   ...points.map((p) => ({ code: p.code, x: p.x, y: p.y })),
 ];
+
+/*
+ * The timeline's second lane: months in the travel log that no written-up trip
+ * covers — the trip has to name the country and span the month. One dot per
+ * month, however many countries it took in.
+ */
+const monthOf = (d: Date) => d.toISOString().slice(0, 7);
+const covered = (code: string, month: string) =>
+  tripsIn(code).some((t) => monthOf(t.data.dateStart) <= month && month <= monthOf(t.data.dateEnd));
+const byMonth = new Map<string, string[]>();
+for (const [code, months] of Object.entries(been)) {
+  for (const m of months) if (!covered(code, m)) byMonth.set(m, [...(byMonth.get(m) ?? []), code]);
+}
+const listOf = (names: string[]) =>
+  names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+const visits = [...byMonth.entries()].map(([month, codes]) => {
+  const sortedCodes = [...codes].sort((a, b) => (COUNTRY_NAMES[a] ?? a).localeCompare(COUNTRY_NAMES[b] ?? b));
+  return { month, countries: sortedCodes, label: listOf(sortedCodes.map((c) => COUNTRY_NAMES[c] ?? c)) };
+});
 ---
 
 <Base
   title="Map"
-  description={`Every country Andy and Beth have written from — ${allCodes.length} of them across ${trips.length} trips, 2009 to now.`}
+  description={`Every country Andy and Beth have been to — ${allCodes.length} of them, ${writtenCodes.length} written about across ${trips.length} trips.`}
 >
   <header class="head">
     <h1 class="display">Map</h1>
     <p class="head__note">
-      {allCodes.length} countries, {trips.length} trips. Hover a country to see when
-      they were there, or hover a trip on the timeline to see everywhere it went.
+      {allCodes.length} countries so far, {writtenCodes.length} of them written up
+      across {trips.length} trips. Hover a country to see when they were there, or
+      a trip on the timeline to see everywhere it went.
     </p>
   </header>
 
@@ -108,33 +154,40 @@ const anchors = [
 
     {/* Labelled <nav>, not role="img": the countries are links, and declaring the
         whole map a single graphic conflicts with that (axe: nested-interactive). */}
-    <nav aria-label={`World map with ${visitedCount} countries marked, each linking to its entries`}>
+    <nav aria-label={`World map with ${visitedCount} countries marked; the ${writtenCodes.length} with entries link to them`}>
     <svg viewBox={`0 0 ${W} ${H}`} focusable="false" class="worldmap">
       <path d={sphere} class="m-sphere" />
       <path d={graticule} class="m-grat" />
       {shapes.map((s) => (
         s.trips.length > 0 && s.alpha ? (
           <a href={`/places/${s.alpha.toLowerCase()}/`} class="m-link" data-cc-link={s.alpha}>
-            <title>
-              {COUNTRY_NAMES[s.alpha] ?? s.name} — {s.trips.length}{' '}
-              {s.trips.length === 1 ? 'trip' : 'trips'}:{' '}
-              {s.trips.map((t) => t.data.year).join(', ')}
-            </title>
+            <title>{titleOf(s.alpha, s.name)}</title>
             <path d={s.d} class="m-country m-country--visited" />
           </a>
+        ) : s.beenOnly && s.alpha ? (
+          /* Nothing to link to yet, so a plain group — but it still lights up
+             when a dot on the timeline traces to it. */
+          <g class="m-been" data-cc-link={s.alpha}>
+            <title>{titleOf(s.alpha, s.name)}</title>
+            <path d={s.d} class="m-country m-country--been" />
+          </g>
         ) : (
           <path d={s.d} class="m-country" />
         )
       ))}
 
       {points.map((p) => (
-        <a href={`/places/${p.code.toLowerCase()}/`} class="m-link" data-cc-link={p.code}>
-          <title>
-            {p.name} — {p.trips.length} {p.trips.length === 1 ? 'trip' : 'trips'}:{' '}
-            {p.trips.map((t) => t.data.year).join(', ')}
-          </title>
-          <circle cx={p.x} cy={p.y} r="4" class="m-point" />
-        </a>
+        p.trips.length > 0 ? (
+          <a href={`/places/${p.code.toLowerCase()}/`} class="m-link" data-cc-link={p.code}>
+            <title>{titleOf(p.code)}</title>
+            <circle cx={p.x} cy={p.y} r="4" class="m-point" />
+          </a>
+        ) : (
+          <g class="m-been" data-cc-link={p.code}>
+            <title>{titleOf(p.code)}</title>
+            <circle cx={p.x} cy={p.y} r="3.5" class="m-point m-point--been" />
+          </g>
+        )
       ))}
 
       {/* Invisible targets the leader lines aim at. Kept inside the map's own
@@ -147,8 +200,12 @@ const anchors = [
     </nav>
 
     <figcaption class="mono">
+      <span class="key">
+        <span class="key__item"><span class="key__swatch key__swatch--written"></span>Written up — click through</span>
+        <span class="key__item"><span class="key__swatch key__swatch--been"></span>Been, no entries yet</span>
+      </span>
       Country level, not route level — there is no GPS in the archive to plot.
-      {points.length > 0 && ` ${points.map((p) => p.name).join(' and ')} marked as points; too small to draw at this scale.`}
+      {points.length > 0 && ` ${listOf(points.map((p) => p.name))} marked as points; too small to draw at this scale.`}
       {stillMissing.length > 0 && ` Not shown: ${stillMissing.map((c) => COUNTRY_NAMES[c] ?? c).join(', ')}.`}
     </figcaption>
 
@@ -166,19 +223,22 @@ const anchors = [
           entries: t.data.stats.entries,
           countries: t.data.countries,
         }))}
+        visits={visits}
       />
       <p class="mono tlwrap__caption">
-        Spaced by real time — the gaps are the gaps. Bars are widened to stay
-        clickable, so a nine-day trip looks longer than it was.
+        Spaced by real time — the gaps are the gaps. Bars are the trips with
+        entries, widened to stay clickable, so a nine-day trip looks longer than it
+        was. Dots are every other month away, from their travel log.
+        {undated.length > 0 && ` No dates recorded for ${listOf(undated.map((c) => COUNTRY_NAMES[c] ?? c))}, so they're on the map but not here.`}
       </p>
     </div>
   </figure>
 
   <section class="legend">
-    <h2 class="mono legend__head">Where they went</h2>
+    <h2 class="mono legend__head">Written up</h2>
     <ul>
-      {allCodes
-        .map((c) => ({ c, name: COUNTRY_NAMES[c] ?? c, n: trips.filter((t) => t.data.countries.includes(c)).length }))
+      {writtenCodes
+        .map((c) => ({ c, name: COUNTRY_NAMES[c] ?? c, n: tripsIn(c).length }))
         .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
         .map((x) => (
           <li>
@@ -188,6 +248,19 @@ const anchors = [
           </li>
         ))}
     </ul>
+
+    {beenOnlyCodes.length > 0 && (
+      <>
+        <h2 class="mono legend__head legend__head--been">Been, no entries yet</h2>
+        <ul>
+          {beenOnlyCodes.map((c) => (
+            <li class="mono legend__been">
+              {COUNTRY_NAMES[c] ?? c} <span class="legend__yrs">{been[c]?.length ? yearSpans(been[c]) : 'undated'}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
   </section>
 </Base>
 
@@ -202,7 +275,8 @@ const anchors = [
     if (!wrap) return;
     var overlay = wrap.querySelector('[data-map-overlay]');
     var callout = wrap.querySelector('[data-map-callout]');
-    var bars = [].slice.call(wrap.querySelectorAll('.tl__bar'));
+    // Trip bars, and the travel-log dots in the lane beneath them.
+    var bars = [].slice.call(wrap.querySelectorAll('.tl__bar, .tl__visit'));
     if (!overlay || !callout || !bars.length) return;
 
     var NS = 'http://www.w3.org/2000/svg';
@@ -380,6 +454,21 @@ const anchors = [
     fill: var(--color-headlamp);
     r: 6;
   }
+  .m-country--been {
+    fill: var(--color-been);
+    stroke: #0a0e13;
+    stroke-width: 0.5;
+    transition: fill 150ms ease;
+  }
+  .m-point--been {
+    fill: var(--color-been);
+    stroke: #0a0e13;
+    stroke-width: 1;
+  }
+  .m-been[data-lit] .m-country--been,
+  .m-been[data-lit] .m-point--been {
+    fill: var(--color-headlamp);
+  }
   .m-anchor { fill: none; stroke: none; pointer-events: none; }
 
   /* While one trip is traced the other countries stand down, but stay clearly
@@ -432,6 +521,11 @@ const anchors = [
     color: var(--color-stone-on-dark);
     font-size: 0.625rem;
   }
+  .key { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-bottom: 0.5rem; }
+  .key__item { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .key__swatch { width: 0.8rem; height: 0.6rem; display: inline-block; }
+  .key__swatch--written { background: var(--color-rime); }
+  .key__swatch--been { background: var(--color-been); }
 
   .tlwrap {
     max-width: 68rem;
@@ -473,4 +567,11 @@ const anchors = [
   }
   .legend a:hover { border-color: var(--color-ink); color: var(--color-ink); }
   .legend__n { color: var(--color-ember); }
+  .legend__head--been { margin-top: 1.6rem; }
+  .legend__been {
+    padding: 0.3rem 0.6rem;
+    border: 1px dashed var(--color-rule);
+    color: var(--color-stone);
+  }
+  .legend__yrs { color: var(--color-rime-on-light); }
 </style>

@@ -35,6 +35,69 @@ function slim(c: unknown): unknown {
   return arr;
 }
 
+/*
+ * The antimeridian. Russia (Chukotka, Wrangel Island) and Fiji have rings whose
+ * edges jump from +179.9° to −180°; a web map draws that jump the long way round
+ * the world — a band circling the pole and a stray wedge across Europe. So each
+ * ring is first made continuous (no step wider than 180°), then any polygon that
+ * spills past ±180° is cut there into a piece on each side, the far piece moved
+ * back by 360°.
+ */
+type Ring = number[][];
+
+function unwrap(ring: Ring): Ring {
+  const out: Ring = [[...ring[0]]];
+  for (let i = 1; i < ring.length; i++) {
+    let x = ring[i][0];
+    const prev = out[i - 1][0];
+    while (x - prev > 180) x -= 360;
+    while (x - prev < -180) x += 360;
+    out.push([x, ring[i][1]]);
+  }
+  // Keep the bulk of the ring in [-180, 180].
+  const mid = (Math.min(...out.map((p) => p[0])) + Math.max(...out.map((p) => p[0]))) / 2;
+  const shift = mid > 180 ? -360 : mid < -180 ? 360 : 0;
+  return shift ? out.map(([x, y]) => [x + shift, y]) : out;
+}
+
+/** Sutherland–Hodgman against one vertical line: keep the side where `keep(x)` holds. */
+function clipAt(ring: Ring, at: number, keep: (x: number) => boolean): Ring {
+  const out: Ring = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [ax, ay] = ring[i];
+    const [bx, by] = ring[i + 1];
+    const ain = keep(ax);
+    const bin = keep(bx);
+    if (ain) out.push([ax, ay]);
+    if (ain !== bin) out.push([at, ay + ((at - ax) / (bx - ax)) * (by - ay)]);
+  }
+  if (out.length) out.push([...out[0]]);
+  return out.length >= 4 ? out : [];
+}
+
+function splitPolygon(poly: Ring[]): Ring[][] {
+  const rings = poly.map(unwrap);
+  const xs = rings.flatMap((r) => r.map((p) => p[0]));
+  const lo = Math.min(...xs);
+  const hi = Math.max(...xs);
+  if (hi <= 180 && lo >= -180) return [rings];
+  const at = hi > 180 ? 180 : -180;
+  const shift = hi > 180 ? -360 : 360;
+  const near = rings.map((r) => clipAt(r, at, (x) => (hi > 180 ? x <= at : x >= at)));
+  const far = rings
+    .map((r) => clipAt(r, at, (x) => (hi > 180 ? x >= at : x <= at)))
+    .map((r) => r.map(([x, y]) => [x + shift, y]));
+  // A hole only survives on a side where its outer ring does.
+  return [near, far].filter((side) => side[0]?.length).map((side) => side.filter((r) => r.length));
+}
+
+function mendAntimeridian(g: Geom): Geom {
+  if (g.type !== 'Polygon' && g.type !== 'MultiPolygon') return g;
+  const polys = (g.type === 'Polygon' ? [g.coordinates] : g.coordinates) as Ring[][];
+  const out = polys.flatMap(splitPolygon);
+  return out.length === 1 ? { type: 'Polygon', coordinates: out[0] } : { type: 'MultiPolygon', coordinates: out };
+}
+
 /** Centre of the biggest piece — France's, not somewhere between Paris and Guiana. */
 function heartOf(g: Geom): [number, number] {
   if (g.type !== 'MultiPolygon') return geoCentroid(g as never) as [number, number];
@@ -43,7 +106,12 @@ function heartOf(g: Geom): [number, number] {
   return geoCentroid(big as never) as [number, number];
 }
 
-/** Bounds of the biggest piece too, unwrapped across the antimeridian (Fiji, Russia). */
+/**
+ * Bounds of the biggest piece, for flying to a country. One that wraps past the
+ * antimeridian (Russia's Chukotka) stops at 180°: a box whose east edge is past
+ * 180 is read by the map as wrapping the other way round the world, and the
+ * camera ends up over the Atlantic.
+ */
 function boxOf(g: Geom): [number, number, number, number] {
   let target: Geom = g;
   if (g.type === 'MultiPolygon') {
@@ -51,7 +119,7 @@ function boxOf(g: Geom): [number, number, number, number] {
     target = parts.sort((a, b) => geoArea(b as never) - geoArea(a as never))[0];
   }
   const [[w, s], [e, n]] = geoBounds(target as never);
-  return [w, s, e < w ? e + 360 : e, n];
+  return [w, s, e < w ? 180 : e, n];
 }
 
 export async function GET() {
@@ -83,6 +151,7 @@ export async function GET() {
     features: Feat[];
   }).features;
   const byNum = new Map(all.map((f) => [String(f.id), f]));
+  const alphaOf = new Map(Object.entries(COUNTRY_NUMERIC).map(([a, n]) => [n, a]));
   const countries: Feat[] = [];
   const hearts: Record<string, [number, number]> = {};
   const boxes: Record<string, [number, number, number, number]> = {};
@@ -107,7 +176,8 @@ export async function GET() {
     if (f) {
       hearts[code] = heartOf(f.geometry);
       boxes[code] = boxOf(f.geometry);
-      countries.push({ type: 'Feature', geometry: { type: f.geometry.type, coordinates: slim(f.geometry.coordinates) }, properties: { ...props, heart: hearts[code], box: boxes[code] } });
+      const geometry = mendAntimeridian({ type: f.geometry.type, coordinates: slim(f.geometry.coordinates) });
+      countries.push({ type: 'Feature', geometry, properties: { ...props, heart: hearts[code], box: boxes[code] } });
     } else if (POINT_MARKERS[code]) {
       // Too small for the dataset: a point the globe draws as a dot.
       const [x, y] = POINT_MARKERS[code];
@@ -142,7 +212,17 @@ export async function GET() {
   const tripOut = trips
     .sort((a, b) => +a.data.dateStart - +b.data.dateStart)
     .map((t) => {
-      const pts = located.filter((e) => tripIdOf(e) === t.id).map((e) => [e.data.location!.lng!, e.data.location!.lat!] as const);
+      // Stops in a country the trip doesn't list — a Brooklyn stopover, a Houston
+      // layover on the way out — would stretch the view across an ocean. Points
+      // just off the outlines (Venice, Hvar, the Galápagos) are in no country and stay.
+      const elsewhere = (lng: number, lat: number) =>
+        all.some((f) => {
+          const a = alphaOf.get(String(f.id));
+          return a && !t.data.countries.includes(a) && geoContains(f as never, [lng, lat]);
+        });
+      const pts = located
+        .filter((e) => tripIdOf(e) === t.id && !elsewhere(e.data.location!.lng!, e.data.location!.lat!))
+        .map((e) => [e.data.location!.lng!, e.data.location!.lat!] as const);
       const ccBoxes = t.data.countries.map((c) => boxes[c]).filter(Boolean);
       const src = pts.length >= 2
         ? pts.map(([x, y]) => [x, y, x, y] as const)

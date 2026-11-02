@@ -211,6 +211,13 @@ first editing screen exists — rather than after every screen is built locally.
    same editor. GPS is read in the browser before re-encoding and merged into
    the folder's `_coords.json` (same format as `import:photos`) — kept for the
    map at the owners' request (2026-11-02), never in the published file.
+   Added 2026-11-02 at the owners' request: **tags + Beth-cried** in the editor
+   (new and existing entries, validated against `tags.ts`), and **+ New trip…**
+   in the trip list — title, dates, countries, optional summary — committed in
+   the same commit as its first entry (`src/admin/trip-new.ts`, shared with
+   `npm run new:trip`), so the site never has an empty trip. The country picker
+   covers every ISO country (`src/data/countries.ts`, numeric codes checked
+   against world-atlas), not only the 28 already visited.
 
 1–2 need nothing from anyone. 3 needs the five set-up steps in §5, which can happen
 in parallel with 1–2.

@@ -81,7 +81,14 @@ Drafts are kept out of the built site until you set it back to `false`.
 
 ### Start a new trip
 
-Do this once per trip, before the first entry.
+**From any browser:** start writing its first entry (**New entry**), open the
+**Trip** list and choose **+ New trip…** at the bottom. Give it a title, a start
+date and its countries — the short name, end date and summary can wait. The
+trip goes on the site together with that first entry, as one change, and then
+appears under **Trips**, where its summary, hero photograph and end date can be
+filled in whenever you like.
+
+**On the laptop with the repo**, do this once per trip, before the first entry:
 
 ```bash
 npm run new:trip -- --title "Torres del Paine 2027" --countries CL,AR
@@ -91,9 +98,10 @@ It writes `src/content/trips/<slug>.mdx` and makes the entries folder, so you ca
 add entries straight away. Options: `--short` (the name used in nav and on cards),
 `--slug`, `--start`, `--end`, `--regions`.
 
-Countries are two-letter codes — `CL`, `AR`, `NP`. If you use one the site hasn't
-seen before it will tell you, and that country needs adding to
-`src/data/trip-meta.ts` or it won't appear on the map or in Places.
+Countries are two-letter codes — `CL`, `AR`, `NP`. Every country in the world is
+already known to the site (`src/data/countries.ts`), so a new one appears on the
+map and in Places without anything else to do. A few that are too small for the
+map's outlines — the Maldives, say — are listed under the map instead.
 
 Then open the trip file and write the **summary** — two sentences, your words.
 That's the only part nothing else can do for you.
@@ -151,6 +159,10 @@ cursor is, in the order they were taken — straight off a phone is fine. They a
 shrunk to the site's size, and **where each was taken is kept for the map**: it is
 saved to the entry's `_coords.json`, exactly as `import:photos` does, while the
 photo file itself is cleaned of all its hidden data.
+
+**Tags** sit above the text: tap the ones that fit (and **Beth cried**, where it
+applies). They're the same tags as on the Tags page, and the same row is in the
+editor for an entry that already exists.
 
 Tick **Draft — not on the site** to save it without publishing; untick it later
 in the same editor to publish. Photos and text land together, as one change.
@@ -282,6 +294,9 @@ tags: ["trekking", "altitude"]
 ```
 
 To add a new one, put it in `src/data/tags.ts` first.
+
+**One entry at a time:** the row of tags above the text in the entry editor
+(**New entry**, or **edit** next to an entry's title).
 
 **Tagging lots of entries at once — from any browser:**
 

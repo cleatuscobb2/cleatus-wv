@@ -7,9 +7,9 @@
  * Writes src/content/trips/<slug>.mdx and creates the entries folder, so
  * `npm run new:entry --trip <slug>` works immediately.
  *
- * The trip is created with `summaryNeedsReview: false` — you are writing this
- * one yourself, so `npm run gen:trips` will only ever refresh its derived stats
- * and will never overwrite what you wrote.
+ * The file is the same one /admin/new writes (src/admin/trip-new.ts): marked
+ * `handEdited: true`, so `npm run gen:trips` only ever refreshes its derived
+ * stats, and flagged for a summary until you write one.
  *
  * Countries use ISO 3166-1 alpha-2. Any code not already known to
  * src/data/trip-meta.ts is reported so it can be added there for the map.
@@ -19,6 +19,8 @@ import { existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC } from '../src/data/trip-meta.ts';
+import { newTripFile, tripSlugOf } from '../src/admin/trip-new.ts';
+import { daysBetween } from '../src/admin/trip-edit.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (n: string) => {
@@ -42,10 +44,7 @@ Usage: npm run new:trip -- --title "Torres del Paine 2027" [options]
   process.exit(1);
 }
 
-const slugify = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
-
-const slug = arg('slug') ?? slugify(title);
+const slug = arg('slug') ?? tripSlugOf(title);
 const short = arg('short') ?? title;
 const start = arg('start') ?? new Date().toISOString().slice(0, 10);
 const end = arg('end') ?? start;
@@ -66,29 +65,8 @@ if (existsSync(tripFile)) {
   process.exit(1);
 }
 
-const q = (s: unknown) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-const days = Math.max(1, Math.round((+new Date(end) - +new Date(start)) / 86400000) + 1);
-
-const body = `---
-title: ${q(title)}
-shortTitle: ${q(short)}
-year: ${Number(start.slice(0, 4))}
-dateStart: ${start}
-dateEnd: ${end}
-countries: [${countries.map(q).join(', ')}]
-regions: [${regions.map(q).join(', ')}]
-summary: ""
-# You are writing this trip, so gen:trips will only refresh the stats below and
-# will never overwrite the summary, hero or dates. Leave this false.
-summaryNeedsReview: false
-hero: null
-stats:
-  days: ${days}
-  entries: 0
-  countriesCount: ${countries.length}
-featured: false
----
-`;
+const days = daysBetween(start, end);
+const body = newTripFile({ id: slug, title, shortTitle: short, dateStart: start, dateEnd: end, countries, regions, summary: '' });
 
 await mkdir(join(ROOT, 'src/content/trips'), { recursive: true });
 await writeFile(tripFile, body, 'utf8');

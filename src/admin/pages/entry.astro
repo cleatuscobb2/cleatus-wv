@@ -1,8 +1,9 @@
 ---
 /**
- * /admin/entry/[trip]/[slug] — edit an entry's title, prose, photos, draft state.
+ * /admin/entry/[trip]/[slug] — edit an entry's title, prose, photos, tags, draft state.
  * /admin/new                 — write a new one (same editor, plus trip, date,
- *                              day, byline and web address).
+ *                              day, byline and web address). "New trip…" in the
+ *                              trip list starts a trip too, saved with the entry.
  *
  * The text as it's stored (Markdown, plus <Photo>, <PullQuote> and <Aside>) in a
  * plain textarea, with the page preview beside it, checked as you type. Not
@@ -22,6 +23,8 @@ import { HOSTED } from '../mode.ts';
 import { readMeta } from '../frontmatter.ts';
 import { readTrip } from '../trip-edit.ts';
 import { checkBody, renderPreview, splitEntry } from '../mdx.ts';
+import { TAGS, TAG_LABELS } from '../../data/tags.ts';
+import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
 
 export const prerender = false;
 
@@ -42,7 +45,10 @@ const trips = (await Promise.all(tripPaths.map(async (p) => {
 
 let path = '';
 let version = '';
-let meta = { title: '', date: new Date().toISOString().slice(0, 10), day: null as number | null, draft: false, authors: ['beth'] as string[] };
+let meta = {
+  title: '', date: new Date().toISOString().slice(0, 10), day: null as number | null, draft: false,
+  authors: ['beth'] as string[], tags: [] as string[], bethCried: false,
+};
 let body = '';
 let existingPhotos: string[] = [];
 const takenSlugs: Record<string, string[]> = {};
@@ -59,7 +65,7 @@ if (isNew) {
   try { file = await store.read(path); } catch { return notFound(); }
   version = file.version;
   const m = readMeta(file.text);
-  meta = { title: m.title, date: m.date, day: m.day, draft: m.draft, authors: m.authors };
+  meta = { title: m.title, date: m.date, day: m.day, draft: m.draft, authors: m.authors, tags: m.tags, bethCried: m.bethCried };
   body = splitEntry(file.text).body;
   existingPhotos = await store.listDir(`assets/photos/${tripParam}/${slugParam}`);
 }
@@ -67,11 +73,12 @@ if (isNew) {
 const tripShort = trips.find((t) => t.id === tripParam)?.short ?? tripParam;
 const first = checkBody(body);
 const saveLabel = HOSTED ? 'Review & publish' : 'Review & save';
+const countries = Object.entries(COUNTRY_NAMES).sort((a, b) => a[1].localeCompare(b[1]));
 const byKey = meta.authors.includes('andy') && meta.authors.includes('beth') ? 'both' : meta.authors.includes('andy') ? 'andy' : 'beth';
 
 const payload = JSON.stringify({
-  hosted: HOSTED, isNew, path, version, title: meta.title, body, draft: meta.draft,
-  trip: tripParam ?? trips[0]?.id ?? '', slug: slugParam ?? '', existingPhotos, takenSlugs,
+  hosted: HOSTED, isNew, path, version, title: meta.title, body, draft: meta.draft, tags: meta.tags, bethCried: meta.bethCried,
+  trip: tripParam ?? trips[0]?.id ?? '', slug: slugParam ?? '', existingPhotos, takenSlugs, tripIds: trips.map((t) => t.id),
 }).replace(/</g, '\\u003c');
 ---
 
@@ -90,7 +97,10 @@ const payload = JSON.stringify({
   {isNew && (
     <div class="ee-meta">
       <label class="ee-field"><span class="mono">Trip</span>
-        <select id="f-trip">{trips.map((t) => <option value={t.id}>{t.short}</option>)}</select>
+        <select id="f-trip">
+          {trips.map((t) => <option value={t.id}>{t.short}</option>)}
+          <option value="__new">+ New trip…</option>
+        </select>
       </label>
       <label class="ee-field"><span class="mono">Date</span><input type="date" id="f-date" value={meta.date} /></label>
       <label class="ee-field ee-field--day"><span class="mono">Trek day <em>(optional)</em></span><input type="number" id="f-day" min="1" max="999" /></label>
@@ -100,10 +110,18 @@ const payload = JSON.stringify({
         </select>
       </label>
       <label class="ee-field ee-field--slug"><span class="mono">Web address</span>
-        <span class="ee-slug"><span class="mono" id="slug-prefix"></span><input id="f-slug" pattern="[a-z0-9-]+" maxlength="80" /></span>
+        <span class="ee-slug"><span class="mono" id="slug-prefix"></span><input id="f-slug" pattern="[a-z0-9\-]+" maxlength="80" /></span>
       </label>
     </div>
   )}
+
+  <fieldset class="ee-tags">
+    <legend class="mono">Tags</legend>
+    {TAGS.map((t) => (
+      <label class="ee-tag"><input type="checkbox" name="tag" value={t} checked={meta.tags.includes(t)} /><span>{TAG_LABELS[t]}</span></label>
+    ))}
+    <label class="ee-tag ee-tag--cried"><input type="checkbox" id="f-cried" checked={meta.bethCried} /><span>Beth cried</span></label>
+  </fieldset>
 
   <div class="ee-panes">
     <section class="ee-pane" aria-labelledby="ee-src-h">
@@ -167,6 +185,33 @@ const payload = JSON.stringify({
     </div>
   </dialog>
 
+  {isNew && (
+    <dialog id="nt-dialog" aria-labelledby="nt-h">
+      <h2 id="nt-h" class="ad-h1 dlg-h">New trip</h2>
+      <p class="nt-lede">It goes on the site with this entry. Everything here can be changed later under <strong>Trips</strong>.</p>
+      <div class="nt-form">
+        <label class="ee-field nt-wide"><span class="mono">Title</span><input id="nt-title" maxlength="120" placeholder="Torres del Paine 2027" /></label>
+        <label class="ee-field nt-wide"><span class="mono">Short name <em>(for menus and cards — optional)</em></span><input id="nt-short" maxlength="40" placeholder="Same as the title" /></label>
+        <label class="ee-field"><span class="mono">Starts</span><input type="date" id="nt-start" /></label>
+        <label class="ee-field"><span class="mono">Ends <em>(optional)</em></span><input type="date" id="nt-end" /></label>
+        <div class="ee-field nt-wide"><span class="mono" id="nt-countries-l">Countries</span>
+          <ul class="nt-chips" id="nt-countries" aria-labelledby="nt-countries-l"></ul>
+          <select id="nt-add-country" aria-label="Add a country">
+            <option value="">Add a country…</option>
+            {countries.map(([code, name]) => <option value={code}>{name}</option>)}
+          </select>
+        </div>
+        <label class="ee-field nt-wide"><span class="mono">Summary <em>(optional — two sentences, your words; it can wait)</em></span><textarea id="nt-summary" maxlength="600" rows="3"></textarea></label>
+        <p class="mono nt-addr nt-wide">Web address <span id="nt-id"></span></p>
+      </div>
+      <p class="dlg-err" id="nt-error" role="alert"></p>
+      <div class="dlg-actions">
+        <button type="button" id="nt-cancel" class="btn">Cancel</button>
+        <button type="button" id="nt-ok" class="btn btn--primary">Use this trip</button>
+      </div>
+    </dialog>
+  )}
+
   <script type="application/json" id="entry-data" set:html={payload}></script>
 </AdminLayout>
 
@@ -177,7 +222,8 @@ const payload = JSON.stringify({
   interface Problem { line: number | null; message: string }
   const data = JSON.parse(document.getElementById('entry-data')!.textContent!) as {
     hosted: boolean; isNew: boolean; path: string; version: string; title: string; body: string; draft: boolean;
-    trip: string; slug: string; existingPhotos: string[]; takenSlugs: Record<string, string[]>;
+    tags: string[]; bethCried: boolean;
+    trip: string; slug: string; existingPhotos: string[]; takenSlugs: Record<string, string[]>; tripIds: string[];
   };
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const esc = (s: string) =>
@@ -187,7 +233,12 @@ const payload = JSON.stringify({
   const titleEl = $<HTMLInputElement>('f-title');
   const bodyEl = $<HTMLTextAreaElement>('f-body');
   const draftEl = $<HTMLInputElement>('f-draft');
-  let orig = { title: data.title, body: data.body, draft: data.draft };
+  const criedEl = $<HTMLInputElement>('f-cried');
+  const tagBoxes = [...document.querySelectorAll<HTMLInputElement>('input[name="tag"]')];
+  const tagsNow = () => tagBoxes.filter((b) => b.checked).map((b) => b.value);
+  const tagLabel = (t: string) => tagBoxes.find((b) => b.value === t)?.nextElementSibling?.textContent ?? t;
+  let orig = { title: data.title, body: data.body, draft: data.draft, tags: data.tags, bethCried: data.bethCried };
+  const tagsChanged = () => tagsNow().join() !== orig.tags.join() || criedEl.checked !== orig.bethCried;
   let problems: Problem[] = [];
   let pending = 0;
   let uploading = 0;
@@ -202,7 +253,7 @@ const payload = JSON.stringify({
   const stagedInBody = () => [...staged.keys()].filter((src) => bodyEl.value.includes(`src="${src}"`));
   const dirty = () => data.isNew
     ? !!(titleNow() || bodyEl.value.trim())
-    : titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body) || draftEl.checked !== orig.draft || stagedInBody().length > 0;
+    : titleNow() !== orig.title || norm(bodyEl.value) !== norm(orig.body) || draftEl.checked !== orig.draft || tagsChanged() || stagedInBody().length > 0;
 
   // ---- where this entry lives (new entries: from trip + web address) -------
   const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
@@ -240,6 +291,94 @@ const payload = JSON.stringify({
     lastPrefix = next;
   }
 
+  // ---- a new trip, started from the trip list (new entries only) -----------
+  // Kept here until Publish, then committed with the entry, so the site never
+  // has a trip with nothing in it.
+  const NEW_TRIP = '__new';
+  interface NewTrip { id: string; title: string; shortTitle: string; dateStart: string; dateEnd: string; countries: string[]; summary: string }
+  let newTrip: NewTrip | null = null;
+  let lastTrip = f?.trip.value ?? data.trip;
+  let newTripSync = () => {};
+  const tripSlugOf = (s: string) =>
+    s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
+  const newTripInUse = () => (newTrip && tripNow() === newTrip.id ? newTrip : null);
+
+  const nt = data.isNew ? {
+    dialog: $<HTMLDialogElement>('nt-dialog'), title: $<HTMLInputElement>('nt-title'), short: $<HTMLInputElement>('nt-short'),
+    start: $<HTMLInputElement>('nt-start'), end: $<HTMLInputElement>('nt-end'), summary: $<HTMLTextAreaElement>('nt-summary'),
+    add: $<HTMLSelectElement>('nt-add-country'), chips: $('nt-countries'), id: $('nt-id'), err: $('nt-error'),
+  } : null;
+  let ntCountries: string[] = [];
+  const countryName = (c: string) => [...(nt?.add.options ?? [])].find((o) => o.value === c)?.text ?? c;
+
+  /** A trip web address nobody has used. */
+  function newTripId() {
+    const base = tripSlugOf(nt!.title.value) || 'trip';
+    const taken = new Set(data.tripIds);
+    let id = base;
+    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+    return id;
+  }
+  function drawNewTrip() {
+    nt!.chips.innerHTML = ntCountries.map((c) =>
+      `<li>${esc(countryName(c))} <button type="button" data-code="${c}" aria-label="Remove ${esc(countryName(c))}">×</button></li>`).join('');
+    for (const o of nt!.add.options) o.disabled = !!o.value && ntCountries.includes(o.value);
+    nt!.id.textContent = nt!.title.value.trim() ? `/${newTripId()}/` : '(from the title)';
+  }
+  function openNewTrip() {
+    if (!nt) return;
+    nt.title.value = newTrip?.title ?? '';
+    nt.short.value = newTrip && newTrip.shortTitle !== newTrip.title ? newTrip.shortTitle : '';
+    nt.start.value = newTrip?.dateStart ?? f!.date.value;
+    nt.end.value = newTrip && newTrip.dateEnd !== newTrip.dateStart ? newTrip.dateEnd : '';
+    nt.summary.value = newTrip?.summary ?? '';
+    ntCountries = [...(newTrip?.countries ?? [])];
+    nt.err.textContent = '';
+    drawNewTrip();
+    nt.dialog.showModal();
+    nt.title.focus();
+  }
+  if (nt) {
+    nt.title.addEventListener('input', drawNewTrip);
+    nt.add.addEventListener('change', () => {
+      if (nt.add.value && !ntCountries.includes(nt.add.value)) ntCountries.push(nt.add.value);
+      nt.add.value = '';
+      drawNewTrip();
+    });
+    nt.chips.addEventListener('click', (ev) => {
+      const code = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-code]')?.dataset.code;
+      if (!code) return;
+      ntCountries = ntCountries.filter((c) => c !== code);
+      drawNewTrip();
+      nt.add.focus();
+    });
+    $('nt-cancel').addEventListener('click', () => nt.dialog.close());
+    $('nt-ok').addEventListener('click', () => {
+      const title = nt.title.value.replace(/\s+/g, ' ').trim();
+      const shortTitle = nt.short.value.replace(/\s+/g, ' ').trim() || title;
+      const problem = !title ? 'Give the trip a title.'
+        : shortTitle.length > 40 ? 'That title is long for menus — give it a short name (40 characters at most).'
+        : !nt.start.value ? 'When does it start?'
+        : nt.end.value && nt.end.value < nt.start.value ? 'It ends before it starts.'
+        : !ntCountries.length ? 'Add at least one country.'
+        : null;
+      if (problem) { nt.err.textContent = problem; return; }
+
+      const old = newTrip?.id;
+      newTrip = {
+        id: newTripId(), title, shortTitle, dateStart: nt.start.value, dateEnd: nt.end.value || nt.start.value,
+        countries: [...ntCountries], summary: nt.summary.value.replace(/\s+/g, ' ').trim(),
+      };
+      const sel = f!.trip;
+      [...sel.options].find((o) => o.value === old)?.remove();
+      sel.prepend(new Option(`${shortTitle} (new)`, newTrip.id));
+      sel.value = lastTrip = newTrip.id;
+      data.takenSlugs[newTrip.id] ??= [];
+      nt.dialog.close();
+      newTripSync();
+    });
+  }
+
   if (f) {
     const syncSlug = () => {
       if (!slugTouched) f.slug.value = uniqueSlug(slugify(titleNow()));
@@ -248,7 +387,12 @@ const payload = JSON.stringify({
       refresh();
     };
     titleEl.addEventListener('input', syncSlug);
-    f.trip.addEventListener('change', syncSlug);
+    f.trip.addEventListener('change', () => {
+      if (f.trip.value === NEW_TRIP) { f.trip.value = lastTrip; openNewTrip(); return; }
+      lastTrip = f.trip.value;
+      syncSlug();
+    });
+    newTripSync = syncSlug;
     f.slug.addEventListener('input', () => {
       slugTouched = true;
       f.slug.value = f.slug.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -340,6 +484,7 @@ const payload = JSON.stringify({
     refresh();
   });
   draftEl.addEventListener('change', refresh);
+  for (const b of [...tagBoxes, criedEl]) b.addEventListener('change', refresh);
 
   // ---- photographs ---------------------------------------------------------
 
@@ -478,6 +623,17 @@ const payload = JSON.stringify({
     } else if (t !== orig.title) {
       bits.push(`<p class="ee-titlechg"><span class="mono">Title</span> <del>${esc(orig.title)}</del> → <ins>${esc(t)}</ins></p>`);
     }
+    const t2 = newTripInUse();
+    if (t2) {
+      bits.push(`<p class="ee-titlechg"><span class="mono">New trip</span> <ins>${esc(t2.title)}</ins> at /${esc(t2.id)}/ · ${esc(t2.dateStart)}${t2.dateEnd !== t2.dateStart ? ` → ${esc(t2.dateEnd)}` : ''} · ${esc(t2.countries.map(countryName).join(', '))}${t2.summary ? '' : ' · summary to write later'}</p>`);
+    }
+    if (data.isNew || tagsChanged()) {
+      const shown = (tags: string[], cried: boolean) => [...tags.map(tagLabel), ...(cried ? ['Beth cried'] : [])].join(', ') || 'none';
+      const now = shown(tagsNow(), criedEl.checked);
+      bits.push(data.isNew
+        ? `<p class="ee-titlechg"><span class="mono">Tags</span> ${esc(now)}</p>`
+        : `<p class="ee-titlechg"><span class="mono">Tags</span> <del>${esc(shown(orig.tags, orig.bethCried))}</del> → <ins>${esc(now)}</ins></p>`);
+    }
     if (draftEl.checked !== orig.draft || data.isNew) {
       bits.push(`<p class="ee-titlechg"><span class="mono">Status</span> ${draftEl.checked ? 'Draft — kept off the site' : '<ins>Published on the site</ins>'}</p>`);
     }
@@ -495,7 +651,7 @@ const payload = JSON.stringify({
     commitBtn.disabled = true;
     err.textContent = '';
     try {
-      const sent = { title: titleNow(), body: bodyEl.value, draft: draftEl.checked };
+      const sent = { title: titleNow(), body: bodyEl.value, draft: draftEl.checked, tags: tagsNow(), bethCried: criedEl.checked };
       const photos = stagedInBody().map((src) => {
         const { token, facts } = staged.get(src)!;
         return {
@@ -509,6 +665,7 @@ const payload = JSON.stringify({
             headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
             body: JSON.stringify({
               ...sent, photos, trip: tripNow(), slug: slugNow(), date: f!.date.value, day: f!.day.value || null,
+              ...(newTripInUse() ? { newTrip: newTripInUse() } : {}),
               authors: f!.by.value === 'both' ? ['andy', 'beth'] : [f!.by.value],
             }),
           })
@@ -520,7 +677,9 @@ const payload = JSON.stringify({
       const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
       if (res.status === 409) {
         err.textContent = data.isNew
-          ? 'Nothing was saved: an entry with that web address — or one of those photo names — already exists. Change the web address and try again.'
+          ? (newTripInUse()
+              ? 'Nothing was saved: someone has just started a trip at that web address. Choose New trip… again and change its title.'
+              : 'Nothing was saved: an entry with that web address — or one of those photo names — already exists. Change the web address and try again.')
           : 'Nothing was saved: someone else changed this entry since the page loaded. Copy your text somewhere safe, reload the page, and make your changes again.';
         return;
       }
@@ -606,7 +765,42 @@ const payload = JSON.stringify({
   .ee-field--day input { width: 6rem; }
   .ee-slug { display: flex; align-items: center; border: 1px solid var(--color-rule); background: var(--color-paper); }
   .ee-slug .mono { font-size: 0.75rem; color: var(--color-stone); padding-left: 0.5rem; white-space: nowrap; }
-  .ee-slug input { border: 0; min-width: 16rem; }
+  /* A long trip address must not push the page wider than a phone. */
+  .ee-field--slug { max-width: 100%; grid-template-columns: minmax(0, 1fr); }
+  .ee-slug { max-width: 100%; }
+  .ee-slug .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ee-slug input { border: 0; width: 16rem; min-width: 6rem; flex: 1 1 auto; }
+  .ee-tags {
+    display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.9rem 0 0; padding: 0; border: 0; max-width: 72rem;
+  }
+  .ee-tags legend { font-size: 0.6875rem; color: var(--color-stone); margin-bottom: 0.35rem; padding: 0; }
+  .ee-tag { position: relative; }
+  .ee-tag input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .ee-tag span {
+    display: inline-block; padding: 0.3rem 0.7rem; font-size: 0.8125rem; border: 1px solid var(--color-rule);
+    background: var(--color-paper); color: var(--color-ink); border-radius: 999px;
+  }
+  .ee-tag input:checked + span { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-snow); }
+  .ee-tag input:checked + span::before { content: '✓ '; }
+  .ee-tag input:focus-visible + span { outline: 3px solid var(--color-rime-on-light); outline-offset: 2px; }
+  .ee-tag--cried { margin-left: 0.6rem; }
+  .ee-tag--cried input:checked + span { background: var(--color-ember, #b4532a); border-color: var(--color-ember, #b4532a); }
+
+  .nt-lede { margin: 0 0 1rem; font-size: 0.9375rem; color: var(--color-stone); }
+  .nt-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.8rem 1rem; }
+  .nt-form .ee-field { min-width: 0; }
+  .nt-form .ee-field > .mono { white-space: normal; }
+  /* A select is as wide as its longest option ("South Georgia and the…"): keep it in the column. */
+  .nt-form input, .nt-form select, .nt-form textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+  .nt-wide { grid-column: 1 / -1; }
+  .nt-form textarea { font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--color-rule); background: var(--color-paper); color: var(--color-ink); resize: vertical; }
+  .nt-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .nt-chips :global(li) { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.2rem 0.15rem 0.6rem; border: 1px solid var(--color-rule); background: var(--color-paper); font-size: 0.875rem; }
+  .nt-chips :global(button) { font: inherit; border: 0; background: none; cursor: pointer; padding: 0 0.35rem; color: var(--color-stone); }
+  .nt-addr { margin: 0; font-size: 0.6875rem; color: var(--color-stone); }
+  .nt-addr span { color: var(--color-ink); text-transform: none; letter-spacing: 0; }
+  @media (max-width: 560px) { .nt-form { grid-template-columns: minmax(0, 1fr); } }
+
   .ee-panes {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

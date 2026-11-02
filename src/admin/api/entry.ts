@@ -2,8 +2,11 @@
  * The prose editor's two endpoints (see mdx.ts for what is and isn't allowed):
  *
  *   POST /api/admin/preview  { body }                                  → { problems, html }
- *   POST /api/admin/entry    { path, version, title, body, draft?, photos? } → { commit, versions }
- *   POST /api/admin/new      { trip, slug, title, date, day, authors, draft, body, photos? }
+ *   POST /api/admin/entry    { path, version, title, body, draft?, tags?, bethCried?, photos? } → { commit, versions }
+ *   POST /api/admin/new      { trip, slug, title, date, day, authors, draft, body, tags?, bethCried?, photos?, newTrip? }
+ *
+ * `newTrip` starts the trip as well (trip-new.ts), in the same commit as its
+ * first entry.
  *
  * `photos` are uploads from /api/admin/photo: [{ src, token }], committed with
  * the text in one commit.
@@ -15,7 +18,9 @@
 import type { APIRoute } from 'astro';
 import { getStore, ConflictError, type Author, type Edit } from '../store/index.ts';
 import { checkBody, joinEntry, renderPreview, splitEntry } from '../mdx.ts';
-import { replaceLine, splitFrontmatter } from '../frontmatter.ts';
+import { list, replaceLine, splitFrontmatter } from '../frontmatter.ts';
+import { newTripFile, validateNewTrip } from '../trip-new.ts';
+import { TAGS } from '../../data/tags.ts';
 import { guard, json, userOf } from '../guard.ts';
 import { HOSTED } from '../mode.ts';
 import { countHit } from '../kv.ts';
@@ -25,6 +30,13 @@ export const prerender = false;
 const ENTRY_PATH = /^src\/content\/entries\/[a-z0-9-]+\/[a-z0-9-]+\.mdx$/;
 const MAX_BODY = 200_000;
 const SAVES_PER_HOUR = 60;
+
+/** Tags from the page, checked against the vocabulary and put in its order. Undefined when not sent. */
+function tagsOf(raw: unknown): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || !raw.every((t) => (TAGS as readonly string[]).includes(t))) throw new Error('tags must come from src/data/tags.ts');
+  return TAGS.filter((t) => raw.includes(t));
+}
 
 async function readJson(request: Request) {
   try { return (await request.json()) as Record<string, unknown>; } catch { return null; }
@@ -58,6 +70,9 @@ export const save: APIRoute = async ({ request }) => {
   if (newBody == null || newBody.length > MAX_BODY) return json({ error: 'expected a body' }, 400);
   if (!title || title.length > 200) return json({ error: 'the title must be 1–200 characters' }, 400);
 
+  let tags;
+  try { tags = tagsOf(input?.tags); } catch (e) { return json({ error: (e as Error).message }, 400); }
+
   const checked = checkBody(newBody);
   if (checked.problems.length) return json({ error: 'problems', problems: checked.problems }, 422);
 
@@ -74,7 +89,13 @@ export const save: APIRoute = async ({ request }) => {
   const { head, imported } = splitEntry(current.text);
   const { head: fm, rest } = splitFrontmatter(head);
   let nextFm = replaceLine(fm, 'title', JSON.stringify(title));
-  if (typeof input?.draft === 'boolean') nextFm = replaceLine(nextFm, 'draft', String(input.draft));
+  try {
+    if (typeof input?.draft === 'boolean') nextFm = replaceLine(nextFm, 'draft', String(input.draft));
+    if (tags) nextFm = replaceLine(nextFm, 'tags', list(tags));
+    if (typeof input?.bethCried === 'boolean') nextFm = replaceLine(nextFm, 'bethCried', String(input.bethCried));
+  } catch (e) {
+    return json({ error: (e as Error).message }, 422);
+  }
   const text = joinEntry(nextFm + rest, newBody, [...new Set([...checked.components, ...imported])]);
   if (text === current.text && !photos.length) return json({ commit: null, versions: {} });
 
@@ -180,12 +201,24 @@ export const create: APIRoute = async ({ request }) => {
   if (day !== null && (!Number.isInteger(day) || day < 1 || day > 999)) return json({ error: 'the day must be a whole number' }, 400);
   if (!authors.length) return json({ error: 'choose who wrote it' }, 400);
   if (newBody == null || newBody.length > MAX_BODY || !newBody.trim()) return json({ error: 'write something first' }, 400);
+  let tags;
+  try { tags = tagsOf(input?.tags) ?? []; } catch (e) { return json({ error: (e as Error).message }, 400); }
 
   const checked = checkBody(newBody);
   if (checked.problems.length) return json({ error: 'problems', problems: checked.problems }, 422);
 
   const store = getStore();
-  try { await store.read(`src/content/trips/${trip}.mdx`); } catch { return json({ error: 'that trip doesn’t exist' }, 400); }
+  const tripPaths = await store.list('src/content/trips', '.mdx');
+  const tripIds = tripPaths.map((p) => p.split('/').pop()!.replace(/.mdx$/, ''));
+  let tripEdit: Edit | null = null;
+  if (input?.newTrip != null) {
+    let t;
+    try { t = validateNewTrip(input.newTrip, tripIds); } catch (e) { return json({ error: (e as Error).message }, 400); }
+    if (t.id !== trip) return json({ error: 'the new trip and the entry disagree about which trip this is' }, 400);
+    tripEdit = { path: `src/content/trips/${trip}.mdx`, text: newTripFile(t, input?.draft === true ? 0 : 1), baseVersion: null };
+  } else if (!tripIds.includes(trip)) {
+    return json({ error: 'that trip doesn’t exist' }, 400);
+  }
 
   let photos;
   try { photos = await photoEdits(input?.photos, trip, slug, newBody); } catch (e) { return json({ error: (e as Error).message }, 400); }
@@ -197,9 +230,9 @@ export const create: APIRoute = async ({ request }) => {
     `day: ${day ?? 'null'}`,
     `date: ${date}`,
     `authors: ${JSON.stringify(authors).replace(/,/g, ', ')}`,
-    'tags: []',
+    `tags: ${list(tags)}`,
     'people: []',
-    'bethCried: false',
+    `bethCried: ${input?.bethCried === true}`,
     `draft: ${input?.draft === true}`,
     '---',
     '',
@@ -208,7 +241,10 @@ export const create: APIRoute = async ({ request }) => {
   const text = joinEntry(head, newBody, checked.components);
   const n = photos.filter((e) => e.staged).length;
   const what = n ? ` (+${n} ${n === 1 ? 'photo' : 'photos'})` : '';
-  const res = await commit([{ path, text, baseVersion: null }, ...photos], `New entry ${trip}/${slug}: “${title}”${what}`, user?.author);
+  const message = tripEdit
+    ? `New trip ${trip}, with its first entry: “${title}”${what}`
+    : `New entry ${trip}/${slug}: “${title}”${what}`;
+  const res = await commit([...(tripEdit ? [tripEdit] : []), { path, text, baseVersion: null }, ...photos], message, user?.author);
   if (res.status !== 200) return res;
   return json({ ...(await res.json()), path, href: `/admin/entry/${trip}/${slug}` });
 };

@@ -10,6 +10,8 @@
  * theirs to write. scripts/gen-trips.ts derives a factual placeholder and flags
  * every one of them for rewriting.
  */
+import { COUNTRIES } from './countries.ts';
+
 export interface TripMeta {
   shortTitle: string;
   countries: string[];
@@ -96,17 +98,13 @@ export const TRIP_META: Record<string, TripMeta> = {
 
 /**
  * ISO 3166-1 alpha-2 → numeric, to join our country codes onto the world-atlas
- * TopoJSON, which is keyed by numeric id. Hong Kong has no separate feature in
- * the 110m dataset (it is inside China), so it is deliberately absent and the
- * map falls back to listing it.
+ * TopoJSON, which is keyed by numeric id. Built from countries.ts, so any
+ * country a trip names can be drawn; one too small for the 110m dataset falls
+ * back to POINT_MARKERS below, or to being listed under the map.
  */
-export const COUNTRY_NUMERIC: Record<string, string> = {
-  PK: '586', TH: '764', SG: '702', MY: '458', KR: '410', JP: '392',
-  TZ: '834', EG: '818', AT: '040', ID: '360', CL: '152', AR: '032',
-  CO: '170', NP: '524', CN: '156', IN: '356', DE: '276', GR: '300',
-  RU: '643', IS: '352', HR: '191', BA: '070', GT: '320', BZ: '084',
-  EC: '218', BO: '068', PE: '604',
-};
+export const COUNTRY_NUMERIC: Record<string, string> = Object.fromEntries(
+  COUNTRIES.filter((c) => c.numeric).map((c) => [c.code, c.numeric as string]),
+);
 
 /**
  * Places with no drawable polygon at 110m resolution — Singapore is below the
@@ -120,22 +118,7 @@ export const POINT_MARKERS: Record<string, [number, number]> = {
 };
 
 /** Continent per country, for the overview page. */
-export const COUNTRY_CONTINENT: Record<string, string> = {
-  PK: 'Asia', TH: 'Asia', SG: 'Asia', MY: 'Asia', KR: 'Asia', JP: 'Asia',
-  ID: 'Asia', NP: 'Asia', CN: 'Asia', IN: 'Asia', HK: 'Asia',
-  TZ: 'Africa', EG: 'Africa',
-  AT: 'Europe', DE: 'Europe', GR: 'Europe', RU: 'Europe', IS: 'Europe',
-  HR: 'Europe', BA: 'Europe',
-  CL: 'South America', AR: 'South America', CO: 'South America',
-  EC: 'South America', BO: 'South America', PE: 'South America',
-  GT: 'North America', BZ: 'North America',
-};
+export const COUNTRY_CONTINENT: Record<string, string> = Object.fromEntries(COUNTRIES.map((c) => [c.code, c.continent]));
 
-export const COUNTRY_NAMES: Record<string, string> = {
-  PK: 'Pakistan', TH: 'Thailand', SG: 'Singapore', MY: 'Malaysia', KR: 'South Korea',
-  JP: 'Japan', TZ: 'Tanzania', EG: 'Egypt', AT: 'Austria', ID: 'Indonesia',
-  CL: 'Chile', AR: 'Argentina', CO: 'Colombia', NP: 'Nepal', CN: 'China',
-  IN: 'India', DE: 'Germany', GR: 'Greece', RU: 'Russia', IS: 'Iceland',
-  HR: 'Croatia', BA: 'Bosnia and Herzegovina', GT: 'Guatemala', BZ: 'Belize',
-  HK: 'Hong Kong', EC: 'Ecuador', BO: 'Bolivia', PE: 'Peru',
-};
+/** Display names, for every country a trip can name. */
+export const COUNTRY_NAMES: Record<string, string> = Object.fromEntries(COUNTRIES.map((c) => [c.code, c.name]));

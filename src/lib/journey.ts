@@ -40,6 +40,8 @@ export interface JourneyPoint {
   kinds: Kind[];
   meters: Partial<Record<Meter, number>>;
   elevationFt: number | null;
+  /** The day's leg, where a trek entry logged one — labels the line into this stop. */
+  distanceMi: number | null;
   photo: string | null;
 }
 
@@ -62,6 +64,7 @@ export function journeyPoints(entries: Entry[]): JourneyPoint[] {
       kinds: kindsOf(e),
       meters: Object.fromEntries(METERS.filter((m) => e.data.meters[m] != null).map((m) => [m, e.data.meters[m]!])),
       elevationFt: e.data.leg?.elevationHighFt ?? e.data.location?.elevationFt ?? null,
+      distanceMi: e.data.leg?.distanceMi ?? null,
       photo: firstPhoto(e),
     }));
 }

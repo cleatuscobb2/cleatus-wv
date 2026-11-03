@@ -17,8 +17,45 @@ interface Ev { lng: number; lat: number; kinds: string[]; title: string; href: s
 interface TripOut { id: string; title: string; shortTitle: string; year: number; countries: string[]; box: number[] | null; route: [number, number][] }
 interface Data { countries: GeoJSON.FeatureCollection; events: Ev[]; trips: TripOut[] }
 
-/** The whole globe in view, as big as the stage allows. */
-const homeZoom = () => (innerWidth < 700 ? 0.9 : innerWidth < 1200 ? 1.6 : 2.05);
+/*
+ * Home view: Europe, Africa and Asia facing you, the globe filling ~94% of the
+ * stage's shorter side. MapLibre draws the globe with radius
+ * 512·2^zoom / (2π·cos lat) px and the camera's perspective shows less than
+ * that (LIMB, about 0.75 on a landscape screen), which gives a first guess;
+ * settleHome() then measures the globe actually drawn and corrects, because
+ * the perspective differs on a tall phone screen.
+ */
+const HOME: [number, number] = [45, 28];
+const FILL = 0.94;
+const LIMB = 0.75;
+/** The globe's drawn diameter in px: walk out from the centre until a point no longer round-trips. */
+function drawnDiameter(map: MLMap, el: HTMLElement) {
+  const cx = el.clientWidth / 2;
+  const cy = el.clientHeight / 2;
+  let x = cx;
+  while (x < cx + el.clientWidth) {
+    const back = map.project(map.unproject([x, cy]));
+    if (Math.abs(back.x - x) > 1.5) break;
+    x += 1;
+  }
+  return 2 * (x - cx);
+}
+
+/** Correct the first-guess zoom against the measured globe; returns the home zoom. */
+function settleHome(map: MLMap, el: HTMLElement) {
+  const want = Math.min(el.clientHeight, el.clientWidth) * FILL;
+  for (let i = 0; i < 3; i++) {
+    const got = drawnDiameter(map, el);
+    if (!got || Math.abs(got - want) < 4) break;
+    map.jumpTo({ zoom: map.getZoom() + Math.log2(want / got) });
+  }
+  return map.getZoom();
+}
+
+const homeZoom = (el: HTMLElement) => {
+  const d = Math.min(el.clientHeight, el.clientWidth) * FILL;
+  return Math.log2((d / LIMB) * Math.PI * Math.cos((HOME[1] * Math.PI) / 180) / 512);
+};
 
 const stage = document.querySelector<HTMLElement>('[data-globe]');
 if (stage && webglOk()) start(stage).catch((err) => {
@@ -40,8 +77,8 @@ async function start(stage: HTMLElement) {
   const map: MLMap = new ml.Map({
     container: el,
     style: BASE_STYLE,
-    center: [40, 22],
-    zoom: homeZoom(),
+    center: HOME,
+    zoom: homeZoom(el),
     attributionControl: { compact: true },
     maxPitch: 70,
   });
@@ -49,8 +86,11 @@ async function start(stage: HTMLElement) {
   map.addControl(new ml.FullscreenControl({ container: stage }), 'top-right');
   document.querySelector('[data-map-wrap]')?.setAttribute('data-globe-live', '');
 
+  let homeZ = homeZoom(el);
+  if (import.meta.env.DEV) (window as unknown as { __globe: MLMap }).__globe = map;
   await new Promise<void>((ok) => map.once('load', () => ok()));
   map.setProjection({ type: 'globe' });
+  homeZ = settleHome(map, el);
   addRelief(map);
   const below = firstSymbolLayer(map);
   const byCode = new Map(data.countries.features.map((f) => [f.properties!.code as string, f.properties as unknown as Country]));
@@ -135,13 +175,14 @@ async function start(stage: HTMLElement) {
   let spinning = !reducedMotion();
   const stopSpin = () => { spinning = false; };
   const spin = () => {
-    if (!spinning || map.isMoving() || map.getZoom() > 2.5) return;
+    if (!spinning || map.isMoving() || map.getZoom() > homeZ + 0.3) return;
     const c = map.getCenter();
-    map.easeTo({ center: [c.lng + 6, c.lat], duration: 1000, easing: (t) => t });
+    map.easeTo({ center: [c.lng + 4, c.lat], duration: 1000, easing: (t) => t });
   };
   map.on('moveend', spin);
   for (const ev of ['mousedown', 'touchstart', 'wheel', 'dragstart'] as const) map.on(ev, stopSpin);
-  spin();
+  // Hold the home view a moment — Europe, Africa and Asia — before it starts to turn.
+  setTimeout(spin, 4000);
 
   let hovered: string | null = null;
   map.on('mousemove', 'cc-fill', (e) => {
@@ -288,7 +329,7 @@ async function start(stage: HTMLElement) {
       touring = 0;
       tourBtn.textContent = '▶ Tour the trips';
       light([], null);
-      map.easeTo({ zoom: homeZoom(), duration: 1500 });
+      map.easeTo({ center: HOME, zoom: homeZ, duration: 1500 });
     }
   });
 
@@ -296,6 +337,6 @@ async function start(stage: HTMLElement) {
     light([], null);
     caption.hidden = true;
     panel.hidden = true;
-    map.easeTo({ center: [40, 22], zoom: homeZoom(), pitch: 0, bearing: 0, duration: 1200 });
+    map.easeTo({ center: HOME, zoom: homeZ, pitch: 0, bearing: 0, duration: 1200 });
   });
 }

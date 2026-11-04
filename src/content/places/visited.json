@@ -9,6 +9,6 @@
   {"id":"cabo-san-lucas-mx","name":"Cabo San Lucas","country":"MX","lat":22.8905,"lng":-109.9167,"dived":true},
   {"id":"cozumel-mx","name":"Cozumel","country":"MX","lat":20.5083,"lng":-86.9458,"when":"2016-07","dived":true},
   {"id":"san-jose-del-cabo-mx","name":"San José del Cabo","country":"MX","lat":23.0631,"lng":-109.6965,"dived":true},
-  {"id":"tulum-mx","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"dived":true},
+  {"id":"tulum-mx","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"when":"2018-06","dived":true},
   {"id":"bangkok-th","name":"Bangkok","country":"TH","lat":13.7563,"lng":100.5018,"when":"2007-12"}
 ]

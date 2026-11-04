@@ -2,8 +2,12 @@
   {"id":"prague-cz","name":"Prague","country":"CZ","lat":50.0875,"lng":14.4213,"when":"1988-08"},
   {"id":"taveuni-fj","name":"Taveuni","country":"FJ","lat":-16.85,"lng":-179.9667,"when":"2006-08","dived":true},
   {"id":"roatan-hn","name":"Roatán","country":"HN","lat":16.3167,"lng":-86.5333,"when":"2012-12","dived":true},
+  {"id":"tokyo-jp","name":"Tokyo","country":"JP","lat":35.6762,"lng":139.6503,"when":"2007-12"},
+  {"id":"siem-reap-kh","name":"Siem Reap","country":"KH","lat":13.3633,"lng":103.8564,"when":"2007-12"},
+  {"id":"luang-prabang-la","name":"Luang Prabang","country":"LA","lat":19.8856,"lng":102.1347,"when":"2007-12"},
   {"id":"cabo-san-lucas-mx","name":"Cabo San Lucas","country":"MX","lat":22.8905,"lng":-109.9167,"dived":true},
   {"id":"cozumel-mx","name":"Cozumel","country":"MX","lat":20.5083,"lng":-86.9458,"dived":true},
   {"id":"san-jose-del-cabo-mx","name":"San José del Cabo","country":"MX","lat":23.0631,"lng":-109.6965,"dived":true},
-  {"id":"tulum-mx","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"dived":true}
+  {"id":"tulum-mx","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"dived":true},
+  {"id":"bangkok-th","name":"Bangkok","country":"TH","lat":13.7563,"lng":100.5018,"when":"2007-12"}
 ]

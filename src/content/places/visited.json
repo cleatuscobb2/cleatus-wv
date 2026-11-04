@@ -1,5 +1,7 @@
 [
+  {"id":"great-blue-hole-bz","name":"Great Blue Hole","country":"BZ","lat":17.3156,"lng":-87.5347,"when":"2008"},
   {"id":"san-pedro-ambergris-caye-bz","name":"San Pedro, Ambergris Caye","country":"BZ","lat":17.9214,"lng":-87.9611,"when":"2006-03"},
+  {"id":"san-pedro-ambergris-caye-bz-2","name":"San Pedro, Ambergris Caye","country":"BZ","lat":17.9214,"lng":-87.9611,"when":"2008"},
   {"id":"prague-cz","name":"Prague","country":"CZ","lat":50.0875,"lng":14.4213,"when":"1988-08"},
   {"id":"taveuni-fj","name":"Taveuni","country":"FJ","lat":-16.85,"lng":-179.9667,"when":"2006-08","dived":true},
   {"id":"roatan-hn","name":"Roatán","country":"HN","lat":16.3167,"lng":-86.5333,"when":"2012-12","dived":true},

@@ -43,6 +43,29 @@ export function whenNear(el: Element, run: () => void) {
   io.observe(el);
 }
 
+/*
+ * Water in the site's palette. The dark basemap draws oceans, lakes and rivers
+ * a grey just lighter than land; these are a deep navy — bluer (hue ~212°) and
+ * darker than the teal country fills (~188°), so a visited coastline never
+ * reads as sea. Close up, the satellite imagery takes over anyway.
+ */
+const WATER = {
+  fill: '#102a47', // oceans, seas, lakes
+  line: '#1d4a6e', // rivers and canals
+  label: '#6f9fc0', // sea and lake names
+  halo: '#081626',
+};
+
+export function tintWater(map: MLMap) {
+  const has = (id: string) => !!map.getLayer(id);
+  if (has('water')) map.setPaintProperty('water', 'fill-color', WATER.fill);
+  if (has('waterway')) map.setPaintProperty('waterway', 'line-color', WATER.line);
+  if (has('water_name')) {
+    map.setPaintProperty('water_name', 'text-color', WATER.label);
+    map.setPaintProperty('water_name', 'text-halo-color', WATER.halo);
+  }
+}
+
 /** The first label layer, so fills and routes can go beneath place names. */
 export const firstSymbolLayer = (map: MLMap) => map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
 

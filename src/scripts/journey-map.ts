@@ -5,7 +5,7 @@
  * the whole trip. Enhancement only — the entries read fine without it.
  */
 import type { Map as MLMap, GeoJSONSource } from 'maplibre-gl';
-import { addEmojiIcons, addRelief, BASE_STYLE, esc, km, loadMaplibre, reducedMotion, setTerrain, webglOk, whenNear } from './map-kit.ts';
+import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, km, loadMaplibre, reducedMotion, setTerrain, webglOk, whenNear } from './map-kit.ts';
 
 interface Pt {
   slug: string; href: string; title: string; when: string; day: number | null;
@@ -89,6 +89,7 @@ async function start(root: HTMLElement, box: HTMLElement) {
   map.addControl(new ml.NavigationControl({ visualizePitch: true }), 'top-right');
   await new Promise<void>((ok) => map.once('load', () => ok()));
   map.setProjection({ type: 'globe' });
+  tintWater(map);
   addRelief(map);
 
   addEmojiIcons(map, Object.fromEntries(Object.entries(cfg.icons).map(([k, v]) => [`k-${k}`, v])));

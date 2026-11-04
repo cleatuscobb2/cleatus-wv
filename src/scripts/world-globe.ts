@@ -6,7 +6,7 @@
  * the globe to the trip.
  */
 import type { Map as MLMap, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl';
-import { addEmojiIcons, addRelief, BASE_STYLE, esc, firstSymbolLayer, loadMaplibre, reducedMotion, webglOk } from './map-kit.ts';
+import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, firstSymbolLayer, loadMaplibre, reducedMotion, webglOk } from './map-kit.ts';
 
 interface Country {
   code: string; name: string; state: 'written' | 'been'; years: string;
@@ -91,6 +91,7 @@ async function start(stage: HTMLElement) {
   await new Promise<void>((ok) => map.once('load', () => ok()));
   map.setProjection({ type: 'globe' });
   homeZ = settleHome(map, el);
+  tintWater(map);
   addRelief(map);
   const below = firstSymbolLayer(map);
   const byCode = new Map(data.countries.features.map((f) => [f.properties!.code as string, f.properties as unknown as Country]));

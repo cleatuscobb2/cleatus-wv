@@ -131,6 +131,8 @@ const places = defineCollection({
     lng: z.number().min(-180).max(180),
     when: z.string().regex(/^\d{4}(-(0[1-9]|1[0-2]))?$/).optional(),
     note: z.string().max(140).optional(),
+    /** They dived here: a dive marker on the map instead of one mid-country. */
+    dived: z.boolean().optional(),
   }),
 });
 

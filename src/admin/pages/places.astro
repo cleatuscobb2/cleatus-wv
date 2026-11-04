@@ -67,10 +67,11 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
   <section class="pl-sec">
     <h2 class="pl-h">Add places</h2>
     <p class="pl-help">
-      One place per line. Add a year (or year-month) at the end if you know it, and a note after a dash.
+      One place per line. Add a year (or year-month) at the end if you know it, a note after a dash,
+      and <code>(dive)</code> for a dive site — it gets a dive marker on the map.
     </p>
     <textarea id="pl-input" rows="7" spellcheck="false"
-      placeholder={'Prague, Czech Republic 1988\nKyoto, Japan 2023-01\nLuang Prabang 2007 — the night market\nHvar, Croatia'}></textarea>
+      placeholder={'Prague, Czech Republic 1988\nKyoto, Japan 2023-01\nLuang Prabang 2007 — the night market\nCozumel, Mexico (dive)'}></textarea>
     <p class="pl-row">
       <button type="button" class="btn btn--primary" id="pl-find">Find them</button>
       <span class="mono pl-status" id="pl-status" role="status"></span>
@@ -102,9 +103,9 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
 </AdminLayout>
 
 <script>
-  interface Hand { id?: string; name: string; country: string; lat: number; lng: number; when?: string; note?: string }
+  interface Hand { id?: string; name: string; country: string; lat: number; lng: number; when?: string; note?: string; dived?: boolean }
   interface Hit { name?: string; display_name: string; lat: string; lon: string; addresstype?: string; address?: { country_code?: string } }
-  interface Row { line: string; when?: string; note?: string; hits: Hit[]; pick: number; keep: boolean; name: string }
+  interface Row { line: string; when?: string; note?: string; dived?: boolean; hits: Hit[]; pick: number; keep: boolean; name: string }
 
   const data = JSON.parse(document.getElementById('pl-data')!.textContent!) as {
     hosted: boolean; version: string | null; hand: Hand[];
@@ -135,13 +136,16 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
 
   // ---- parsing and finding ---------------------------------------------------------------------
   const WHEN = /\s+(\d{4}(?:-(?:0[1-9]|1[0-2]))?)$/;
+  const DIVE = /\s*(?:\(dived?\)|🤿)\s*/i;
   function parseLine(line: string) {
+    const dived = DIVE.test(line) || undefined;
+    line = line.replace(DIVE, ' ').trim();
     let [q, ...rest] = line.split(/\s+(?:—|–|--|-)\s+/);
     const note = rest.join(' — ').trim() || undefined;
     const m = q.match(WHEN);
     const when = m?.[1];
     if (m) q = q.slice(0, m.index);
-    return { q: q.trim(), when, note };
+    return { q: q.trim(), when, note, dived };
   }
   const shortName = (h: Hit) => h.name || h.display_name.split(',')[0];
   const ccOf = (h: Hit) => (h.address?.country_code ?? '').toUpperCase();
@@ -161,13 +165,13 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
     // Nominatim's usage policy: about one search a second, started by a person.
     for (let i = 0; i < lines.length; i++) {
       status.textContent = `Finding ${i + 1} of ${lines.length}…`;
-      const { q, when, note } = parseLine(lines[i]);
+      const { q, when, note, dived } = parseLine(lines[i]);
       let hits: Hit[] = [];
       try {
         const res = await fetch(`${NOMINATIM}/search?format=jsonv2&addressdetails=1&limit=5&accept-language=en&q=${encodeURIComponent(q)}`);
         hits = ((await res.json()) as Hit[]).filter((h) => ccOf(h) && data.names[ccOf(h)]);
       } catch { /* shown as not found */ }
-      fresh.push({ line: lines[i], when, note, hits, pick: 0, keep: hits.length > 0, name: hits[0] ? shortName(hits[0]) : q });
+      fresh.push({ line: lines[i], when, note, dived, hits, pick: 0, keep: hits.length > 0, name: hits[0] ? shortName(hits[0]) : q });
       if (i < lines.length - 1) await wait(1100);
     }
     for (const r of fresh) {
@@ -206,7 +210,10 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
             : `<span class="pl-r__where">${esc(h.display_name)}</span>`}
           ${warn ? `<span class="mono pl-r__warn">${esc(warn)}</span>` : ''}
         </span>
-        <input class="pl-r__when mono" data-when="${i}" value="${esc(r.when ?? '')}" placeholder="YYYY" aria-label="When" />
+        <span class="pl-r__side">
+          <input class="pl-r__when mono" data-when="${i}" value="${esc(r.when ?? '')}" placeholder="YYYY" aria-label="When" />
+          <label class="mono pl-dive"><input type="checkbox" data-dived="${i}" ${r.dived ? 'checked' : ''} /> 🤿 dived</label>
+        </span>
         <button type="button" class="pl-x" data-drop="${i}" aria-label="Remove">×</button>
       </li>`;
     }).join('');
@@ -221,6 +228,7 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
             <span class="mono pl-h-r__cc">${esc(data.names[p.country] ?? p.country)}</span>
             <input class="pl-r__when mono" data-hwhen="${i}" value="${esc(p.when ?? '')}" placeholder="YYYY" aria-label="When" />
             <input class="pl-h-r__note" data-hnote="${i}" value="${esc(p.note ?? '')}" placeholder="Note (optional)" aria-label="Note" />
+            <label class="mono pl-dive"><input type="checkbox" data-hdived="${i}" ${p.dived ? 'checked' : ''} /> 🤿</label>
             <button type="button" class="pl-x" data-hdrop="${i}" aria-label="Remove ${esc(p.name)}">×</button>
           </li>`;
         }).join('')
@@ -234,7 +242,7 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
     const h = r.hits[r.pick];
     return {
       name: r.name.trim() || shortName(h), country: ccOf(h), lat: Number(h.lat), lng: Number(h.lon),
-      ...(r.when ? { when: r.when } : {}), ...(r.note ? { note: r.note } : {}),
+      ...(r.when ? { when: r.when } : {}), ...(r.note ? { note: r.note } : {}), ...(r.dived ? { dived: true } : {}),
     } as Hand;
   });
   const next = () => [...hand, ...toAdd()];
@@ -246,7 +254,7 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
     const removing = saved.filter((p) => !ids.has(p.id)).length;
     const editing = hand.filter((p) => {
       const o = saved.find((s) => s.id === p.id);
-      return o && ((o.when ?? '') !== (p.when ?? '') || (o.note ?? '') !== (p.note ?? ''));
+      return o && ((o.when ?? '') !== (p.when ?? '') || (o.note ?? '') !== (p.note ?? '') || !!o.dived !== !!p.dived);
     }).length;
     const parts = [
       adding ? `add ${adding}` : '', removing ? `remove ${removing}` : '', editing ? `change ${editing}` : '',
@@ -271,6 +279,8 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
   document.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
     if (t.dataset.keep) { rows[Number(t.dataset.keep)].keep = t.checked; render(); }
+    if (t.dataset.dived) { rows[Number(t.dataset.dived)].dived = t.checked || undefined; refresh(); }
+    if (t.dataset.hdived) { hand[Number(t.dataset.hdived)].dived = t.checked || undefined; refresh(); }
     if (t.dataset.pick) {
       const r = rows[Number(t.dataset.pick)];
       r.pick = Number(t.value);
@@ -349,7 +359,7 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
   .pl-save .dlg-err { margin: 0; }
 
   :global(.pl-r) {
-    display: grid; grid-template-columns: auto 1fr 5.5rem auto; gap: 0.6rem; align-items: start;
+    display: grid; grid-template-columns: auto 1fr 6.5rem auto; gap: 0.6rem; align-items: start;
     padding: 0.55rem 0.6rem; border: 1px solid var(--color-rule); background: #fff;
   }
   :global(.pl-r.is-off) { opacity: 0.55; }
@@ -361,6 +371,8 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
     font: inherit; font-size: 0.875rem; padding: 0.3rem 0.45rem; border: 1px solid var(--color-rule); min-width: 0; max-width: 100%;
   }
   :global(.pl-r__name) { font-weight: 600; }
+  :global(.pl-r__side) { display: grid; gap: 0.3rem; }
+  :global(.pl-dive) { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.6875rem; color: var(--color-stone); white-space: nowrap; }
   :global(.pl-r__where) { font-size: 0.8125rem; color: var(--color-stone); }
   :global(.pl-r__warn) { font-size: 0.6875rem; color: var(--color-ember); }
   :global(.pl-x) {
@@ -369,7 +381,7 @@ const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
   }
   :global(.pl-x:hover) { color: #9b1c1c; }
   :global(.pl-h-r) {
-    display: grid; grid-template-columns: minmax(8rem, 1fr) 9rem 5.5rem minmax(8rem, 1.4fr) auto; gap: 0.6rem; align-items: center;
+    display: grid; grid-template-columns: minmax(8rem, 1fr) 9rem 5.5rem minmax(8rem, 1.4fr) auto auto; gap: 0.6rem; align-items: center;
     padding: 0.35rem 0; border-bottom: 1px solid var(--color-rule);
   }
   :global(.pl-h-r__name) { font-weight: 600; }

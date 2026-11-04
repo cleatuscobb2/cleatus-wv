@@ -28,6 +28,8 @@ export interface HandPlace {
   /** 'YYYY' or 'YYYY-MM', when known. */
   when?: string;
   note?: string;
+  /** They dived here. */
+  dived?: boolean;
 }
 
 export interface PinnedEntry {

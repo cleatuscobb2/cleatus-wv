@@ -41,7 +41,11 @@ export function validatePlaces(raw: unknown): HandPlace[] {
     const given = typeof p.id === 'string' && ID.test(p.id) && !taken.has(p.id) ? p.id : null;
     const id = given ?? placeId(name, country, taken);
     taken.add(id);
-    return { id, name, country, lat: round(lat), lng: round(lng), ...(when ? { when } : {}), ...(note ? { note } : {}) };
+    const dived = p.dived === true;
+    return {
+      id, name, country, lat: round(lat), lng: round(lng),
+      ...(when ? { when } : {}), ...(note ? { note } : {}), ...(dived ? { dived } : {}),
+    };
   });
 }
 

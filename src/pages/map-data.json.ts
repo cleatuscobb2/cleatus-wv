@@ -190,27 +190,6 @@ export async function GET() {
     }
   }
 
-  // Dived there, per the log, but no located entry says so: one marker per country.
-  for (const code of FLAGS.scuba as readonly string[]) {
-    if (!codes.includes(code) || !hearts[code]) continue;
-    const f = byNum.get(COUNTRY_NUMERIC[code] ?? '');
-    const covered = located.some(
-      (e) => e.data.tags.includes('diving') && (f ? geoContains(f as never, [e.data.location!.lng!, e.data.location!.lat!]) : false),
-    );
-    if (covered) continue;
-    const ts = tripsIn(code);
-    events.push({
-      lng: hearts[code][0],
-      lat: hearts[code][1],
-      kinds: ['diving'],
-      title: `Dived in ${COUNTRY_NAMES[code] ?? code}`,
-      href: ts.length ? `/places/${code.toLowerCase()}/` : null,
-      when: been[code]?.length ? yearSpans(been[code]) : '',
-      place: COUNTRY_NAMES[code] ?? code,
-      trip: '',
-    });
-  }
-
   // --- places: cities and towns, from the entries and from /admin/places ------------
   const hand = (await getCollection('places')).map((p) => ({ id: p.id, ...p.data }));
   const visited = new Set(codes);
@@ -250,6 +229,46 @@ export async function GET() {
     hand,
     countryOf,
   ).map((p) => ({ ...p, countryName: COUNTRY_NAMES[p.country] ?? p.country }));
+
+  // The same rule for an entry: its trip's countries first (San Andrés dives are Colombian).
+  const countryOfEntry = (e: (typeof located)[number]) =>
+    countryOf(e.data.location!.lng!, e.data.location!.lat!, trips.find((t) => t.id === tripIdOf(e))?.data.countries);
+
+  // Dive sites added in /admin/places ("Dived here"): a dive marker on each.
+  const handDives = hand.filter((p) => p.dived);
+  for (const p of handDives) {
+    events.push({
+      lng: p.lng,
+      lat: p.lat,
+      kinds: ['diving'],
+      title: `Dived at ${p.name}`,
+      href: tripsIn(p.country).length ? `/places/${p.country.toLowerCase()}/` : null,
+      when: p.when ? yearSpans([p.when]) : '',
+      place: COUNTRY_NAMES[p.country] ?? p.country,
+      trip: '',
+    });
+  }
+
+  // Dived there, per the log, but neither an entry nor a hand-added place says
+  // where: one marker in the middle of the country.
+  for (const code of FLAGS.scuba as readonly string[]) {
+    if (!codes.includes(code) || !hearts[code]) continue;
+    const covered = handDives.some((p) => p.country === code) || located.some(
+      (e) => e.data.tags.includes('diving') && countryOfEntry(e) === code,
+    );
+    if (covered) continue;
+    const ts = tripsIn(code);
+    events.push({
+      lng: hearts[code][0],
+      lat: hearts[code][1],
+      kinds: ['diving'],
+      title: `Dived in ${COUNTRY_NAMES[code] ?? code}`,
+      href: ts.length ? `/places/${code.toLowerCase()}/` : null,
+      when: been[code]?.length ? yearSpans(been[code]) : '',
+      place: COUNTRY_NAMES[code] ?? code,
+      trip: '',
+    });
+  }
 
   // --- trips: where the tour and the timeline fly to ----------------------------------
   const tripOut = trips

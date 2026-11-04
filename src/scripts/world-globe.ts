@@ -1,9 +1,9 @@
 /**
  * /map/ — the interactive globe. Enhancement only: the page already shows the
  * static SVG map and the timeline; this swaps the SVG for a spinning globe with
- * the visited countries, an icon wherever something happened, a legend that
- * filters them, a country panel, a guided tour, and timeline hovers that fly
- * the globe to the trip.
+ * the visited countries named, a marker on every city and place they've been,
+ * an icon wherever something happened, a legend that filters them, a country
+ * panel, a guided tour, and timeline hovers that fly the globe to the trip.
  */
 import type { Map as MLMap, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl';
 import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, firstSymbolLayer, loadMaplibre, reducedMotion, webglOk } from './map-kit.ts';
@@ -15,7 +15,11 @@ interface Country {
 }
 interface Ev { lng: number; lat: number; kinds: string[]; title: string; href: string | null; when: string; place: string; trip: string }
 interface TripOut { id: string; title: string; shortTitle: string; year: number; countries: string[]; box: number[] | null; route: [number, number][] }
-interface Data { countries: GeoJSON.FeatureCollection; events: Ev[]; trips: TripOut[] }
+interface Place {
+  name: string; country: string; countryName: string; lat: number; lng: number; n: number; years: string;
+  entries: { title: string; href: string; date: string; trip: string }[]; note?: string;
+}
+interface Data { countries: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; trips: TripOut[] }
 
 /*
  * Home view: Europe, Africa and Asia facing you, the globe filling ~94% of the
@@ -140,6 +144,77 @@ async function start(stage: HTMLElement) {
     },
   });
 
+  // --- country names: the visited ones, in the site's teal, over the basemap's grey ---------
+  for (const id of ['place_country_major', 'place_country_minor', 'place_country_other']) {
+    if (map.getLayer(id)) map.setPaintProperty(id, 'text-opacity', 0.45);
+  }
+  map.addSource('cc-names', {
+    type: 'geojson',
+    data: {
+      type: 'FeatureCollection',
+      features: data.countries.features.map((f) => ({
+        type: 'Feature' as const,
+        properties: { code: f.properties!.code, name: f.properties!.name, state: f.properties!.state },
+        geometry: { type: 'Point' as const, coordinates: f.properties!.heart as [number, number] },
+      })),
+    },
+  });
+  map.addLayer({
+    id: 'cc-name', type: 'symbol', source: 'cc-names', maxzoom: 5.2,
+    layout: {
+      'text-field': ['upcase', ['get', 'name']],
+      'text-font': ['Noto Sans Bold'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 1, 9, 4, 13],
+      'text-letter-spacing': 0.12,
+      'text-max-width': 7,
+      'symbol-sort-key': ['match', ['get', 'state'], 'written', 0, 1],
+    },
+    paint: {
+      'text-color': ['match', ['get', 'state'], 'written', '#a9e9f2', '#7fc4cc'],
+      'text-halo-color': '#081626', 'text-halo-width': 1.4,
+      'text-opacity': ['interpolate', ['linear'], ['zoom'], 4.4, 1, 5.2, 0],
+    },
+  });
+
+  // --- cities and places: a dot for each, named once you're close enough to read them ----------
+  stage.querySelector('[data-places-n]')!.textContent = String(data.places.length);
+  map.addSource('places', {
+    type: 'geojson',
+    data: {
+      type: 'FeatureCollection',
+      features: data.places.map((p, i) => ({
+        type: 'Feature' as const, id: i,
+        properties: { i, name: p.name, n: p.n },
+        geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+      })),
+    },
+  });
+  map.addLayer({
+    id: 'pl-dot', type: 'circle', source: 'places',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, ['case', ['>=', ['get', 'n'], 3], 2.6, 1.8], 6, ['case', ['>=', ['get', 'n'], 3], 5, 4]] as never,
+      'circle-color': ['case', ['>', ['get', 'n'], 0], '#f4fbfc', '#0a0e13'] as never,
+      'circle-stroke-color': ['case', ['>', ['get', 'n'], 0], '#0a0e13', '#7fd8e8'] as never,
+      'circle-stroke-width': ['case', ['>', ['get', 'n'], 0], 1, 1.6] as never,
+    },
+  });
+  map.addLayer({
+    id: 'pl-label', type: 'symbol', source: 'places', minzoom: 2.2,
+    layout: {
+      // The places with the most entries are named first; the rest join in closer up.
+      'text-field': ['step', ['zoom'], ['case', ['>=', ['get', 'n'], 4], ['get', 'name'], ''], 3.4, ['get', 'name']] as never,
+      'text-font': ['case', ['>=', ['get', 'n'], 3], ['literal', ['Noto Sans Bold']], ['literal', ['Noto Sans Regular']]] as never,
+      'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 7, 13],
+      'text-variable-anchor': ['left', 'right', 'top', 'bottom'],
+      // Far enough out to clear an event icon or cluster badge on the same spot.
+      'text-radial-offset': 1.35,
+      'text-justify': 'auto',
+      'text-max-width': 9,
+      'symbol-sort-key': ['-', 0, ['get', 'n']] as never,
+    },
+    paint: { 'text-color': '#eef7f8', 'text-halo-color': '#081626', 'text-halo-width': 1.5 },
+  });
+
   // --- events ----------------------------------------------------------------------------
   addEmojiIcons(map, Object.fromEntries(Object.entries(cfg.icons).map(([k, v]) => [`k-${k}`, v])));
   const enabled = new Set(cfg.order.filter((k) => !cfg.defaultOff.includes(k)));
@@ -167,6 +242,8 @@ async function start(stage: HTMLElement) {
     id: 'ev-icon', type: 'symbol', source: 'ev', filter: ['!', ['has', 'point_count']],
     layout: { 'icon-image': ['concat', 'k-', ['get', 'kind']], 'icon-size': 1, 'icon-allow-overlap': true },
   });
+  // Place names over the icons, so a badge never hides the name beside it.
+  map.moveLayer('pl-label');
 
   // --- interaction -------------------------------------------------------------------------
   const panel = stage.querySelector<HTMLElement>('[data-globe-panel]')!;
@@ -218,7 +295,7 @@ async function start(stage: HTMLElement) {
   const onCountry = (e: { point: { x: number; y: number }; features?: { properties: Record<string, unknown> }[] }) => {
     stopSpin();
     // An icon or cluster on top of the country gets the click, not the country.
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'pl-dot', 'pl-label'] }).length) return;
     const code = e.features?.[0]?.properties?.code as string | undefined;
     if (code) showCountry(code);
   };
@@ -241,7 +318,29 @@ async function start(stage: HTMLElement) {
         <p class="gpop__meta">${esc([ev.place, ev.when, ev.trip].filter(Boolean).join(' · '))}</p>`)
       .addTo(map);
   });
-  for (const l of ['ev-icon', 'ev-cluster', 'cc-dot']) {
+  // A place: what's written from there, or a note that nothing is yet.
+  const onPlace = (e: { point: { x: number; y: number }; features?: { properties: Record<string, unknown> }[] }) => {
+    stopSpin();
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
+    const p = data.places[e.features![0].properties!.i as number];
+    const SHOW = 5;
+    const list = p.entries.slice(0, SHOW).map((x) =>
+      `<li><a href="${x.href}">${esc(x.title)}</a><span>${esc(x.trip)}</span></li>`).join('');
+    const more = p.entries.length > SHOW
+      ? `<p class="gpop__more"><a href="/places/${p.country.toLowerCase()}/">${p.entries.length - SHOW} more from ${esc(p.countryName)} →</a></p>` : '';
+    const count = p.n ? `${p.n} ${p.n === 1 ? 'entry' : 'entries'}` : 'nothing written from here yet';
+    popup
+      .setLngLat([p.lng, p.lat])
+      .setHTML(`<p class="gpop__title">${esc(p.name)}</p>
+        <p class="gpop__meta">${esc([p.countryName, p.years, count].filter(Boolean).join(' · '))}</p>
+        ${p.note ? `<p class="gpop__meta">${esc(p.note)}</p>` : ''}
+        ${list ? `<ul class="gpop__list">${list}</ul>` : ''}${more}`)
+      .addTo(map);
+  };
+  map.on('click', 'pl-dot', onPlace);
+  map.on('click', 'pl-label', onPlace);
+
+  for (const l of ['ev-icon', 'ev-cluster', 'cc-dot', 'pl-dot', 'pl-label']) {
     map.on('mouseenter', l, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', l, () => { map.getCanvas().style.cursor = ''; });
   }
@@ -261,6 +360,13 @@ async function start(stage: HTMLElement) {
       if (b.checked) enabled.add(b.value); else enabled.delete(b.value);
     });
     (map.getSource('ev') as GeoJSONSource).setData(evFeatures());
+  });
+
+  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'] };
+  stage.querySelectorAll<HTMLInputElement>('[data-layer-toggle]').forEach((box) => {
+    box.addEventListener('change', () => {
+      for (const id of LAYERS[box.value] ?? []) map.setLayoutProperty(id, 'visibility', box.checked ? 'visible' : 'none');
+    });
   });
 
   // --- flying to things --------------------------------------------------------------------------

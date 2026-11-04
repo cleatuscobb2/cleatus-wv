@@ -7,15 +7,18 @@
  *  - events:    every located entry (its kinds pick the icon) plus a country-
  *               level dive marker wherever the log says they dived but no
  *               located entry does
+ *  - places:    every city and place they've been — the entries' places merged
+ *               (src/lib/places.ts) with the ones added in /admin/places
  *  - trips:     for the timeline and the tour — where each trip should fly to
  */
 import { getCollection } from 'astro:content';
 import { feature } from 'topojson-client';
-import { geoArea, geoBounds, geoCentroid, geoContains } from 'd3-geo';
+import { geoArea, geoBounds, geoCentroid, geoContains, geoDistance } from 'd3-geo';
 import world from 'world-atlas/countries-50m.json';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
 import { beenTo, yearSpans, FLAGS } from '../data/been-to.ts';
 import { kindsOf, type Kind } from '../lib/journey.ts';
+import { buildPlaces } from '../lib/places.ts';
 import { entrySlug, fmtDateShort, tripIdOf, chronological } from '../lib/entries.ts';
 
 type Geom = { type: string; coordinates: unknown };
@@ -208,6 +211,46 @@ export async function GET() {
     });
   }
 
+  // --- places: cities and towns, from the entries and from /admin/places ------------
+  const hand = (await getCollection('places')).map((p) => ({ id: p.id, ...p.data }));
+  const visited = new Set(codes);
+  /*
+   * The country a place is in. The outline that holds it, if that's somewhere
+   * they've been; otherwise — just off an outline (Venice, Hvar, a Galápagos
+   * landing), or an island the outlines give a neighbour (San Andrés is
+   * Colombian) — the nearest of `prefer` (the entry's trip countries), or of
+   * everywhere they've been.
+   */
+  const countryOf = (lng: number, lat: number, prefer: string[] = []) => {
+    const f = all.find((x) => geoContains(x as never, [lng, lat]));
+    const a = f ? alphaOf.get(String(f.id)) : undefined;
+    if (a && (prefer.includes(a) || visited.has(a))) return a;
+    const pool = prefer.some((c) => hearts[c]) ? new Set(prefer) : visited;
+    let best = '';
+    let bestD = Infinity;
+    for (const [c, h] of Object.entries(hearts)) {
+      if (!pool.has(c)) continue;
+      const d = geoDistance([lng, lat], h) * 6371;
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    // A home-country stopover (Brooklyn, Houston) stays where it is.
+    return a && bestD > 2000 ? a : best || a || '';
+  };
+  const places = buildPlaces(
+    located.map((e) => ({
+      name: e.data.location!.name,
+      lat: e.data.location!.lat!,
+      lng: e.data.location!.lng!,
+      title: e.data.title,
+      href: `/${tripIdOf(e)}/${entrySlug(e)}/`,
+      date: e.data.date.toISOString().slice(0, 10),
+      trip: tripShort(tripIdOf(e)),
+      country: countryOf(e.data.location!.lng!, e.data.location!.lat!, trips.find((t) => t.id === tripIdOf(e))?.data.countries),
+    })),
+    hand,
+    countryOf,
+  ).map((p) => ({ ...p, countryName: COUNTRY_NAMES[p.country] ?? p.country }));
+
   // --- trips: where the tour and the timeline fly to ----------------------------------
   const tripOut = trips
     .sort((a, b) => +a.data.dateStart - +b.data.dateStart)
@@ -241,7 +284,7 @@ export async function GET() {
       };
     });
 
-  return new Response(JSON.stringify({ countries: { type: 'FeatureCollection', features: countries }, events, trips: tripOut }), {
+  return new Response(JSON.stringify({ countries: { type: 'FeatureCollection', features: countries }, events, places, trips: tripOut }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

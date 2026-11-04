@@ -33,6 +33,8 @@ export default function cleatusAdmin(): AstroIntegration {
         route('/api/admin/new', './api/entry-new.ts');
         route('/api/admin/photo', './api/photo.ts');
         route('/admin/readers', './pages/readers.astro');
+        route('/admin/places', './pages/places.astro');
+        route('/api/admin/places', './api/places.ts');
         // Public: the reader counter's beacon. Counts only; answers nothing.
         route('/api/hit', './api/hit.ts');
         route('/admin/comments', './pages/comments.astro');

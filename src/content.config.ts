@@ -1,5 +1,5 @@
 import { defineCollection, reference, z } from 'astro:content';
-import { glob } from 'astro/loaders';
+import { file, glob } from 'astro/loaders';
 import { TAGS, METERS, type Meter } from './data/tags.ts';
 
 const tag = z.enum(TAGS);
@@ -117,4 +117,21 @@ const comments = defineCollection({
   }),
 });
 
-export const collections = { trips, entries, people, retrospectives, comments };
+/**
+ * Cities and places they've been that no entry is pinned to — added in
+ * /admin/places, one array in one file. The globe merges these with every
+ * entry's place (src/lib/places.ts).
+ */
+const places = defineCollection({
+  loader: file('src/content/places/visited.json'),
+  schema: z.object({
+    name: z.string().min(1).max(80),
+    country: z.string().regex(/^[A-Z]{2}$/),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    when: z.string().regex(/^\d{4}(-(0[1-9]|1[0-2]))?$/).optional(),
+    note: z.string().max(140).optional(),
+  }),
+});
+
+export const collections = { trips, entries, people, retrospectives, comments, places };

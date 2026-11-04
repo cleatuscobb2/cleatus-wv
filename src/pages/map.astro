@@ -206,6 +206,25 @@ const globeConfig = {
         <li><span class="key__swatch key__swatch--written"></span>Written up</li>
         <li><span class="key__swatch key__swatch--been"></span>Been, no entries yet</li>
       </ul>
+      <p class="mono key-panel__head">On the map</p>
+      <ul class="key-panel__kinds key-panel__layers">
+        <li>
+          <label>
+            <input type="checkbox" value="places" data-layer-toggle checked />
+            <span class="key-panel__icon" aria-hidden="true"><span class="key__dot"></span></span>
+            <span class="key-panel__label">Cities &amp; places</span>
+            <span class="mono key-panel__n" data-places-n></span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" value="names" data-layer-toggle checked />
+            <span class="key-panel__icon key__aa" aria-hidden="true">Aa</span>
+            <span class="key-panel__label">Country names</span>
+            <span class="mono key-panel__n"></span>
+          </label>
+        </li>
+      </ul>
       <p class="mono key-panel__head">
         What happened where
         <button type="button" class="key-panel__all" data-kinds-all>all / none</button>
@@ -222,7 +241,7 @@ const globeConfig = {
           </li>
         ))}
       </ul>
-      <p class="key-panel__note">Places are where each entry says it happened, pinned to the town, camp or park — not a GPS track.</p>
+      <p class="key-panel__note">Places are where each entry says it happened, pinned to the town, camp or park — not a GPS track. A hollow dot is somewhere they've been but haven't written from yet.</p>
     </div>
 
     <aside class="gpanel" data-globe-panel hidden aria-live="polite"></aside>
@@ -573,6 +592,11 @@ const globeConfig = {
   .key-panel__kinds input:not(:checked) ~ .key-panel__icon,
   .key-panel__kinds input:not(:checked) ~ .key-panel__label { opacity: 0.4; }
   .key-panel__icon { font-size: 1rem; text-align: center; }
+  .key__dot {
+    display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%;
+    background: #f4fbfc; box-shadow: 0 0 0 2px #0a0e13, 0 0 0 3px #7fd8e8; vertical-align: middle;
+  }
+  .key__aa { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; color: #7fd8e8; }
   .key-panel__n { font-size: 0.625rem; color: var(--color-stone-on-dark); }
   .key-panel__note { margin: 0.7rem 0 0; font-size: 0.6875rem; color: var(--color-stone-on-dark); line-height: 1.4; }
 
@@ -633,6 +657,11 @@ const globeConfig = {
   :global(.globe-pop .gpop__title) { margin: 0.25rem 0 0; font-family: var(--font-display); font-size: 1.05rem; line-height: 1.25; }
   :global(.globe-pop .gpop__title a) { color: var(--color-rime); }
   :global(.globe-pop .gpop__meta) { margin: 0.3rem 0 0; font-size: 0.75rem; color: var(--color-stone-on-dark); }
+  :global(.globe-pop .gpop__list) { list-style: none; margin: 0.45rem 0 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.8125rem; line-height: 1.3; }
+  :global(.globe-pop .gpop__list a) { color: var(--color-rime); }
+  :global(.globe-pop .gpop__list span) { display: block; font-size: 0.6875rem; color: var(--color-stone-on-dark); }
+  :global(.globe-pop .gpop__more) { margin: 0.4rem 0 0; font-size: 0.75rem; }
+  :global(.globe-pop .gpop__more a) { color: var(--color-rime); }
 
   /* On a phone the legend folds under the header and the panel takes the bottom. */
   @media (max-width: 700px) {

@@ -1,0 +1,384 @@
+---
+/**
+ * /admin/places — put cities and places on the /map/ globe that no entry is
+ * pinned to: the towns they passed through, the countries from before the
+ * blog. Paste a list, one place per line; the page finds each one with
+ * OpenStreetMap's place search, you tick the right matches, and one save adds
+ * them all.
+ *
+ * Places that entries are already pinned to are on the map without this — they
+ * come from each entry's "Where" — and are listed at the bottom so nothing gets
+ * added twice.
+ */
+import AdminLayout from '../AdminLayout.astro';
+import { getStore } from '../store/index.ts';
+import { guard, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
+import { readMeta } from '../frontmatter.ts';
+import { PLACES_PATH, parsePlaces } from '../places.ts';
+import { buildPlaces } from '../../lib/places.ts';
+import { COUNTRY_NAMES } from '../../data/trip-meta.ts';
+import { BEEN_TO } from '../../data/been-to.ts';
+
+export const prerender = false;
+
+const blocked = guard(Astro.request);
+if (blocked) return blocked;
+const user = HOSTED ? userOf(Astro.request) : null;
+
+const store = getStore();
+const file = await store.read(PLACES_PATH).catch(() => null);
+const hand = file ? parsePlaces(file.text) : [];
+
+const entryPaths = await store.list('src/content/entries', '.mdx');
+const pinned = (await Promise.all(entryPaths.map(async (p) => readMeta((await store.read(p)).text).location)))
+  .filter((l): l is { name: string; lat: number; lng: number } => !!l && l.lat != null && l.lng != null);
+const fromEntries = buildPlaces(
+  pinned.map((l) => ({ ...l, title: '', href: '', date: '2000-01-01', trip: '' })),
+  [],
+  () => '',
+).map((p) => ({ name: p.name, lat: p.lat, lng: p.lng, n: p.n }));
+
+// Countries in the travel log or on a trip: a place anywhere else gets a warning.
+const tripPaths = await store.list('src/content/trips', '.mdx');
+const tripCountries = (await Promise.all(tripPaths.map(async (p) => (await store.read(p)).text)))
+  .flatMap((t) => JSON.parse(t.match(/^countries:\s*(\[.*\])\s*$/m)?.[1] ?? '[]') as string[]);
+const known = [...new Set([...Object.keys(BEEN_TO), ...tripCountries])];
+
+const payload = JSON.stringify({
+  hosted: HOSTED,
+  version: file?.version ?? null,
+  hand,
+  fromEntries,
+  known,
+  names: COUNTRY_NAMES,
+}).replace(/</g, '\\u003c');
+const saveLabel = HOSTED ? 'Publish' : 'Save as one commit';
+---
+
+<AdminLayout title="Map places" current="places" user={user}>
+  <h1 class="ad-h1">Map places</h1>
+  <p class="ad-lede">
+    Every city and place on the <a href="/map/" target="_blank" rel="noopener">map</a>. Places your entries
+    are pinned to are there already. Add the rest here: the towns you passed through and never wrote
+    about, and the trips from before the blog.
+  </p>
+
+  <section class="pl-sec">
+    <h2 class="pl-h">Add places</h2>
+    <p class="pl-help">
+      One place per line. Add a year (or year-month) at the end if you know it, and a note after a dash.
+    </p>
+    <textarea id="pl-input" rows="7" spellcheck="false"
+      placeholder={'Prague, Czech Republic 1988\nKyoto, Japan 2023-01\nLuang Prabang 2007 — the night market\nHvar, Croatia'}></textarea>
+    <p class="pl-row">
+      <button type="button" class="btn btn--primary" id="pl-find">Find them</button>
+      <span class="mono pl-status" id="pl-status" role="status"></span>
+    </p>
+    <ul class="pl-found" id="pl-found"></ul>
+  </section>
+
+  <section class="pl-sec">
+    <h2 class="pl-h">Places you've added <span class="mono pl-count" id="pl-hand-n"></span></h2>
+    <p class="pl-help">Shown on the map as a hollow dot: been there, nothing written from it yet.</p>
+    <ul class="pl-list" id="pl-hand"></ul>
+  </section>
+
+  <div class="pl-save">
+    <p class="mono pl-pending" id="pl-pending">No changes.</p>
+    <p class="dlg-err" id="pl-error" role="alert"></p>
+    <button type="button" class="btn btn--primary" id="pl-save" disabled>{saveLabel}</button>
+  </div>
+
+  <section class="pl-sec">
+    <details>
+      <summary class="pl-h pl-sum">Already on the map from your entries <span class="mono pl-count">{fromEntries.length}</span></summary>
+      <p class="pl-help">These come from each entry's "Where" — change one in that entry.</p>
+      <p class="pl-entries">{fromEntries.map((p) => p.name).sort((a, b) => a.localeCompare(b)).join(' · ')}</p>
+    </details>
+  </section>
+
+  <script type="application/json" id="pl-data" set:html={payload}></script>
+</AdminLayout>
+
+<script>
+  interface Hand { id?: string; name: string; country: string; lat: number; lng: number; when?: string; note?: string }
+  interface Hit { name?: string; display_name: string; lat: string; lon: string; addresstype?: string; address?: { country_code?: string } }
+  interface Row { line: string; when?: string; note?: string; hits: Hit[]; pick: number; keep: boolean; name: string }
+
+  const data = JSON.parse(document.getElementById('pl-data')!.textContent!) as {
+    hosted: boolean; version: string | null; hand: Hand[];
+    fromEntries: { name: string; lat: number; lng: number; n: number }[]; known: string[]; names: Record<string, string>;
+  };
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+  let saved: Hand[] = structuredClone(data.hand);
+  let hand: Hand[] = structuredClone(data.hand);
+  let rows: Row[] = [];
+
+  const km = (a: [number, number], b: [number, number]) => {
+    const r = Math.PI / 180;
+    const h = Math.sin(((b[1] - a[1]) * r) / 2) ** 2
+      + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(((b[0] - a[0]) * r) / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(h));
+  };
+  /** Something already on the map within 25 km of here, if any. */
+  const nearby = (lat: number, lng: number, skip?: Hand) => {
+    const e = data.fromEntries.find((p) => km([p.lng, p.lat], [lng, lat]) < 25);
+    if (e) return `${e.name} is already on the map (${e.n} ${e.n === 1 ? 'entry' : 'entries'})`;
+    const h = hand.find((p) => p !== skip && km([p.lng, p.lat], [lng, lat]) < 25);
+    if (h) return `${h.name} is already in your list`;
+    return '';
+  };
+
+  // ---- parsing and finding ---------------------------------------------------------------------
+  const WHEN = /\s+(\d{4}(?:-(?:0[1-9]|1[0-2]))?)$/;
+  function parseLine(line: string) {
+    let [q, ...rest] = line.split(/\s+(?:—|–|--|-)\s+/);
+    const note = rest.join(' — ').trim() || undefined;
+    const m = q.match(WHEN);
+    const when = m?.[1];
+    if (m) q = q.slice(0, m.index);
+    return { q: q.trim(), when, note };
+  }
+  const shortName = (h: Hit) => h.name || h.display_name.split(',')[0];
+  const ccOf = (h: Hit) => (h.address?.country_code ?? '').toUpperCase();
+
+  const NOMINATIM = 'https://nominatim.openstreetmap.org';
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let finding = false;
+
+  $('pl-find').addEventListener('click', async () => {
+    if (finding) return;
+    const lines = $<HTMLTextAreaElement>('pl-input').value.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) { $('pl-input').focus(); return; }
+    finding = true;
+    $<HTMLButtonElement>('pl-find').disabled = true;
+    const status = $('pl-status');
+    const fresh: Row[] = [];
+    // Nominatim's usage policy: about one search a second, started by a person.
+    for (let i = 0; i < lines.length; i++) {
+      status.textContent = `Finding ${i + 1} of ${lines.length}…`;
+      const { q, when, note } = parseLine(lines[i]);
+      let hits: Hit[] = [];
+      try {
+        const res = await fetch(`${NOMINATIM}/search?format=jsonv2&addressdetails=1&limit=5&accept-language=en&q=${encodeURIComponent(q)}`);
+        hits = ((await res.json()) as Hit[]).filter((h) => ccOf(h) && data.names[ccOf(h)]);
+      } catch { /* shown as not found */ }
+      fresh.push({ line: lines[i], when, note, hits, pick: 0, keep: hits.length > 0, name: hits[0] ? shortName(hits[0]) : q });
+      if (i < lines.length - 1) await wait(1100);
+    }
+    for (const r of fresh) {
+      const h = r.hits[r.pick];
+      if (h && nearby(Number(h.lat), Number(h.lon))) r.keep = false;
+    }
+    rows = [...rows, ...fresh];
+    const got = fresh.filter((r) => r.hits.length).length;
+    status.textContent = `Found ${got} of ${lines.length}. Untick any you don't want, then save.`;
+    $<HTMLTextAreaElement>('pl-input').value = fresh.filter((r) => !r.hits.length).map((r) => r.line).join('\n');
+    finding = false;
+    $<HTMLButtonElement>('pl-find').disabled = false;
+    render();
+  });
+
+  // ---- drawing --------------------------------------------------------------------------------
+  function render() {
+    $('pl-found').innerHTML = rows.map((r, i) => {
+      if (!r.hits.length) {
+        return `<li class="pl-r pl-r--miss"><span class="mono">Not found:</span> ${esc(r.line)}
+          <button type="button" class="pl-x" data-drop="${i}" aria-label="Remove">×</button></li>`;
+      }
+      const h = r.hits[r.pick];
+      const cc = ccOf(h);
+      const warn = [
+        nearby(Number(h.lat), Number(h.lon)),
+        data.known.includes(cc) ? '' : `${data.names[cc] ?? cc} isn't in your travel log yet`,
+      ].filter(Boolean).join(' · ');
+      return `<li class="pl-r${r.keep ? '' : ' is-off'}">
+        <input type="checkbox" data-keep="${i}" ${r.keep ? 'checked' : ''} aria-label="Add ${esc(r.name)}" />
+        <span class="pl-r__main">
+          <input class="pl-r__name" data-name="${i}" value="${esc(r.name)}" aria-label="Name on the map" />
+          ${r.hits.length > 1
+            ? `<select data-pick="${i}" aria-label="Which one">${r.hits.map((x, j) =>
+                `<option value="${j}" ${j === r.pick ? 'selected' : ''}>${esc(x.display_name)}</option>`).join('')}</select>`
+            : `<span class="pl-r__where">${esc(h.display_name)}</span>`}
+          ${warn ? `<span class="mono pl-r__warn">${esc(warn)}</span>` : ''}
+        </span>
+        <input class="pl-r__when mono" data-when="${i}" value="${esc(r.when ?? '')}" placeholder="YYYY" aria-label="When" />
+        <button type="button" class="pl-x" data-drop="${i}" aria-label="Remove">×</button>
+      </li>`;
+    }).join('');
+
+    const sorted = [...hand].sort((a, b) =>
+      (data.names[a.country] ?? a.country).localeCompare(data.names[b.country] ?? b.country) || a.name.localeCompare(b.name));
+    $('pl-hand').innerHTML = sorted.length
+      ? sorted.map((p) => {
+          const i = hand.indexOf(p);
+          return `<li class="pl-h-r">
+            <span class="pl-h-r__name">${esc(p.name)}</span>
+            <span class="mono pl-h-r__cc">${esc(data.names[p.country] ?? p.country)}</span>
+            <input class="pl-r__when mono" data-hwhen="${i}" value="${esc(p.when ?? '')}" placeholder="YYYY" aria-label="When" />
+            <input class="pl-h-r__note" data-hnote="${i}" value="${esc(p.note ?? '')}" placeholder="Note (optional)" aria-label="Note" />
+            <button type="button" class="pl-x" data-hdrop="${i}" aria-label="Remove ${esc(p.name)}">×</button>
+          </li>`;
+        }).join('')
+      : '<li class="mono pl-empty">None yet.</li>';
+    $('pl-hand-n').textContent = String(hand.length);
+    refresh();
+  }
+
+  const WHEN_OK = /^\d{4}(-(0[1-9]|1[0-2]))?$/;
+  const toAdd = () => rows.filter((r) => r.keep && r.hits.length).map((r) => {
+    const h = r.hits[r.pick];
+    return {
+      name: r.name.trim() || shortName(h), country: ccOf(h), lat: Number(h.lat), lng: Number(h.lon),
+      ...(r.when ? { when: r.when } : {}), ...(r.note ? { note: r.note } : {}),
+    } as Hand;
+  });
+  const next = () => [...hand, ...toAdd()];
+  const badWhen = () => next().filter((p) => p.when && !WHEN_OK.test(p.when)).map((p) => p.name);
+
+  function refresh() {
+    const adding = toAdd().length;
+    const ids = new Set(hand.map((p) => p.id));
+    const removing = saved.filter((p) => !ids.has(p.id)).length;
+    const editing = hand.filter((p) => {
+      const o = saved.find((s) => s.id === p.id);
+      return o && ((o.when ?? '') !== (p.when ?? '') || (o.note ?? '') !== (p.note ?? ''));
+    }).length;
+    const parts = [
+      adding ? `add ${adding}` : '', removing ? `remove ${removing}` : '', editing ? `change ${editing}` : '',
+    ].filter(Boolean);
+    const bad = badWhen();
+    $('pl-pending').textContent = bad.length
+      ? `Fix the year on ${bad.join(', ')} — YYYY or YYYY-MM.`
+      : parts.length ? `Will ${parts.join(', ')}.` : 'No changes.';
+    $<HTMLButtonElement>('pl-save').disabled = !parts.length || bad.length > 0;
+  }
+
+  document.addEventListener('input', (e) => {
+    const t = e.target as HTMLInputElement;
+    const d = t.dataset;
+    if (d.name) rows[Number(d.name)].name = t.value;
+    else if (d.when) rows[Number(d.when)].when = t.value.trim() || undefined;
+    else if (d.hwhen) hand[Number(d.hwhen)].when = t.value.trim() || undefined;
+    else if (d.hnote) hand[Number(d.hnote)].note = t.value.trim() || undefined;
+    else return;
+    refresh();
+  });
+  document.addEventListener('change', (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.dataset.keep) { rows[Number(t.dataset.keep)].keep = t.checked; render(); }
+    if (t.dataset.pick) {
+      const r = rows[Number(t.dataset.pick)];
+      r.pick = Number(t.value);
+      r.name = shortName(r.hits[r.pick]);
+      render();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-drop], [data-hdrop]');
+    if (!t) return;
+    if (t.dataset.drop) rows.splice(Number(t.dataset.drop), 1);
+    else hand.splice(Number(t.dataset.hdrop), 1);
+    render();
+  });
+
+  // ---- saving ---------------------------------------------------------------------------------
+  const err = $('pl-error');
+  $('pl-save').addEventListener('click', async () => {
+    const btn = $<HTMLButtonElement>('pl-save');
+    btn.disabled = true;
+    err.textContent = '';
+    try {
+      const places = next();
+      const res = await fetch('/api/admin/places', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-cleatus-admin': '1' },
+        body: JSON.stringify({ version: data.version, places }),
+      });
+      const out = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (res.status === 409) {
+        err.textContent = 'Nothing was saved: the list changed since this page loaded. Copy your new places, reload, and paste them again.';
+        return;
+      }
+      if (!res.ok) { err.textContent = `Nothing was saved: ${out.error}`; return; }
+      // Reload to pick up the ids and order the server gave them.
+      location.href = `/admin/places?saved=${encodeURIComponent(out.commit ?? '')}`;
+    } catch (e) {
+      err.textContent = `Nothing was saved: ${(e as Error).message}`;
+    } finally {
+      refresh();
+    }
+  });
+
+  const savedAs = new URLSearchParams(location.search).get('saved');
+  if (savedAs !== null) {
+    $('pl-status').textContent = !savedAs
+      ? 'Nothing needed saving.'
+      : data.hosted ? `Published as ${savedAs}. The map updates in a minute or two.` : `Saved on this laptop as ${savedAs}.`;
+    history.replaceState(null, '', '/admin/places');
+  }
+
+  addEventListener('beforeunload', (e) => {
+    if (!$<HTMLButtonElement>('pl-save').disabled && !finding) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  render();
+</script>
+
+<style>
+  .pl-sec { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--color-rule); max-width: 60rem; }
+  .pl-h { font-family: var(--font-display); font-size: 1.15rem; margin: 0; }
+  .pl-sum { cursor: pointer; }
+  .pl-count { font-size: 0.75rem; color: var(--color-stone); font-family: var(--font-mono); margin-left: 0.3rem; }
+  .pl-help { color: var(--color-stone); margin: 0.3rem 0 0.75rem; font-size: 0.9375rem; }
+  #pl-input { width: 100%; font: inherit; font-family: var(--font-mono); font-size: 0.875rem; line-height: 1.5; padding: 0.6rem 0.7rem; border: 1px solid var(--color-rule); resize: vertical; }
+  .pl-row { display: flex; align-items: center; gap: 1rem; margin: 0.6rem 0 0; }
+  .pl-status { font-size: 0.75rem; color: var(--color-stone); }
+  .pl-found, .pl-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.4rem; }
+  .pl-entries { font-size: 0.875rem; line-height: 1.6; color: var(--color-stone); }
+  .pl-save {
+    position: sticky; bottom: 0; z-index: 5; max-width: 60rem; margin-top: 1.5rem;
+    display: flex; align-items: center; justify-content: flex-end; gap: 1rem; flex-wrap: wrap;
+    padding: 0.8rem 0; background: var(--color-snow); border-top: 1px solid var(--color-rule);
+  }
+  .pl-pending { margin: 0 auto 0 0; font-size: 0.75rem; }
+  .pl-save .dlg-err { margin: 0; }
+
+  :global(.pl-r) {
+    display: grid; grid-template-columns: auto 1fr 5.5rem auto; gap: 0.6rem; align-items: start;
+    padding: 0.55rem 0.6rem; border: 1px solid var(--color-rule); background: #fff;
+  }
+  :global(.pl-r.is-off) { opacity: 0.55; }
+  :global(.pl-r--miss) { display: flex; gap: 0.5rem; align-items: center; color: var(--color-ember); font-size: 0.875rem; }
+  :global(.pl-r--miss .pl-x) { margin-left: auto; }
+  :global(.pl-r > input[type='checkbox']) { margin-top: 0.45rem; accent-color: var(--color-ink); }
+  :global(.pl-r__main) { display: grid; gap: 0.3rem; min-width: 0; }
+  :global(.pl-r__name), :global(.pl-r__when), :global(.pl-h-r__note), :global(.pl-r select) {
+    font: inherit; font-size: 0.875rem; padding: 0.3rem 0.45rem; border: 1px solid var(--color-rule); min-width: 0; max-width: 100%;
+  }
+  :global(.pl-r__name) { font-weight: 600; }
+  :global(.pl-r__where) { font-size: 0.8125rem; color: var(--color-stone); }
+  :global(.pl-r__warn) { font-size: 0.6875rem; color: var(--color-ember); }
+  :global(.pl-x) {
+    border: 0; background: none; font-size: 1.15rem; line-height: 1; padding: 0.25rem 0.4rem;
+    color: var(--color-stone); cursor: pointer;
+  }
+  :global(.pl-x:hover) { color: #9b1c1c; }
+  :global(.pl-h-r) {
+    display: grid; grid-template-columns: minmax(8rem, 1fr) 9rem 5.5rem minmax(8rem, 1.4fr) auto; gap: 0.6rem; align-items: center;
+    padding: 0.35rem 0; border-bottom: 1px solid var(--color-rule);
+  }
+  :global(.pl-h-r__name) { font-weight: 600; }
+  :global(.pl-h-r__cc) { font-size: 0.6875rem; color: var(--color-stone); }
+  :global(.pl-empty) { font-size: 0.75rem; color: var(--color-stone); }
+  @media (max-width: 640px) {
+    :global(.pl-h-r) { grid-template-columns: 1fr 5rem auto; }
+    :global(.pl-h-r__cc), :global(.pl-h-r__note) { grid-column: 1 / -1; }
+    :global(.pl-r) { grid-template-columns: auto 1fr auto; }
+    :global(.pl-r__when) { grid-column: 2; }
+  }
+</style>

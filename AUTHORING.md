@@ -118,6 +118,14 @@ The same file feeds the Numbers page — the year-by-year count, most-visited
 countries, and the spreadsheet's tick boxes (`FLAGS`: dived, Muslim-majority,
 communist at the time, lived in). Tick a new country by adding its code to the right list.
 
+**Cities and places.** Every place an entry is pinned to (its "Where") is already a
+dot on the map, named once you zoom in. For the towns you went through and never
+wrote about, use **Map places** in the admin: paste a list, one place per line —
+`Prague, Czech Republic 1988`, `Luang Prabang 2007 — the night market` — press
+*Find them*, untick any wrong matches, and save. They're kept in
+`src/content/places/visited.json` and show as hollow dots. A place in a country
+that isn't in `been-to.ts` gets a warning; add the country there too.
+
 Then open the trip file and write the **summary** — two sentences, your words.
 That's the only part nothing else can do for you.
 

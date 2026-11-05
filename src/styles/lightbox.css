@@ -1,0 +1,72 @@
+/* The photo viewer (src/scripts/lightbox.ts). Always dark: it frames a photo. */
+html.lb-open { overflow: hidden; }
+
+.lb {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: clamp(0.75rem, 2.5vw, 2rem) clamp(0.75rem, 5vw, 5rem);
+  border: 0;
+  overflow: hidden;
+  color: #eef3f5;
+  background: rgba(6, 9, 13, 0.94);
+}
+.lb::backdrop { background: rgba(6, 9, 13, 0.94); }
+
+.lb__fig {
+  height: 100%;
+  margin: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: 0.75rem;
+}
+.lb__stage {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lb__img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.lb__text { width: min(100%, 44rem); font-size: 0.9375rem; line-height: 1.45; }
+.lb__count { display: block; font-size: 0.75rem; color: #a9b6bf; text-align: center; }
+.lb__count:empty { display: none; }
+.lb__cap { margin: 0.2rem 0 0; max-height: 7.5rem; overflow-y: auto; white-space: pre-line; overflow-wrap: anywhere; }
+.lb__meta { margin: 0.3rem 0 0; font-size: 0.75rem; color: #a9b6bf; }
+
+.lb button {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  font: inherit;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(18, 22, 28, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.lb button[hidden] { display: none; }
+.lb button:hover { background: #2a323b; }
+.lb button:focus-visible { outline: 2px solid #ffc24b; outline-offset: 2px; }
+.lb__close { top: 0.75rem; right: 0.75rem; }
+.lb__nav { top: 50%; transform: translateY(-50%); }
+.lb__nav--prev { left: 0.5rem; }
+.lb__nav--next { right: 0.5rem; }

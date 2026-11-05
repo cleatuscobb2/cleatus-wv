@@ -23,7 +23,7 @@ const when = (d: string) => {
           {p.data.media.map((m) => m.video ? (
             <video src={m.src} poster={m.poster} controls preload="none" playsinline width={m.w} height={m.h}></video>
           ) : (
-            <a href={m.src}><img src={m.thumb} alt="" loading="lazy" decoding="async" width={m.w} height={m.h} /></a>
+            <a href={m.src} aria-label="Enlarge photo"><img src={m.thumb} alt="" loading="lazy" decoding="async" width={m.w} height={m.h} /></a>
           ))}
         </div>
         {p.data.media.length > 1 && <p class="mono ig__more">{p.data.media.length} photos · swipe</p>}
@@ -34,6 +34,22 @@ const when = (d: string) => {
   </div>
 </section>
 
+<script>
+  import { openLightbox, plainClick } from '../scripts/lightbox.ts';
+
+  // Enlarge in place; each post's photos step through together.
+  document.querySelectorAll<HTMLElement>('.ig__post').forEach((post) => {
+    const links = [...post.querySelectorAll<HTMLAnchorElement>('.ig__strip a')];
+    const caption = post.querySelector('.ig__caption')?.textContent ?? '';
+    const meta = post.querySelector('.ig__meta')?.textContent ?? '';
+    links.forEach((a, i) => a.addEventListener('click', (e) => {
+      if (!plainClick(e)) return;
+      e.preventDefault();
+      openLightbox(links.map((l) => ({ src: l.href, caption, meta })), i);
+    }));
+  });
+</script>
+
 <style>
   .ig { max-width: 76rem; margin: clamp(2.5rem, 6vw, 4rem) auto 0; padding: 0 clamp(1rem, 4vw, 3rem); }
   .ig__head { font-size: 0.8125rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-stone); margin: 0 0 1rem; }
@@ -43,6 +59,7 @@ const when = (d: string) => {
   .ig__strip { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; aspect-ratio: 1; background: var(--color-rule); }
   .ig__strip > * { flex: 0 0 100%; width: 100%; height: 100%; scroll-snap-align: start; display: block; }
   .ig__strip img, .ig__strip video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ig__strip a { cursor: zoom-in; }
   .ig__more { margin: 0.35rem 0 0; font-size: 0.6875rem; color: var(--color-stone); }
   .ig__caption { margin: 0.55rem 0 0; font-size: 0.9375rem; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
   .ig__meta { margin: 0.45rem 0 0; font-size: 0.6875rem; color: var(--color-stone); }

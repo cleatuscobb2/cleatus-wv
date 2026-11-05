@@ -6,6 +6,7 @@
  * panel, a guided tour, and timeline hovers that fly the globe to the trip.
  */
 import type { Map as MLMap, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl';
+import { openLightbox, plainClick } from './lightbox.ts';
 import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, firstSymbolLayer, loadMaplibre, reducedMotion, webglOk } from './map-kit.ts';
 
 interface Country {
@@ -442,11 +443,18 @@ async function start(stage: HTMLElement) {
       const meta = [post.when, post.place, post.author].filter(Boolean).join(' · ');
       root.innerHTML = `<div class="igp__media">${m.video
         ? `<video src="${esc(m.src)}" poster="${esc(m.poster ?? '')}" controls playsinline preload="metadata"></video>`
-        : `<a href="${esc(m.src)}" target="_blank" rel="noopener"><img src="${esc(m.src)}" alt="" /></a>`}</div>
+        : `<a href="${esc(m.src)}" aria-label="Enlarge photo"><img src="${esc(m.src)}" alt="" /></a>`}</div>
         ${slides.length > 1 ? `<div class="igp__nav"><button type="button" data-d="-1" aria-label="Previous">‹</button><span class="mono">${n + 1} / ${slides.length}</span><button type="button" data-d="1" aria-label="Next">›</button></div>` : ''}
         ${post.caption ? `<p class="igp__caption">${esc(post.caption)}</p>` : ''}
         <p class="gpop__meta">${esc(meta)}</p>
         ${post.trip ? `<p class="gpop__more"><a href="/${esc(post.trip.id)}/">${esc(post.trip.title)} →</a></p>` : ''}`;
+      // Enlarge in place, with the rest of this post's photos a swipe away.
+      root.querySelector<HTMLAnchorElement>('.igp__media a')?.addEventListener('click', (e) => {
+        if (!plainClick(e)) return;
+        e.preventDefault();
+        const photos = post.media.filter((x) => !x.video);
+        openLightbox(photos.map((x) => ({ src: x.src, caption: post.caption, meta })), photos.indexOf(m));
+      });
       root.querySelectorAll<HTMLButtonElement>('[data-d]').forEach((b) => b.addEventListener('click', () => {
         n = (n + Number(b.dataset.d) + slides.length) % slides.length;
         draw();

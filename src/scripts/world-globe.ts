@@ -193,9 +193,10 @@ async function start(stage: HTMLElement) {
     id: 'pl-dot', type: 'circle', source: 'places',
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, ['case', ['>=', ['get', 'n'], 3], 2.6, 1.8], 6, ['case', ['>=', ['get', 'n'], 3], 5, 4]] as never,
-      'circle-color': ['case', ['>', ['get', 'n'], 0], '#f4fbfc', '#0a0e13'] as never,
-      'circle-stroke-color': ['case', ['>', ['get', 'n'], 0], '#0a0e13', '#7fd8e8'] as never,
-      'circle-stroke-width': ['case', ['>', ['get', 'n'], 0], 1, 1.6] as never,
+      // White where they've written from; yellow where they've been but haven't yet.
+      'circle-color': ['case', ['>', ['get', 'n'], 0], '#f4fbfc', '#ffc24b'] as never,
+      'circle-stroke-color': '#0a0e13',
+      'circle-stroke-width': 1,
     },
   });
   map.addLayer({

@@ -211,7 +211,7 @@ const globeConfig = {
         <li>
           <label>
             <input type="checkbox" value="places" data-layer-toggle checked />
-            <span class="key-panel__icon" aria-hidden="true"><span class="key__dot"></span></span>
+            <span class="key-panel__icon" aria-hidden="true"><span class="key__dot"></span><span class="key__dot key__dot--been"></span></span>
             <span class="key-panel__label">Cities &amp; places</span>
             <span class="mono key-panel__n" data-places-n></span>
           </label>
@@ -241,7 +241,7 @@ const globeConfig = {
           </li>
         ))}
       </ul>
-      <p class="key-panel__note">Places are where each entry says it happened, pinned to the town, camp or park — not a GPS track. A hollow dot is somewhere they've been but haven't written from yet.</p>
+      <p class="key-panel__note">Places are where each entry says it happened, pinned to the town, camp or park — not a GPS track. A white dot has entries written from it; a yellow dot is somewhere they've been but haven't written from yet.</p>
     </div>
 
     <aside class="gpanel" data-globe-panel hidden aria-live="polite"></aside>
@@ -594,8 +594,9 @@ const globeConfig = {
   .key-panel__icon { font-size: 1rem; text-align: center; }
   .key__dot {
     display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%;
-    background: #f4fbfc; box-shadow: 0 0 0 2px #0a0e13, 0 0 0 3px #7fd8e8; vertical-align: middle;
+    background: #f4fbfc; box-shadow: 0 0 0 1px #0a0e13; vertical-align: middle;
   }
+  .key__dot--been { background: #ffc24b; margin-left: 0.15rem; }
   .key__aa { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; color: #7fd8e8; }
   .key-panel__n { font-size: 0.625rem; color: var(--color-stone-on-dark); }
   .key-panel__note { margin: 0.7rem 0 0; font-size: 0.6875rem; color: var(--color-stone-on-dark); line-height: 1.4; }

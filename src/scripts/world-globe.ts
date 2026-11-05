@@ -19,7 +19,7 @@ interface Place {
   name: string; country: string; countryName: string; lat: number; lng: number; n: number; years: string;
   entries: { title: string; href: string; date: string; trip: string }[]; note?: string;
 }
-interface Data { countries: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; trips: TripOut[] }
+interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; trips: TripOut[] }
 
 /*
  * Home view: Europe, Africa and Asia facing you, the globe filling ~94% of the
@@ -122,6 +122,21 @@ async function start(stage: HTMLElement) {
       'circle-stroke-color': '#0a0e13', 'circle-stroke-width': 1,
     },
   }, below);
+
+  // --- US states they've been to: home isn't among the countries, so it's by state ------
+  map.addSource('st', { type: 'geojson', data: data.states, promoteId: 'code' });
+  map.addLayer({
+    id: 'st-fill', type: 'fill', source: 'st',
+    paint: {
+      'fill-color': '#3a8f9c',
+      'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.7, 0.45] as never,
+    },
+  }, below);
+  map.addLayer({
+    id: 'st-line', type: 'line', source: 'st',
+    paint: { 'line-color': '#7fd8e8', 'line-width': 0.6, 'line-opacity': 0.55 },
+  }, below);
+  stage.querySelector('[data-states-n]')!.textContent = `${data.states.features.length} of 50`;
 
   // --- trip routes, faint, so the events read as journeys ------------------------------
   map.addSource('routes', {
@@ -303,6 +318,29 @@ async function start(stage: HTMLElement) {
   map.on('click', 'cc-fill', onCountry);
   map.on('click', 'cc-dot', onCountry);
 
+  let stHovered: string | null = null;
+  map.on('mousemove', 'st-fill', (e) => {
+    const id = e.features?.[0]?.properties?.code as string | undefined;
+    if (stHovered && stHovered !== id) map.setFeatureState({ source: 'st', id: stHovered }, { hover: false });
+    if (id) { stHovered = id; map.setFeatureState({ source: 'st', id }, { hover: true }); }
+    map.getCanvas().style.cursor = 'pointer';
+  });
+  map.on('mouseleave', 'st-fill', () => {
+    if (stHovered) map.setFeatureState({ source: 'st', id: stHovered }, { hover: false });
+    stHovered = null;
+    map.getCanvas().style.cursor = '';
+  });
+  map.on('click', 'st-fill', (e) => {
+    stopSpin();
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'pl-dot', 'pl-label'] }).length) return;
+    const name = e.features?.[0]?.properties?.name as string | undefined;
+    if (!name) return;
+    popup
+      .setLngLat(e.lngLat)
+      .setHTML(`<p class="gpop__title">${esc(name)}</p><p class="gpop__meta">One of the ${data.states.features.length} US states they've been to</p>`)
+      .addTo(map);
+  });
+
   map.on('click', 'ev-cluster', async (e) => {
     stopSpin();
     const f = e.features![0];
@@ -363,7 +401,7 @@ async function start(stage: HTMLElement) {
     (map.getSource('ev') as GeoJSONSource).setData(evFeatures());
   });
 
-  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'] };
+  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'], states: ['st-fill', 'st-line'] };
   stage.querySelectorAll<HTMLInputElement>('[data-layer-toggle]').forEach((box) => {
     box.addEventListener('change', () => {
       for (const id of LAYERS[box.value] ?? []) map.setLayoutProperty(id, 'visibility', box.checked ? 'visible' : 'none');

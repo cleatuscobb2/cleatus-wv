@@ -15,6 +15,8 @@ import { getCollection } from 'astro:content';
 import { feature } from 'topojson-client';
 import { geoArea, geoBounds, geoCentroid, geoContains, geoDistance } from 'd3-geo';
 import world from 'world-atlas/countries-50m.json';
+import usStates from 'us-atlas/states-10m.json';
+import { NOT_YET, STATES } from '../data/us-states.ts';
 import { COUNTRY_NAMES, COUNTRY_NUMERIC, POINT_MARKERS } from '../data/trip-meta.ts';
 import { beenTo, yearSpans, FLAGS } from '../data/been-to.ts';
 import { kindsOf, type Kind } from '../lib/journey.ts';
@@ -303,7 +305,22 @@ export async function GET() {
       };
     });
 
-  return new Response(JSON.stringify({ countries: { type: 'FeatureCollection', features: countries }, events, places, trips: tripOut }), {
+  // --- US states they've been to (home isn't among the countries) --------------------
+  const states = (feature(usStates as never, (usStates as never as { objects: { states: unknown } }).objects.states) as unknown as {
+    features: Feat[];
+  }).features
+    .filter((f) => STATES[String(f.id)] && !NOT_YET.includes(STATES[String(f.id)][0]))
+    .map((f) => {
+      const [code, name] = STATES[String(f.id)];
+      const geometry = mendAntimeridian({ type: f.geometry.type, coordinates: slim(f.geometry.coordinates) });
+      return { type: 'Feature', geometry, properties: { code, name } };
+    });
+
+  return new Response(JSON.stringify({
+    countries: { type: 'FeatureCollection', features: countries },
+    states: { type: 'FeatureCollection', features: states },
+    events, places, trips: tripOut,
+  }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

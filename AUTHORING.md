@@ -127,6 +127,8 @@ wrote about, use **Map places** in the admin: paste a list, one place per line �
 that isn't in `been-to.ts` gets a warning; add the country there too. Add `(dive)` to a line, or tick 🤿, for a dive site: it gets a dive marker, and the
 country's catch-all "Dived in …" marker goes away.
 
+**US states.** Home isn't counted among the countries, so the map shades the US by state instead. The states not yet visited are listed in `src/data/us-states.ts` (`NOT_YET`); take one off the list once you've been.
+
 Then open the trip file and write the **summary** — two sentences, your words.
 That's the only part nothing else can do for you.
 

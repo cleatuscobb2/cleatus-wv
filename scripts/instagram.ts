@@ -42,7 +42,13 @@ interface Post {
   media: Media[]; lat: number | null; lng: number | null; pin: 'gps' | 'date' | null; pinNote?: string;
   home: string | null; country: string; place: string; trip: string | null;
 }
-interface Decision { publish?: boolean; trip?: string | null; pin?: { lat: number; lng: number } | null; place?: string; caption?: string }
+interface Decision {
+  publish?: boolean; trip?: string | null; pin?: { lat: number; lng: number } | null; place?: string; caption?: string;
+  /** Corrects a pin the export got wrong. */
+  country?: string;
+  /** Shows the post on this entry of its trip, rather than in the trip's own list. */
+  entry?: string;
+}
 interface Home { name: string; lat: number; lng: number; km: number }
 interface Trip { id: string; title: string; start: string; end: string; countries: string[] }
 interface Pinned { date: string; trip: string; name: string; lat: number; lng: number }
@@ -312,8 +318,9 @@ async function publish() {
       id: p.id, author: p.author, date: p.date, caption: d.caption ?? p.caption,
       ...(lat != null && lng != null ? { lat: Math.round(lat * 1e4) / 1e4, lng: Math.round(lng * 1e4) / 1e4 } : {}),
       ...((d.place ?? p.place) ? { place: d.place ?? p.place } : {}),
-      ...(p.country ? { country: p.country } : {}),
+      ...((d.country ?? p.country) ? { country: d.country ?? p.country } : {}),
       ...(trip ? { trip } : {}),
+      ...(trip && d.entry ? { entry: d.entry } : {}),
       media,
     });
   }

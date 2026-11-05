@@ -8,7 +8,7 @@
  */
 import '../styles/lightbox.css';
 
-export interface Slide { src: string; caption?: string; meta?: string }
+export interface Slide { src: string; alt?: string; caption?: string; meta?: string }
 
 let dialog: HTMLDialogElement | null = null;
 let slides: Slide[] = [];
@@ -21,6 +21,8 @@ function show() {
   const img = part<HTMLImageElement>('.lb__img');
   // Blank first, so a slow photo doesn't sit under the last one's caption.
   img.removeAttribute('src');
+  img.alt = s.alt ?? '';
+  part('.lb__err').hidden = true;
   img.src = s.src;
   const cap = part('.lb__cap');
   cap.textContent = s.caption ?? '';
@@ -52,7 +54,10 @@ function build() {
     <button type="button" class="lb__nav lb__nav--prev" aria-label="Previous photo">‹</button>
     <button type="button" class="lb__nav lb__nav--next" aria-label="Next photo">›</button>
     <figure class="lb__fig">
-      <div class="lb__stage"><img class="lb__img" alt="" /></div>
+      <div class="lb__stage">
+        <img class="lb__img" alt="" />
+        <p class="lb__err" hidden>This photo didn't open in this browser.</p>
+      </div>
       <figcaption class="lb__text">
         <span class="lb__count" aria-live="polite"></span>
         <p class="lb__cap"></p>
@@ -62,6 +67,8 @@ function build() {
   document.body.append(d);
   dialog = d;
 
+  // A few old photos are iPhone HEIC files, which not every browser can draw.
+  part('.lb__img').addEventListener('error', () => { part('.lb__err').hidden = false; });
   part('.lb__close').addEventListener('click', () => d.close());
   part('.lb__nav--prev').addEventListener('click', () => step(-1));
   part('.lb__nav--next').addEventListener('click', () => step(1));

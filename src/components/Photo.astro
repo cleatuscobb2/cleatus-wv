@@ -17,13 +17,23 @@ const { src, alt = '', caption, size = 'wide' } = Astro.props;
 ---
 
 <figure class={`photo photo--${size}`}>
-  <img src={src} alt={alt} loading="lazy" decoding="async" />
+  <a href={src} data-zoom aria-label={alt ? `Enlarge photo: ${alt}` : 'Enlarge photo'}>
+    <img src={src} alt={alt} loading="lazy" decoding="async" />
+  </a>
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
+
+<script>
+  import '../scripts/photo-zoom.ts';
+</script>
 
 <style>
   .photo {
     margin-block: 2rem;
+  }
+  .photo a {
+    display: block;
+    cursor: zoom-in;
   }
   .photo img {
     display: block;

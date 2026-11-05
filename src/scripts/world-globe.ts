@@ -22,7 +22,7 @@ interface Place {
 }
 interface Photo {
   lat: number; lng: number; author: string; caption: string; when: string; place: string;
-  trip: { id: string; title: string } | null;
+  link: { href: string; title: string } | null;
   media: { src: string; poster?: string; video?: boolean }[];
 }
 interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; photos: Photo[]; trips: TripOut[] }
@@ -447,7 +447,7 @@ async function start(stage: HTMLElement) {
         ${slides.length > 1 ? `<div class="igp__nav"><button type="button" data-d="-1" aria-label="Previous">‹</button><span class="mono">${n + 1} / ${slides.length}</span><button type="button" data-d="1" aria-label="Next">›</button></div>` : ''}
         ${post.caption ? `<p class="igp__caption">${esc(post.caption)}</p>` : ''}
         <p class="gpop__meta">${esc(meta)}</p>
-        ${post.trip ? `<p class="gpop__more"><a href="/${esc(post.trip.id)}/">${esc(post.trip.title)} →</a></p>` : ''}`;
+        ${post.link ? `<p class="gpop__more"><a href="${esc(post.link.href)}">${esc(post.link.title)} →</a></p>` : ''}`;
       // Enlarge in place, with the rest of this post's photos a swipe away.
       root.querySelector<HTMLAnchorElement>('.igp__media a')?.addEventListener('click', (e) => {
         if (!plainClick(e)) return;

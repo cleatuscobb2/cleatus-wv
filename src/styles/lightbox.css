@@ -40,6 +40,9 @@ html.lb-open { overflow: hidden; }
   object-fit: contain;
 }
 
+.lb__err { margin: 0; color: #a9b6bf; text-align: center; }
+.lb__err[hidden] { display: none; }
+
 .lb__text { width: min(100%, 44rem); font-size: 0.9375rem; line-height: 1.45; }
 .lb__count { display: block; font-size: 0.75rem; color: #a9b6bf; text-align: center; }
 .lb__count:empty { display: none; }

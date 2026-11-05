@@ -14,13 +14,24 @@ const { shots, caption } = Astro.props;
 <figure class="pair">
   <div class="pair__grid">
     {shots.slice(0, 2).map((s) => (
-      <img src={s.src} alt={s.alt ?? ''} loading="lazy" decoding="async" />
+      <a href={s.src} data-zoom aria-label={s.alt ? `Enlarge photo: ${s.alt}` : 'Enlarge photo'}>
+        <img src={s.src} alt={s.alt ?? ''} loading="lazy" decoding="async" />
+      </a>
     ))}
   </div>
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
 
+<script>
+  import '../scripts/photo-zoom.ts';
+</script>
+
 <style>
+  .pair__grid a {
+    display: block;
+    height: 100%;
+    cursor: zoom-in;
+  }
   .pair {
     margin-block: 2rem;
     width: min(100%, calc(var(--measure) + 12rem));

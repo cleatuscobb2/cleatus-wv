@@ -312,11 +312,17 @@ export async function GET() {
     .map((p) => {
       const d = new Date(`${p.data.date}T00:00:00Z`);
       const trip = trips.find((t) => t.id === p.data.trip);
+      const entryTitle = p.data.entry
+        ? located.find((e) => tripIdOf(e) === p.data.trip && entrySlug(e) === p.data.entry)?.data.title
+        : undefined;
       return {
         lat: p.data.lat, lng: p.data.lng, author: p.data.author, caption: p.data.caption,
         when: `${fmtDateShort(d)} ${d.getUTCFullYear()}`,
         place: [p.data.place, p.data.country ? COUNTRY_NAMES[p.data.country] ?? '' : ''].filter(Boolean).join(', '),
-        trip: trip ? { id: trip.id, title: trip.data.shortTitle } : null,
+        // Links to its entry if it has one, otherwise to its trip.
+        link: entryTitle
+          ? { href: `/${p.data.trip}/${p.data.entry}/`, title: entryTitle }
+          : trip ? { href: `/${trip.id}/`, title: trip.data.shortTitle } : null,
         media: p.data.media.map(({ src, poster, video }) => ({ src, poster, video })),
       };
     });

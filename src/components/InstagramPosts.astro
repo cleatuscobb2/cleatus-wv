@@ -7,14 +7,18 @@ import { fmtDateShort } from '../lib/entries.ts';
 
 interface Media { src: string; thumb: string; poster?: string; w: number; h: number; video?: boolean }
 interface Post { id: string; data: { author: string; date: string; caption: string; place?: string; media: Media[] } }
-interface Props { posts: Post[] }
-const { posts } = Astro.props;
+interface Props {
+  posts: Post[];
+  /** Inside an entry: bigger photos, and the entry's own margins. */
+  large?: boolean;
+}
+const { posts, large = false } = Astro.props;
 const when = (d: string) => {
   const date = new Date(`${d}T00:00:00Z`);
   return `${fmtDateShort(date)} ${date.getUTCFullYear()}`;
 };
 ---
-<section class="ig" aria-labelledby="ig-head">
+<section class:list={['ig', { 'ig--large': large }]} aria-labelledby="ig-head">
   <h2 class="mono ig__head" id="ig-head">From Instagram <span class="ig__n">{posts.length}</span></h2>
   <div class="ig__grid">
     {posts.map((p) => (
@@ -52,6 +56,8 @@ const when = (d: string) => {
 
 <style>
   .ig { max-width: 76rem; margin: clamp(2.5rem, 6vw, 4rem) auto 0; padding: 0 clamp(1rem, 4vw, 3rem); }
+  .ig--large { padding: 0; margin-block: 2rem 0; }
+  .ig--large .ig__grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)); }
   .ig__head { font-size: 0.8125rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-stone); margin: 0 0 1rem; }
   .ig__n { opacity: 0.75; margin-left: 0.3rem; }
   .ig__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: clamp(1rem, 2.5vw, 1.75rem); align-items: start; }

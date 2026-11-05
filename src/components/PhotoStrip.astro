@@ -9,12 +9,26 @@ const { shots, caption } = Astro.props as { shots: Shot[]; caption?: string };
 
 <figure class="strip">
   <div class="strip__scroll" tabindex="0" role="group" aria-label={caption ?? 'Photographs'}>
-    {shots.map((s) => <img src={s.src} alt={s.alt ?? ''} loading="lazy" decoding="async" />)}
+    {shots.map((s) => (
+      <a href={s.src} data-zoom aria-label={s.alt ? `Enlarge photo: ${s.alt}` : 'Enlarge photo'}>
+        <img src={s.src} alt={s.alt ?? ''} loading="lazy" decoding="async" />
+      </a>
+    ))}
   </div>
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
 
+<script>
+  import '../scripts/photo-zoom.ts';
+</script>
+
 <style>
+  .strip__scroll a {
+    flex: 0 0 auto;
+    display: block;
+    scroll-snap-align: start;
+    cursor: zoom-in;
+  }
   .strip {
     margin-block: 2rem;
     width: min(100%, calc(var(--measure) + 12rem));
@@ -28,10 +42,9 @@ const { shots, caption } = Astro.props as { shots: Shot[]; caption?: string };
     padding-bottom: 0.5rem;
   }
   .strip__scroll img {
-    flex: 0 0 auto;
+    display: block;
     height: clamp(200px, 34vw, 340px);
     width: auto;
-    scroll-snap-align: start;
     background: var(--color-rule);
   }
   figcaption {

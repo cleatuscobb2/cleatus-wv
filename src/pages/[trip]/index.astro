@@ -36,7 +36,8 @@ const retro = (await getCollection('retrospectives'))
   .filter((r) => (typeof r.data.trip === 'string' ? r.data.trip : r.data.trip.id) === trip.id);
 
 const instagram = (await getCollection('instagram'))
-  .filter((p) => p.data.trip === trip.id)
+  // A post that belongs with one entry appears on that entry instead.
+  .filter((p) => p.data.trip === trip.id && !p.data.entry)
   .sort((a, b) => a.data.date.localeCompare(b.data.date));
 
 const startHere = d.startHere

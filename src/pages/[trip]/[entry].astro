@@ -13,6 +13,7 @@ import PhotoStrip from '../../components/PhotoStrip.astro';
 import Aside from '../../components/Aside.astro';
 import PullQuote from '../../components/PullQuote.astro';
 import Comments from '../../components/Comments.astro';
+import InstagramPosts from '../../components/InstagramPosts.astro';
 import {
   chronological, tripIdOf, entrySlug, routeNodes, fmtDate,
   AUTHOR_NAMES, excerpt,
@@ -51,6 +52,9 @@ const { Content } = await render(entry);
 
 const nodes = routeNodes(siblings);
 const me = entrySlug(entry);
+const instagram = trip
+  ? (await getCollection('instagram')).filter((p) => p.data.trip === trip.id && p.data.entry === me)
+  : [];
 const position = siblings.findIndex((s) => s.id === entry.id) + 1;
 const description = excerpt(entry.body, 155);
 
@@ -133,6 +137,8 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       <div class="prose-entry">
         <Content components={{ Photo, PhotoPair, PhotoStrip, Aside, PullQuote }} />
       </div>
+
+      {instagram.length > 0 && <InstagramPosts posts={instagram} large />}
 
       {d.tags.length > 0 && (
         <ul class="tags">

@@ -15,5 +15,6 @@
   {"id":"san-jose-del-cabo-mx-2","name":"San José del Cabo","country":"MX","lat":23.0631,"lng":-109.6965,"when":"2026"},
   {"id":"tulum-mx","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"when":"2018-06","dived":true},
   {"id":"tulum-mx-2","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"when":"2021-12"},
+  {"id":"auckland-nz","name":"Auckland","country":"NZ","lat":-36.8485,"lng":174.7633,"when":"2026-06"},
   {"id":"bangkok-th","name":"Bangkok","country":"TH","lat":13.7563,"lng":100.5018,"when":"2007-12"}
 ]

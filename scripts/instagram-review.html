@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Instagram review</title>
+<style>
+  :root { color-scheme: dark; --bg: #0f1318; --card: #181e25; --line: #2a333d; --ink: #eef3f5; --dim: #9aa8b2; --teal: #7fd8e8; --gold: #ffc24b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: #12171dee; backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: 0.7rem 1rem; display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; }
+  h1 { font-size: 1.05rem; margin: 0; }
+  #tally { color: var(--dim); font-size: 0.875rem; flex: 1 1 12rem; }
+  select, button, input[type=text], textarea { font: inherit; color: inherit; background: #222a32; border: 1px solid var(--line); border-radius: 6px; padding: 0.3rem 0.55rem; }
+  button { cursor: pointer; }
+  #publish { background: var(--gold); color: #1a1405; border-color: var(--gold); font-weight: 650; padding: 0.4rem 0.9rem; }
+  #publish:disabled { opacity: 0.6; cursor: wait; }
+  #msg { width: 100%; color: var(--teal); font-size: 0.875rem; }
+  #msg:empty { display: none; }
+  main { padding: 1rem; max-width: 1400px; margin: 0 auto; }
+  .note { color: var(--dim); max-width: 70ch; margin: 0 0 1rem; font-size: 0.9rem; }
+  section { margin: 0 0 2rem; }
+  .ghead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem; margin-bottom: 0.7rem; border-bottom: 1px solid var(--line); padding-bottom: 0.35rem; }
+  h2 { font-size: 1.1rem; margin: 0; }
+  .gn { color: var(--dim); font-size: 0.85rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 0.8rem; }
+  .card { background: var(--card); border: 2px solid var(--line); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .card.on { border-color: var(--gold); }
+  .strip { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; background: #000; aspect-ratio: 1; }
+  .strip > * { flex: 0 0 100%; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: start; }
+  .body { padding: 0.55rem 0.65rem 0.65rem; display: grid; gap: 0.4rem; font-size: 0.85rem; }
+  .tick { display: flex; gap: 0.45rem; align-items: center; font-weight: 650; cursor: pointer; }
+  .tick input { width: 1.1rem; height: 1.1rem; accent-color: var(--gold); }
+  .meta { color: var(--dim); font-size: 0.78rem; }
+  .warn { color: var(--gold); font-size: 0.78rem; }
+  textarea { width: 100%; min-height: 4.4rem; resize: vertical; font-size: 0.82rem; }
+  .body select, .body input[type=text] { width: 100%; font-size: 0.8rem; }
+  .row label { display: block; color: var(--dim); font-size: 0.72rem; margin-bottom: 0.1rem; }
+  details > summary { cursor: pointer; font-size: 1.1rem; font-weight: 650; margin-bottom: 0.7rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Instagram review</h1>
+  <span id="tally"></span>
+  <label>Group by <select id="group"><option value="trip">Trip, then year</option><option value="year">Year</option><option value="country">Country</option></select></label>
+  <label>Show <select id="show"><option value="all">All</option><option value="on">Ticked</option><option value="off">Not ticked</option></select></label>
+  <button id="publish" type="button">Publish ticked posts</button>
+  <div id="msg" role="status"></div>
+</header>
+<main>
+  <p class="note">Nothing here is public until you tick it and press Publish. Everything stays on this computer until then. Tick what can go on the site, and fix the caption or pin if you need to. Your ticks save as you go, so you can stop and come back.</p>
+  <div id="groups"></div>
+  <details id="homeBox"><summary id="homeHead"></summary><div class="grid" id="homeGrid"></div></details>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let posts = [], decisions = {}, trips = [], tripById = new Map();
+let saveTimer;
+const dec = (id) => decisions[id] ?? (decisions[id] = {});
+const isOn = (p) => !!decisions[p.id]?.publish;
+const tripOf = (p) => { const d = decisions[p.id]?.trip; return d === undefined ? p.trip : d; };
+
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => fetch('/api/decisions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(decisions) }), 250);
+}
+function tally() {
+  const open = posts.filter((p) => !p.home);
+  $('#tally').textContent = `${open.filter(isOn).length} of ${open.length} ticked · ${posts.length - open.length} near home, kept off`;
+}
+function groupKey(p) {
+  const mode = $('#group').value;
+  if (mode === 'year') return p.date.slice(0, 4);
+  if (mode === 'country') return p.country || 'Not placed';
+  const t = tripOf(p);
+  return t ? (tripById.get(t)?.title ?? t) + ' (trip)' : `${p.date.slice(0, 4)}, no trip`;
+}
+function media(p) {
+  return p.media.map((m, i) => m.video
+    ? `<video src="/m/${p.id}/${i}" controls preload="none"></video>`
+    : `<img src="/m/${p.id}/${i}" loading="lazy" alt="" />`).join('');
+}
+function card(p, locked) {
+  const d = decisions[p.id] ?? {};
+  const place = [d.place ?? p.place, p.country].filter(Boolean).join(', ');
+  const pinText = d.pin ? `${d.pin.lat}, ${d.pin.lng}` : '';
+  const multi = p.media.length > 1 ? ` · ${p.media.length} items, swipe` : '';
+  const warn = locked ? ''
+    : p.pin === 'date' ? `<div class="warn">${esc(p.pinNote)}</div>`
+    : !p.pin && !d.pin ? `<div class="warn">No location: it won't be on the map. Type a pin below to place it.</div>` : '';
+  return `<article class="card ${isOn(p) && !locked ? 'on' : ''}" data-id="${esc(p.id)}">
+    <div class="strip">${media(p)}</div>
+    <div class="body">
+      ${locked ? '' : `<label class="tick"><input type="checkbox" data-f="publish" ${isOn(p) ? 'checked' : ''} /> Put on the site</label>`}
+      <div class="meta">${esc(p.date)} · ${esc(p.author)}${place ? ' · ' + esc(place) : ''}${multi}</div>
+      ${warn}
+      ${locked ? `<div class="meta">${esc(p.caption)}</div>` : `
+      <div class="row"><label>Caption</label><textarea data-f="caption">${esc(d.caption ?? p.caption)}</textarea></div>
+      <div class="row"><label>Trip page</label><select data-f="trip"><option value="">None</option>${trips.map((t) => `<option value="${esc(t.id)}" ${tripOf(p) === t.id ? 'selected' : ''}>${esc(t.title)} ${esc(t.start.slice(0, 4))}</option>`).join('')}</select></div>
+      <div class="row"><label>Pin override (lat, lng)</label><input type="text" data-f="pin" value="${esc(pinText)}" placeholder="${p.pin ? 'Leave blank to keep this pin' : 'e.g. 35.88, 76.51'}" /></div>
+      <div class="row"><label>Place name</label><input type="text" data-f="place" value="${esc(d.place ?? p.place)}" /></div>`}
+    </div></article>`;
+}
+function render() {
+  const show = $('#show').value;
+  const open = posts.filter((p) => !p.home && (show === 'all' || (show === 'on') === isOn(p)));
+  const groups = new Map();
+  for (const p of open) { const k = groupKey(p); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+  const keys = [...groups.keys()].sort((a, b) => {
+    const at = a.endsWith('(trip)'), bt = b.endsWith('(trip)');
+    return at !== bt ? (at ? -1 : 1) : (at || $('#group').value === 'country' ? a.localeCompare(b) : b.localeCompare(a));
+  });
+  $('#groups').innerHTML = keys.map((k) => {
+    const list = groups.get(k);
+    return `<section><div class="ghead"><h2>${esc(k)}</h2><span class="gn">${list.length} posts</span>
+      <button type="button" data-all="1" data-key="${esc(k)}">Tick all</button>
+      <button type="button" data-all="0" data-key="${esc(k)}">Untick all</button></div>
+      <div class="grid">${list.map((p) => card(p, false)).join('')}</div></section>`;
+  }).join('');
+  const homes = posts.filter((p) => p.home);
+  $('#homeHead').textContent = `Near home: ${homes.length} posts, kept off the site`;
+  $('#homeBox').hidden = !homes.length;
+  $('#homeGrid').innerHTML = $('#homeBox').open ? homes.map((p) => card(p, true)).join('') : '';
+  tally();
+}
+$('#homeBox').addEventListener('toggle', () => { if ($('#homeBox').open) render(); });
+$('#group').addEventListener('change', render);
+$('#show').addEventListener('change', render);
+$('#groups').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-all]');
+  if (!b) return;
+  const on = b.dataset.all === '1';
+  for (const p of posts) if (!p.home && groupKey(p) === b.dataset.key) dec(p.id).publish = on;
+  save(); render();
+});
+$('#groups').addEventListener('change', (e) => {
+  const f = e.target.dataset.f;
+  const el = e.target.closest('.card');
+  if (!f || !el) return;
+  const p = posts.find((x) => x.id === el.dataset.id);
+  const d = dec(p.id);
+  if (f === 'publish') { d.publish = e.target.checked; el.classList.toggle('on', d.publish); }
+  if (f === 'caption') d.caption = e.target.value;
+  if (f === 'place') d.place = e.target.value;
+  if (f === 'trip') d.trip = e.target.value || null;
+  if (f === 'pin') {
+    const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(e.target.value);
+    if (m) d.pin = { lat: +m[1], lng: +m[2] };
+    else { delete d.pin; if (e.target.value.trim()) e.target.value = ''; }
+  }
+  save(); tally();
+});
+$('#publish').addEventListener('click', async () => {
+  const b = $('#publish');
+  clearTimeout(saveTimer);
+  b.disabled = true;
+  $('#msg').textContent = 'Preparing photos… this can take a few minutes the first time.';
+  try {
+    await fetch('/api/decisions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(decisions) });
+    const r = await fetch('/api/publish', { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    const j = await r.json();
+    $('#msg').textContent = `Ready: ${j.published} posts prepared in the site folder${j.removed ? `, ${j.removed} removed` : ''}${j.refused ? `, ${j.refused} refused because they're near home` : ''}. Nothing is live yet: tell Claude to put them online.`;
+  } catch (err) {
+    $('#msg').textContent = 'That failed: ' + err.message;
+  } finally {
+    b.disabled = false;
+  }
+});
+fetch('/api/data').then((r) => r.json()).then((j) => {
+  posts = j.posts; decisions = j.decisions; trips = j.trips.sort((a, b) => b.start.localeCompare(a.start));
+  tripById = new Map(trips.map((t) => [t.id, t]));
+  render();
+});
+</script>
+</body>
+</html>

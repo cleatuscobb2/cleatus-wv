@@ -11,6 +11,7 @@
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import RouteLine from '../../components/RouteLine.astro';
+import InstagramPosts from '../../components/InstagramPosts.astro';
 import {
   entriesForTrip, entrySlug, routeNodes, fmtRange, fmtDateShort,
   AUTHOR_NAMES, excerpt, type Entry,
@@ -33,6 +34,10 @@ const people = (await getCollection('people'))
 
 const retro = (await getCollection('retrospectives'))
   .filter((r) => (typeof r.data.trip === 'string' ? r.data.trip : r.data.trip.id) === trip.id);
+
+const instagram = (await getCollection('instagram'))
+  .filter((p) => p.data.trip === trip.id)
+  .sort((a, b) => a.data.date.localeCompare(b.data.date));
 
 const startHere = d.startHere
   ? entries.find((e) => entrySlug(e) === d.startHere)
@@ -274,6 +279,8 @@ const jsonLd = {
       </div>
     )}
   </section>
+
+  {instagram.length > 0 && <InstagramPosts posts={instagram} />}
 
   {people.length > 0 && (
     <section class="cast">

@@ -19,7 +19,12 @@ interface Place {
   name: string; country: string; countryName: string; lat: number; lng: number; n: number; years: string;
   entries: { title: string; href: string; date: string; trip: string }[]; note?: string;
 }
-interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; trips: TripOut[] }
+interface Photo {
+  lat: number; lng: number; author: string; caption: string; when: string; place: string;
+  trip: { id: string; title: string } | null;
+  media: { src: string; poster?: string; video?: boolean }[];
+}
+interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; photos: Photo[]; trips: TripOut[] }
 
 /*
  * Home view: Europe, Africa and Asia facing you, the globe filling ~94% of the
@@ -231,6 +236,37 @@ async function start(stage: HTMLElement) {
     paint: { 'text-color': '#eef7f8', 'text-halo-color': '#081626', 'text-halo-width': 1.5 },
   });
 
+  // --- Instagram posts, under the events so a photo never hides a story -------------------
+  addEmojiIcons(map, { 'ig-photo': '📷' }, '#ff8fb8');
+  map.addSource('ig', {
+    type: 'geojson', cluster: true, clusterRadius: 30, clusterMaxZoom: 11,
+    data: {
+      type: 'FeatureCollection',
+      features: data.photos.map((p, i) => ({
+        type: 'Feature' as const, properties: { i }, geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+      })),
+    },
+  });
+  map.addLayer({
+    id: 'ig-cluster', type: 'circle', source: 'ig', filter: ['has', 'point_count'],
+    paint: {
+      'circle-color': '#12161c', 'circle-stroke-color': '#ff8fb8', 'circle-stroke-width': 2,
+      'circle-radius': ['step', ['get', 'point_count'], 12, 8, 15, 25, 18],
+    },
+  });
+  map.addLayer({
+    id: 'ig-count', type: 'symbol', source: 'ig', filter: ['has', 'point_count'],
+    layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-allow-overlap': true },
+    paint: { 'text-color': '#ff8fb8' },
+  });
+  map.addLayer({
+    id: 'ig-icon', type: 'symbol', source: 'ig', filter: ['!', ['has', 'point_count']],
+    layout: { 'icon-image': 'ig-photo', 'icon-size': 0.5, 'icon-allow-overlap': true },
+  });
+  const igRow = stage.querySelector<HTMLElement>('[data-ig-row]');
+  if (igRow) igRow.hidden = !data.photos.length;
+  stage.querySelector('[data-ig-n]')!.textContent = String(data.photos.length);
+
   // --- events ----------------------------------------------------------------------------
   addEmojiIcons(map, Object.fromEntries(Object.entries(cfg.icons).map(([k, v]) => [`k-${k}`, v])));
   const enabled = new Set(cfg.order.filter((k) => !cfg.defaultOff.includes(k)));
@@ -311,7 +347,7 @@ async function start(stage: HTMLElement) {
   const onCountry = (e: { point: { x: number; y: number }; features?: { properties: Record<string, unknown> }[] }) => {
     stopSpin();
     // An icon or cluster on top of the country gets the click, not the country.
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'pl-dot', 'pl-label'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster', 'pl-dot', 'pl-label'] }).length) return;
     const code = e.features?.[0]?.properties?.code as string | undefined;
     if (code) showCountry(code);
   };
@@ -332,7 +368,7 @@ async function start(stage: HTMLElement) {
   });
   map.on('click', 'st-fill', (e) => {
     stopSpin();
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'pl-dot', 'pl-label'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster', 'pl-dot', 'pl-label'] }).length) return;
     const name = e.features?.[0]?.properties?.name as string | undefined;
     if (!name) return;
     popup
@@ -356,11 +392,21 @@ async function start(stage: HTMLElement) {
       .setHTML(`<p class="gpop__icons">${icons}</p><p class="gpop__title">${ev.href ? `<a href="${ev.href}">${esc(ev.title)}</a>` : esc(ev.title)}</p>
         <p class="gpop__meta">${esc([ev.place, ev.when, ev.trip].filter(Boolean).join(' · '))}</p>`)
       .addTo(map);
+    // Instagram posts sit under the events: offer any on this same spot.
+    const here = photosAt(e.point);
+    if (here.length) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'gpop__ig';
+      b.textContent = `📷 ${here.length} Instagram ${here.length > 1 ? 'posts' : 'post'} here`;
+      b.addEventListener('click', () => { popup.remove(); showPhotos(here, [here[0].lng, here[0].lat]); });
+      popup.getElement().querySelector('.maplibregl-popup-content')?.append(b);
+    }
   });
   // A place: what's written from there, or a note that nothing is yet.
   const onPlace = (e: { point: { x: number; y: number }; features?: { properties: Record<string, unknown> }[] }) => {
     stopSpin();
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster'] }).length) return;
     const p = data.places[e.features![0].properties!.i as number];
     const SHOW = 5;
     const list = p.entries.slice(0, SHOW).map((x) =>
@@ -379,7 +425,53 @@ async function start(stage: HTMLElement) {
   map.on('click', 'pl-dot', onPlace);
   map.on('click', 'pl-label', onPlace);
 
-  for (const l of ['ev-icon', 'ev-cluster', 'cc-dot', 'pl-dot', 'pl-label']) {
+  // An Instagram post: its photos and write-up. Posts on the same spot share one popup.
+  const igPopup = new ml.Popup({ closeButton: true, maxWidth: '340px', offset: 16, className: 'globe-pop globe-pop--ig' });
+  function photosAt(pt: { x: number; y: number }) {
+    const near = map.queryRenderedFeatures([[pt.x - 8, pt.y - 8], [pt.x + 8, pt.y + 8]], { layers: ['ig-icon'] });
+    const seen = new Set<number>();
+    return near.map((f) => f.properties!.i as number).filter((i) => !seen.has(i) && seen.add(i)).map((i) => data.photos[i]);
+  }
+  const showPhotos = (list: Photo[], at: [number, number]) => {
+    const slides = list.flatMap((post) => post.media.map((m) => ({ post, m })));
+    let n = 0;
+    const root = document.createElement('div');
+    root.className = 'igp';
+    const draw = () => {
+      const { post, m } = slides[n];
+      const meta = [post.when, post.place, post.author].filter(Boolean).join(' · ');
+      root.innerHTML = `<div class="igp__media">${m.video
+        ? `<video src="${esc(m.src)}" poster="${esc(m.poster ?? '')}" controls playsinline preload="metadata"></video>`
+        : `<a href="${esc(m.src)}" target="_blank" rel="noopener"><img src="${esc(m.src)}" alt="" /></a>`}</div>
+        ${slides.length > 1 ? `<div class="igp__nav"><button type="button" data-d="-1" aria-label="Previous">‹</button><span class="mono">${n + 1} / ${slides.length}</span><button type="button" data-d="1" aria-label="Next">›</button></div>` : ''}
+        ${post.caption ? `<p class="igp__caption">${esc(post.caption)}</p>` : ''}
+        <p class="gpop__meta">${esc(meta)}</p>
+        ${post.trip ? `<p class="gpop__more"><a href="/${esc(post.trip.id)}/">${esc(post.trip.title)} →</a></p>` : ''}`;
+      root.querySelectorAll<HTMLButtonElement>('[data-d]').forEach((b) => b.addEventListener('click', () => {
+        n = (n + Number(b.dataset.d) + slides.length) % slides.length;
+        draw();
+      }));
+    };
+    draw();
+    // Bring the spot up the screen, so the photo opening below it clears the legend.
+    map.easeTo({ center: at, offset: [0, -map.getContainer().clientHeight * 0.24], duration: reducedMotion() ? 0 : 400 });
+    igPopup.setLngLat(at).setDOMContent(root).addTo(map);
+  };
+  map.on('click', 'ig-icon', (e) => {
+    stopSpin();
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
+    const list = photosAt(e.point);
+    if (list.length) showPhotos(list, [list[0].lng, list[0].lat]);
+  });
+  map.on('click', 'ig-cluster', async (e) => {
+    stopSpin();
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
+    const f = e.features![0];
+    const z = await (map.getSource('ig') as GeoJSONSource).getClusterExpansionZoom(f.properties!.cluster_id);
+    map.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom: z + 0.3 });
+  });
+
+  for (const l of ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster', 'cc-dot', 'pl-dot', 'pl-label']) {
     map.on('mouseenter', l, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', l, () => { map.getCanvas().style.cursor = ''; });
   }
@@ -401,7 +493,7 @@ async function start(stage: HTMLElement) {
     (map.getSource('ev') as GeoJSONSource).setData(evFeatures());
   });
 
-  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'], states: ['st-fill', 'st-line'] };
+  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'], states: ['st-fill', 'st-line'], instagram: ['ig-cluster', 'ig-count', 'ig-icon'] };
   stage.querySelectorAll<HTMLInputElement>('[data-layer-toggle]').forEach((box) => {
     box.addEventListener('change', () => {
       for (const id of LAYERS[box.value] ?? []) map.setLayoutProperty(id, 'visibility', box.checked ? 'visible' : 'none');

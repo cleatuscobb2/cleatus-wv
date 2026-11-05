@@ -4,8 +4,26 @@
     {
       "name": "cleatus-wv",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "4321"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "4321"
+      ],
       "port": 4321
+    },
+    {
+      "name": "cleatus-wv-instagram",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "ig",
+        "--",
+        "review"
+      ],
+      "port": 4399,
+      "url": "http://127.0.0.1:4399"
     }
   ]
 }

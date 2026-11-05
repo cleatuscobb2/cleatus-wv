@@ -305,6 +305,22 @@ export async function GET() {
       };
     });
 
+  // --- Instagram posts: only the pinned ones go on the map ----------------------------
+  const photos = (await getCollection('instagram'))
+    .filter((p) => p.data.lat != null && p.data.lng != null)
+    .sort((a, b) => a.data.date.localeCompare(b.data.date))
+    .map((p) => {
+      const d = new Date(`${p.data.date}T00:00:00Z`);
+      const trip = trips.find((t) => t.id === p.data.trip);
+      return {
+        lat: p.data.lat, lng: p.data.lng, author: p.data.author, caption: p.data.caption,
+        when: `${fmtDateShort(d)} ${d.getUTCFullYear()}`,
+        place: [p.data.place, p.data.country ? COUNTRY_NAMES[p.data.country] ?? '' : ''].filter(Boolean).join(', '),
+        trip: trip ? { id: trip.id, title: trip.data.shortTitle } : null,
+        media: p.data.media.map(({ src, poster, video }) => ({ src, poster, video })),
+      };
+    });
+
   // --- US states they've been to (home isn't among the countries) --------------------
   const states = (feature(usStates as never, (usStates as never as { objects: { states: unknown } }).objects.states) as unknown as {
     features: Feat[];
@@ -319,7 +335,7 @@ export async function GET() {
   return new Response(JSON.stringify({
     countries: { type: 'FeatureCollection', features: countries },
     states: { type: 'FeatureCollection', features: states },
-    events, places, trips: tripOut,
+    events, places, photos, trips: tripOut,
   }), {
     headers: { 'Content-Type': 'application/json' },
   });

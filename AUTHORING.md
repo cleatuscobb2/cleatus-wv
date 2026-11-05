@@ -127,6 +127,8 @@ wrote about, use **Map places** in the admin: paste a list, one place per line �
 that isn't in `been-to.ts` gets a warning; add the country there too. Add `(dive)` to a line, or tick 🤿, for a dive site: it gets a dive marker, and the
 country's catch-all "Dived in …" marker goes away.
 
+**Instagram.** Posts come from Instagram's *Download your information* export (JSON). `npm run ig -- import --from "<folder>" --account <name> --author <Andy or Beth>`, then `npm run ig -- geocode`, then `npm run ig -- review` for the review page. Nothing goes on the site until it's ticked there and published: the catalogue, your ticks and the home locations stay in `../cleatus-wv-instagram`, outside this public repo, and posts near home are refused. A published post gets a 📷 marker on the map and, if it has a trip, a place on that trip's page.
+
 **US states.** Home isn't counted among the countries, so the map shades the US by state instead. The states not yet visited are listed in `src/data/us-states.ts` (`NOT_YET`); take one off the list once you've been.
 
 Then open the trip file and write the **summary** — two sentences, your words.

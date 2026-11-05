@@ -31,7 +31,8 @@
     "new:trip": "node --experimental-strip-types scripts/new-trip.ts",
     "new:entry": "node --experimental-strip-types scripts/new-entry.ts",
     "inbox": "node --experimental-strip-types scripts/promote-inbox.ts",
-    "import:photos": "node --experimental-strip-types scripts/import-photos.ts"
+    "import:photos": "node --experimental-strip-types scripts/import-photos.ts",
+    "ig": "node --experimental-strip-types scripts/instagram.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.14",

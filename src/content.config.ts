@@ -136,4 +136,30 @@ const places = defineCollection({
   }),
 });
 
-export const collections = { trips, entries, people, retrospectives, comments, places };
+/**
+ * Instagram posts someone has ticked for the site (npm run ig -- review). The
+ * rest of the archive, and the home locations, stay out of this public repo.
+ */
+const instagram = defineCollection({
+  loader: file('src/content/instagram/posts.json'),
+  schema: z.object({
+    author: z.string(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    caption: z.string(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    place: z.string().optional(),
+    country: z.string().optional(),
+    trip: z.string().optional(),
+    media: z.array(z.object({
+      src: z.string(),
+      thumb: z.string(),
+      poster: z.string().optional(),
+      w: z.number(),
+      h: z.number(),
+      video: z.boolean().optional(),
+    })).min(1),
+  }),
+});
+
+export const collections = { trips, entries, people, retrospectives, comments, places, instagram };

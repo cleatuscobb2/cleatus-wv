@@ -649,22 +649,40 @@ async function renderVercel(d: Data) {
   const res = await fetch(`/api/admin/analytics?days=${state.days}&vercel=1`);
   const v = await res.json();
   if (!host.isConnected) return;
-  if (v.status === 'not-connected' || v.status === 'analytics-off') {
-    host.replaceChildren(card(v.status === 'not-connected' ? 'Vercel isn\'t connected yet' : 'Vercel has no analytics for this site', 'Everything else on this page comes from the site\'s own counter and works without this.',
+  if (v.status === 'not-connected') {
+    host.replaceChildren(card('Vercel isn\'t connected yet', 'Everything else on this page comes from the site\'s own counter and works without this.',
       el('ol', { class: 'an-steps' },
         el('li', {}, 'In the Vercel dashboard, open the cleatus-wv project, then Analytics, and turn on Web Analytics if it\'s off.'),
-        el('li', {}, 'In Vercel account settings, create a token with an expiry date. It can reach every project on your account, so name it for this and don\'t reuse it.'),
+        el('li', {}, 'In Vercel account settings, create a token with an expiry date, for the team that holds this project. It can reach every project there, so name it for this and don\'t reuse it.'),
         el('li', {}, 'In the project\'s environment variables, add it as VERCEL_ANALYTICS_TOKEN for Production, then redeploy.')),
     ));
     return;
   }
+  if (v.status === 'not-found') {
+    host.replaceChildren(card('Vercel answered "not found"', 'The token was read and Vercel replied, but it found no analytics to give back. Everything else on this page still works.',
+      el('ol', { class: 'an-steps' },
+        el('li', {}, 'If Web Analytics was only just turned on, look again in a little while.'),
+        el('li', {}, 'Check that the token\'s scope is the team that holds cleatus-wv, not only your personal account. If it isn\'t, replace the token and redeploy.'),
+        el('li', {}, 'Check that the project\'s Analytics page in Vercel shows views.')),
+    ));
+    return;
+  }
   if (v.status === 'failed') { host.replaceChildren(card('Couldn\'t read Vercel\'s numbers', v.message)); return; }
-  const theirs = (v.series as { day: string; views: number }[]).reduce((s, x) => s + x.views, 0);
-  host.replaceChildren(
+  // Vercel only knows the days since it was turned on, so compare those days and no others.
+  const counted = (v.series as { day: string; views: number; visitors: number }[]).filter((x) => x.views > 0);
+  if (!counted.length) {
+    host.replaceChildren(card('Vercel has no views to show yet', `Vercel answered, but has nothing for the last ${v.days} days. New views can take a little while to appear.`));
+    return;
+  }
+  const first = counted[0].day;
+  const theirs = counted.reduce((s, x) => s + x.views, 0);
+  const ours = d.days.filter((x) => x.day >= first).reduce((s, x) => s + x.views, 0);
+  refill(host,
     el('div', { class: 'an-tiles an-tiles--3' },
-      tile('Vercel\'s views', fmt(theirs)),
-      tile('This site\'s count', fmt(d.views)),
-      tile('Difference', theirs ? `${pct(Math.abs(theirs - d.views), theirs)}%` : '–', 'the two count bots and blockers differently')),
+      tile('Vercel\'s views', fmt(theirs), `since ${dayLabel(first)}`),
+      tile('Vercel\'s visitors', fmt(counted.reduce((s, x) => s + x.visitors, 0)), 'added up by day'),
+      tile('This site, same days', fmt(ours), `${pct(Math.abs(theirs - ours), theirs)}% apart; the two treat bots and blockers differently`)),
+    state.days > v.days ? el('p', { class: 'an-note' }, `Vercel's numbers cover the last ${v.days} days at most, because its free plan keeps one month.`) : null,
     el('div', { class: 'an-three' },
       card('Pages', null, bars(pageRows(v.pages))),
       card('Countries', null, bars((v.countries as Row[]).map((c) => ({ ...c, label: countryName(c.key) })))),

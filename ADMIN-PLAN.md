@@ -277,6 +277,14 @@ Vercel Analytics still runs alongside and keeps its own dashboard copy.
 - Bots, non-page paths, other sites' requests and more than 300 hits an hour from
   one address are ignored. The beacon always answers 204 either way.
 
+**`/admin/analytics` (added 2026-11-05) goes deeper, on the same terms:** cities, time
+on page, scroll depth, click maps, journeys, searches and page speed, all as per-day
+counters (`src/admin/pulse.ts`), with no row per visit and no visitor id. Two changes
+from the above, made at Andy's request: browsers now keep a small note of their last
+visit, reported only as a rough range so returning visits can be totalled; and Vercel's
+own numbers appear on the page if `VERCEL_ANALYTICS_TOKEN` is set, accepting the token's
+reach described above. The About page tells readers what's counted.
+
 | Panel | From |
 |---|---|
 | Views, visitors (estimate), countries | with the previous period beside it |

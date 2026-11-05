@@ -35,8 +35,11 @@ export default function cleatusAdmin(): AstroIntegration {
         route('/admin/readers', './pages/readers.astro');
         route('/admin/places', './pages/places.astro');
         route('/api/admin/places', './api/places.ts');
-        // Public: the reader counter's beacon. Counts only; answers nothing.
+        route('/admin/analytics', './pages/analytics.astro');
+        route('/api/admin/analytics', './api/analytics.ts');
+        // Public: the reader counter's beacons. Counts only; answers nothing.
         route('/api/hit', './api/hit.ts');
+        route('/api/pulse', './api/pulse.ts');
         route('/admin/comments', './pages/comments.astro');
         route('/api/admin/comments', './api/comments.ts');
         // Public: readers' comments go to a pending queue, never straight onto the site.

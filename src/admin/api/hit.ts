@@ -8,7 +8,9 @@
  */
 import type { APIRoute } from 'astro';
 import { recordHit } from '../readers.ts';
-import { sameOrigin } from '../guard.ts';
+import { recordVisit } from '../pulse.ts';
+import { sameOrigin, userOf } from '../guard.ts';
+import { HOSTED } from '../mode.ts';
 
 export const prerender = false;
 
@@ -17,22 +19,25 @@ const done = () => new Response(null, { status: 204, headers: { 'cache-control':
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   if (!sameOrigin(request)) return done();
   if (request.headers.get('sec-gpc') === '1' || request.headers.get('dnt') === '1') return done();
+  // Your own visits aren't readers.
+  if (HOSTED && userOf(request)) return done();
 
   const raw = await request.text().catch(() => '');
   if (raw.length > 2000) return done();
-  let hit: { p?: unknown; r?: unknown };
+  let hit: { p?: unknown; r?: unknown } & Record<string, unknown>;
   try { hit = JSON.parse(raw); } catch { return done(); }
 
   let ip = '';
   try { ip = clientAddress; } catch { /* not available in every runtime */ }
   try {
-    await recordHit({
+    const counted = await recordHit({
       path: String(hit.p ?? ''),
       referrer: String(hit.r ?? ''),
       country: request.headers.get('x-vercel-ip-country') ?? '',
       ua: request.headers.get('user-agent') ?? '',
       ip,
     });
+    if (counted) await recordVisit(hit, request.headers);
   } catch (e) {
     // Counting must never break a reader's page; just note it.
     console.error('[readers] not counted:', (e as Error).message);

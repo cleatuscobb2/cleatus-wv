@@ -43,6 +43,19 @@ const paras = mdx.split('\n\n').filter(Boolean);
     <p class="mono about__foot">
       <a href="/beth-cried-here/">Beth cried here →</a>
     </p>
+    <section class="about__counting" aria-labelledby="counting">
+      <h2 id="counting">What this site counts</h2>
+      <p>
+        So we can see what people read, the site keeps anonymous totals: pages viewed, roughly
+        which city and country views come from, where they arrived from, reading time, how far
+        down a page people get, what gets clicked and how fast pages load. Your browser also keeps
+        a small note of when it last visited, so we can count returning visits as a total. Nothing
+        identifies you or links one visit to another, and there's no advertising. Your network
+        address is used only briefly, to keep out abuse, and isn't kept with any of this. Our
+        host, Vercel, also runs its own anonymous page counts. If your browser asks sites not to
+        track you, the site's own counting is skipped.
+      </p>
+    </section>
   </article>
 </Base>
 
@@ -60,4 +73,18 @@ const paras = mdx.split('\n\n').filter(Boolean);
     margin-top: 2.5rem;
     color: var(--color-stone);
   }
+  .about__counting {
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-rule);
+    color: var(--color-stone);
+    font-size: 0.9375rem;
+    max-width: var(--measure);
+  }
+  .about__counting h2 {
+    font-size: 1rem;
+    margin: 0 0 0.4rem;
+    color: var(--color-ink);
+  }
+  .about__counting p { margin: 0; }
 </style>

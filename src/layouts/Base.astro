@@ -70,7 +70,8 @@ const ogUrl = ogImage ? new URL(ogImage, canonical).toString() : null;
       forty people read the Gondogoro La entry from eleven countries, and it
       cannot tell you who any of them are or link one visit to the next. That is
       the trade for asking nothing of the reader — no consent banner, no
-      identifier, nothing stored on their machine.
+      identifier. The one thing kept on their machine is the site's own note of
+      when that browser last came, which it reports only as a rough range.
 
       Deliberately production-only, so `npm run dev` never files fake pageviews
       against the real numbers.
@@ -78,20 +79,12 @@ const ogUrl = ogImage ? new URL(ogImage, canonical).toString() : null;
     {import.meta.env.PROD && <Analytics />}
 
     <!--
-      The site's own count, for /admin/readers (src/admin/readers.ts): the page
-      path and the referrer, once per view. Same terms as above — no cookie, no
-      identifier — and skipped entirely for browsers that ask not to be tracked.
+      The site's own count, for /admin/readers and /admin/analytics: page, referrer,
+      time, depth, clicks and speed (src/scripts/reader-pulse.ts). Same terms as above
+      — no cookie, no identifier — and skipped entirely for browsers that ask not to
+      be tracked. Off under `npm run dev` unless PUBLIC_PULSE=1 is set for testing.
     -->
-    {import.meta.env.PROD && (
-      <script is:inline>
-        (function () {
-          try {
-            if (navigator.globalPrivacyControl || navigator.doNotTrack === '1') return;
-            navigator.sendBeacon('/api/hit', JSON.stringify({ p: location.pathname, r: document.referrer }));
-          } catch (e) {}
-        })();
-      </script>
-    )}
+    {(import.meta.env.PROD || import.meta.env.PUBLIC_PULSE === '1') && <script src="../scripts/reader-pulse.ts"></script>}
 
     <!--
       §7.5 — `/` focuses search from anywhere. A few hundred bytes, and nothing

@@ -22,7 +22,7 @@ export const TIME_ZONE = 'America/Los_Angeles';
 const SITE_HOST = 'cleatusandthewestvirginian.com';
 const HITS_PER_IP_PER_HOUR = 300;
 
-const BOT = /bot|crawl|spider|slurp|facebookexternalhit|embedly|preview|headless|lighthouse|pingdom|uptime|monitor|curl|wget|python|axios|node-fetch|undici|go-http|java\/|okhttp|httpclient|scrapy|vercel/i;
+export const BOT = /bot|crawl|spider|slurp|facebookexternalhit|embedly|preview|headless|lighthouse|pingdom|uptime|monitor|curl|wget|python|axios|node-fetch|undici|go-http|java\/|okhttp|httpclient|scrapy|vercel/i;
 const PATH = /^\/[a-z0-9\-\/]{0,160}$/;
 
 export const dayOf = (d: Date) =>

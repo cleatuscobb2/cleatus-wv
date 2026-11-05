@@ -129,6 +129,8 @@ country's catch-all "Dived in …" marker goes away.
 
 **Instagram.** Posts come from Instagram's *Download your information* export (JSON). `npm run ig -- import --from "<folder>" --account <name> --author <Andy or Beth>`, then `npm run ig -- geocode`, then `npm run ig -- review` for the review page. Nothing goes on the site until it's ticked there and published: the catalogue, your ticks and the home locations stay in `../cleatus-wv-instagram`, outside this public repo, and posts near home are refused. A published post gets a 📷 marker on the map and, if it has a trip, a place on that trip's page. To correct a wrong pin or attach a post to one entry, edit its line in `../cleatus-wv-instagram/decisions.json` (`pin`, `place`, `country`, `entry`) and publish again: a post with an `entry` shows on that entry instead of the trip's list.
 
+**Analytics.** `/admin/analytics` shows where readers are, what they read, how long and how far, what they click (a click map over each page), where they came from, repeat visits, searches and page speed, with suggestions on the first tab. It's anonymous counts only (`src/admin/pulse.ts`), the About page tells readers what's counted, and your own signed-in visits don't count. Under `npm run dev` nothing is collected unless `PUBLIC_PULSE=1` is set. To show Vercel's numbers too, set `VERCEL_ANALYTICS_TOKEN` in Vercel; the Vercel tab has the steps.
+
 **US states.** Home isn't counted among the countries, so the map shades the US by state instead. The states not yet visited are listed in `src/data/us-states.ts` (`NOT_YET`); take one off the list once you've been.
 
 Then open the trip file and write the **summary** — two sentences, your words.

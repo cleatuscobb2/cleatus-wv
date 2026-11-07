@@ -85,7 +85,7 @@ for (const slug of slugs) {
       });
     }
     // The trip's own dates, not the entries' publish dates: a person may have
-    // fixed them (Japan 2022 was posted over 535 days but lasted 13).
+    // fixed them (Japan 2022 was posted over 535 days but lasted 11).
     const start = new Date(fm(existing, 'dateStart') ?? '');
     const end = new Date(fm(existing, 'dateEnd') ?? '');
     const days = Math.max(1, Math.round((+end - +start) / 86400000) + 1);

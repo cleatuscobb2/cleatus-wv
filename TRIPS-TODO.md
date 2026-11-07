@@ -8,9 +8,8 @@ A snapshot from the last run. The live list — and the editor — is /admin/tri
 - **k2pakistanseasia2024** — hero is just the first photograph of the first entry (`01-IMG_2512.jpg`). Pick the one that should carry the trip.
 - **k2pakistanseasia2024** — summary is auto-derived: _"25 entries from Pakistan, Thailand, Singapore and 2 more, 29 July – 11 September 2024."_ — replace with two sentences in your own voice.
   - ⚠ SE Asia legs read from post titles: Bangkok, Singapore, Borneo (Sabah), Seoul.
-- **japan-2022** — computed span is 535 days (2022-12-27 → 2024-06-13), which is a publish-date artefact, not the trip length. Set the real dateStart/dateEnd by hand.
 - **japan-2022** — hero is just the first photograph of the first entry (`04-6C24EE77-AEF9-4B60-8C71-1CEBCB17E1E0.jpeg`). Pick the one that should carry the trip.
-- **japan-2022** — summary is auto-derived: _"5 entries from Japan, 27 December – 13 June 2024."_ — replace with two sentences in your own voice.
+- **japan-2022** — summary is auto-derived: _"5 entries from Japan, 26 December 2022 – 5 January 2023."_ — replace with two sentences in your own voice.
 - **africa-and-egypt-2018** — hero is just the first photograph of the first entry (`01-IMG_8744.HEIC`). Pick the one that should carry the trip.
 - **africa-and-egypt-2018** — summary is auto-derived: _"41 entries from Tanzania, Egypt, Austria, 16 September – 4 November 2018."_ — replace with two sentences in your own voice.
   - ⚠ Austria inferred from the Innsbruck posts at the end of the trip. Confirm whether that belongs to this trip or should be split out.

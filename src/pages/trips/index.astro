@@ -1,129 +1,882 @@
 ---
 /**
  * §7.1 — the fourteen-item nav moved here, where it can grow.
+ *
+ * Every trip as a card, across the whole width, under a strip that lays them out
+ * in time. Filters, sorting and the photo flip-through are added by the script at
+ * the bottom; without it this is still the full list, newest first.
  */
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
-import { fmtRange, entryCounts } from '../../lib/entries.ts';
+import { fmtRange, chronological, tripIdOf, entryPath } from '../../lib/entries.ts';
+import { firstPhoto } from '../../lib/journey.ts';
+import { COUNTRY_CONTINENT, COUNTRY_NAMES } from '../../data/trip-meta.ts';
+import { TAG_ICONS, TAG_LABELS, BETH_CRIED_ICON, type Tag } from '../../data/tags.ts';
 
+const now = new Date();
 const trips = (await getCollection('trips')).sort((a, b) => +b.data.dateStart - +a.data.dateStart);
-const counts = await entryCounts();
+const entries = chronological(await getCollection('entries', (e) => !e.data.draft));
+
+const byTrip = new Map<string, typeof entries>();
+for (const e of entries) {
+  const id = tripIdOf(e);
+  byTrip.set(id, [...(byTrip.get(id) ?? []), e]);
+}
+
+/** Up to eight pictures spread across the trip, starting with its cover. */
+function photosOf(hero: string | null, list: typeof entries): string[] {
+  const all = [...new Set([hero, ...list.map(firstPhoto)].filter((p): p is string => Boolean(p)))];
+  if (all.length <= 8) return all;
+  return Array.from({ length: 8 }, (_, i) => all[Math.round((i * (all.length - 1)) / 7)]);
+}
+
+const DAY = 86_400_000;
+const statusOf = (start: Date, end: Date) =>
+  +now < +start ? 'upcoming' : +now <= +end + DAY ? 'away' : 'done';
+
+const cards = trips.map((t) => {
+  const list = byTrip.get(t.id) ?? [];
+  const tags = new Map<Tag, number>();
+  for (const e of list) for (const g of e.data.tags) tags.set(g, (tags.get(g) ?? 0) + 1);
+  const continents = [...new Set(t.data.countries.map((c) => COUNTRY_CONTINENT[c]).filter(Boolean))];
+  return {
+    t,
+    entries: list.length,
+    photos: photosOf(t.data.hero, list),
+    topTags: [...tags].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([g]) => g),
+    cried: list.filter((e) => e.data.bethCried).length,
+    continents,
+    status: statusOf(t.data.dateStart, t.data.dateEnd),
+    daysUntil: Math.ceil((+t.data.dateStart - +now) / DAY),
+  };
+});
+
+// The running totals count trips that have happened, not plans.
+const past = cards.filter((c) => c.status !== 'upcoming');
+const countries = new Set(past.flatMap((c) => c.t.data.countries)).size;
+const totals = [
+  { n: past.length, label: 'trips taken' },
+  { n: countries, label: 'countries' },
+  { n: past.reduce((s, c) => s + c.t.data.stats.days, 0), label: 'days away' },
+  { n: past.reduce((s, c) => s + (c.t.data.stats.trekMiles ?? 0), 0), label: 'miles on foot' },
+  { n: Math.max(0, ...past.map((c) => c.t.data.stats.maxElevationFt ?? 0)), label: 'ft, highest' },
+].filter((x) => x.n > 0);
+
+const continentCounts = new Map<string, number>();
+for (const c of cards) for (const k of c.continents) continentCounts.set(k, (continentCounts.get(k) ?? 0) + 1);
+const continentChips = [...continentCounts].sort((a, b) => b[1] - a[1]);
+
+// The timeline: one dot per trip, placed by date between the first year and the last.
+const firstYear = Math.min(...trips.map((t) => t.data.dateStart.getUTCFullYear()));
+const lastYear = Math.max(...trips.map((t) => t.data.dateEnd.getUTCFullYear()), now.getUTCFullYear());
+const span0 = Date.UTC(firstYear, 0, 1);
+const span = Date.UTC(lastYear + 1, 0, 1) - span0;
+const at = (d: Date) => ((+d - span0) / span) * 100;
+const years = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i);
+const tripYears = new Set(trips.flatMap((t) => [t.data.dateStart.getUTCFullYear(), t.data.dateEnd.getUTCFullYear()]));
+// Trips close together go on separate lanes so their dots don't sit on each other.
+const laneEnds: number[] = [];
+const dots = [...cards].sort((a, b) => +a.t.data.dateStart - +b.t.data.dateStart).map((c) => {
+  const left = at(c.t.data.dateStart);
+  const width = Math.max(at(c.t.data.dateEnd) - left, 0);
+  let lane = laneEnds.findIndex((end) => end + 3 < left);
+  if (lane === -1) { lane = laneEnds.length; laneEnds.push(0); }
+  laneEnds[lane] = left + width;
+  return { c, left, width, lane };
+});
+
+const pickFrom = entries.map(entryPath);
+const fmtN = (n: number) => n.toLocaleString('en-US');
+const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
 ---
 
 <Base
   title="Trips"
   description="Fifteen years of long, hard trips — Pakistan's Karakoram, Patagonia, the Himalaya, Borneo, the Galápagos and more, 2009 to now."
 >
-  <header class="head">
-    <h1 class="display">Trips</h1>
-    <p class="head__note">
-      {trips.length} trips, newest first. Each one reads forward from day one.
-    </p>
-  </header>
+  <div class="trips">
+    <header class="head">
+      <div class="head__words">
+        <h1 class="display">Trips</h1>
+        <p class="head__note">
+          {trips.length} trips, newest first. Each one reads forward from day one.
+        </p>
+        {pickFrom.length > 0 && (
+          <a class="dice mono" href={pickFrom[0]} data-dice>
+            <span class="dice__face" aria-hidden="true">🎲</span> Take me somewhere
+          </a>
+        )}
+      </div>
+      <dl class="totals">
+        {totals.map((x) => (
+          <div class="totals__item">
+            <dt class="mono">{x.label}</dt>
+            <dd class="display">{fmtN(x.n)}</dd>
+          </div>
+        ))}
+      </dl>
+    </header>
 
-  <ol class="grid">
-    {trips.map((t) => (
-      <li class="trip">
-        <a href={`/${t.id}/`} class="trip__link">
-          <span class="trip__media">
-            {t.data.hero
-              ? <img src={t.data.hero} alt="" loading="lazy" decoding="async" />
-              : <span class="trip__media--none mono">No photographs</span>}
-          </span>
-          <span class="trip__body">
-            <span class="mono trip__dates">{fmtRange(t.data.dateStart, t.data.dateEnd)}</span>
-            <span class="display trip__title">{t.data.title}</span>
-            <span class="mono trip__stats">
-              {[
-                `${counts.get(t.id) ?? 0} entries`,
-                t.data.stats.trekMiles ? `${t.data.stats.trekMiles} mi trek` : null,
-                t.data.stats.maxElevationFt
-                  ? `${t.data.stats.maxElevationFt.toLocaleString('en-US')} ft` : null,
-                `${t.data.stats.countriesCount} countries`,
-              ].filter(Boolean).join(' · ')}
+    <section class="ribbon" aria-label="The trips in time">
+      <div class="ribbon__track" style={`--lanes: ${laneEnds.length}`}>
+        {years.map((y) => (
+          <span
+            class:list={['ribbon__year mono', { 'ribbon__year--empty': !tripYears.has(y) }]}
+            style={`left: ${at(new Date(Date.UTC(y, 0, 1)))}%; width: ${100 / years.length}%`}
+          >{y}</span>
+        ))}
+        {dots.map(({ c, left, width, lane }) => (
+          <a
+            href={`#${c.t.id}`}
+            class:list={['ribbon__dot', `ribbon__dot--${c.status}`, { 'ribbon__dot--bare': !c.photos.length }]}
+            style={`left: ${left}%; --w: ${width}%; --lane: ${lane}`}
+            data-for={c.t.id}
+          >
+            <span class="ribbon__label mono">
+              {c.t.data.shortTitle} <span class="ribbon__when">{c.t.data.dateStart.getUTCFullYear()}</span>
             </span>
-          </span>
-        </a>
-      </li>
-    ))}
-  </ol>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <div class="tools" data-tools hidden>
+      <div class="chips" role="group" aria-label="Show trips in">
+        <button type="button" class="chip mono" data-where="" aria-pressed="true">Everywhere <span class="chip__n">{cards.length}</span></button>
+        {continentChips.map(([k, n]) => (
+          <button type="button" class="chip mono" data-where={k} aria-pressed="false">{k} <span class="chip__n">{n}</span></button>
+        ))}
+      </div>
+      <div class="chips" role="group" aria-label="Only trips with">
+        <button type="button" class="chip mono" data-only="trek" aria-pressed="false">🥾 A trek</button>
+        <button type="button" class="chip mono" data-only="cried" aria-pressed="false">{BETH_CRIED_ICON} Beth cried</button>
+      </div>
+      <label class="sort mono">
+        Sort
+        <select data-sort>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="longest">Longest</option>
+          <option value="written">Most written</option>
+          <option value="countries">Most countries</option>
+          <option value="tears">Most tears</option>
+        </select>
+      </label>
+      <p class="tools__count mono" aria-live="polite" data-count></p>
+    </div>
+
+    <ol class="grid" data-grid>
+      {cards.map((c, i) => {
+        const { t } = c;
+        const s = t.data.stats;
+        return (
+          <li
+            id={t.id}
+            class:list={['trip', `trip--${c.status}`, { 'is-lead': i === cards.findIndex((x) => x.photos.length > 0) }]}
+            style={`view-transition-name: trip-${i}`}
+            data-start={+t.data.dateStart}
+            data-end={+t.data.dateEnd}
+            data-days={s.days}
+            data-written={c.entries}
+            data-countries={t.data.countries.length}
+            data-where={c.continents.join('|')}
+            data-trek={s.trekMiles ? '1' : ''}
+            data-cried={c.cried ? '1' : ''}
+            data-tears={c.cried}
+          >
+            <a href={`/${t.id}/`} class="trip__link">
+              <span class="trip__media" data-photos={c.photos.length > 1 ? JSON.stringify(c.photos) : undefined}>
+                {c.photos.length > 0 ? (
+                  <>
+                    <img src={c.photos[0]} alt="" loading={i < 3 ? 'eager' : 'lazy'} decoding="async" />
+                    {c.photos.length > 1 && (
+                      <span class="trip__ticks" aria-hidden="true">
+                        {c.photos.map((_, k) => <span class:list={['trip__tick', { on: k === 0 }]} />)}
+                      </span>
+                    )}
+                  </>
+                ) : c.status === 'upcoming' || c.status === 'away' ? (
+                  <span class="trip__soon">
+                    <span class="mono trip__soon-kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
+                    <span class="display trip__soon-big" data-countdown={+t.data.dateStart} data-until={+t.data.dateEnd}>
+                      {c.status === 'away' ? 'Away now' : c.daysUntil === 1 ? 'Tomorrow' : `In ${c.daysUntil} days`}
+                    </span>
+                    <span class="mono trip__soon-where">{t.data.countries.map(nameOf).join(' · ')}</span>
+                  </span>
+                ) : (
+                  <span class="trip__none">
+                    <span class="display trip__none-where">{t.data.countries.map(nameOf).join(' · ')}</span>
+                    <span class="mono">No photographs</span>
+                  </span>
+                )}
+              </span>
+              <span class="trip__body">
+                <span class="mono trip__dates">{fmtRange(t.data.dateStart, t.data.dateEnd)} · {s.days} days</span>
+                <span class="display trip__title">{t.data.title}</span>
+                <span class="trip__codes" aria-label={`Countries: ${t.data.countries.map(nameOf).join(', ')}`}>
+                  {t.data.countries.map((code) => <abbr class="mono" title={nameOf(code)} aria-hidden="true">{code}</abbr>)}
+                </span>
+                <span class="mono trip__stats">
+                  {[
+                    `${c.entries} ${c.entries === 1 ? 'entry' : 'entries'}`,
+                    s.trekMiles ? `${s.trekMiles} mi trek` : null,
+                    s.maxElevationFt ? `${fmtN(s.maxElevationFt)} ft` : null,
+                  ].filter(Boolean).join(' · ')}
+                </span>
+                {(c.topTags.length > 0 || c.cried > 0) && (
+                  <span class="trip__marks">
+                    {c.topTags.map((g) => <span title={TAG_LABELS[g]} aria-label={TAG_LABELS[g]} role="img">{TAG_ICONS[g]}</span>)}
+                    {c.cried > 0 && (
+                      <span class="trip__cried mono" title={`Beth cried ${c.cried} ${c.cried === 1 ? 'time' : 'times'}`}>
+                        <span aria-hidden="true">{BETH_CRIED_ICON}</span> ×{c.cried}<span class="sr"> times Beth cried</span>
+                      </span>
+                    )}
+                  </span>
+                )}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+    <p class="none" data-none hidden>
+      No trips match that. <button type="button" class="mono" data-clear>Show them all</button>
+    </p>
+  </div>
+  <script type="application/json" id="trip-picks" set:html={JSON.stringify(pickFrom)} />
 </Base>
 
+<script>
+  const grid = document.querySelector<HTMLOListElement>('[data-grid]');
+  const tools = document.querySelector<HTMLElement>('[data-tools]');
+  if (grid && tools) {
+    const cards = [...grid.querySelectorAll<HTMLLIElement>('.trip')];
+    const count = tools.querySelector<HTMLElement>('[data-count]')!;
+    const sortBox = tools.querySelector<HTMLSelectElement>('[data-sort]')!;
+    const none = document.querySelector<HTMLElement>('[data-none]')!;
+    const calm = matchMedia('(prefers-reduced-motion: reduce)');
+    tools.hidden = false;
+
+    // ---- filters and sorting, kept in the address so a view can be shared ----
+    const q = new URLSearchParams(location.search);
+    const state = {
+      where: q.get('where') ?? '',
+      only: new Set((q.get('only') ?? '').split(',').filter(Boolean)),
+      sort: q.get('sort') ?? 'newest',
+    };
+    const num = (li: HTMLElement, k: string) => Number(li.dataset[k] ?? 0);
+    const SORTS: Record<string, (a: HTMLElement, b: HTMLElement) => number> = {
+      newest: (a, b) => num(b, 'start') - num(a, 'start'),
+      oldest: (a, b) => num(a, 'start') - num(b, 'start'),
+      longest: (a, b) => num(b, 'days') - num(a, 'days'),
+      written: (a, b) => num(b, 'written') - num(a, 'written'),
+      countries: (a, b) => num(b, 'countries') - num(a, 'countries'),
+      tears: (a, b) => num(b, 'tears') - num(a, 'tears'),
+    };
+    if (!SORTS[state.sort]) state.sort = 'newest';
+
+    const shows = (li: HTMLElement) =>
+      (!state.where || (li.dataset.where ?? '').split('|').includes(state.where)) &&
+      [...state.only].every((k) => li.dataset[k] === '1');
+
+    function apply() {
+      const order = [...cards].sort((a, b) => SORTS[state.sort](a, b) || num(b, 'start') - num(a, 'start'));
+      let shown = 0;
+      let lead = false;
+      for (const li of order) {
+        const on = shows(li);
+        li.hidden = !on;
+        if (on) shown++;
+        // The first match with photographs gets the big tile.
+        const isLead = on && !lead && Boolean(li.querySelector('.trip__media img'));
+        li.classList.toggle('is-lead', isLead);
+        if (isLead) lead = true;
+        grid!.append(li);
+      }
+      count.textContent = shown === cards.length ? '' : `${shown} of ${cards.length} trips`;
+      none.hidden = shown > 0;
+      tools!.querySelectorAll<HTMLButtonElement>('[data-where]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.where === state.where)));
+      tools!.querySelectorAll<HTMLButtonElement>('[data-only]').forEach((b) => b.setAttribute('aria-pressed', String(state.only.has(b.dataset.only!))));
+      sortBox.value = state.sort;
+      document.querySelectorAll<HTMLElement>('.ribbon__dot').forEach((d) => {
+        const li = document.getElementById(d.dataset.for!);
+        d.classList.toggle('is-out', Boolean(li?.hidden));
+      });
+      const out = new URLSearchParams();
+      if (state.where) out.set('where', state.where);
+      if (state.only.size) out.set('only', [...state.only].join(','));
+      if (state.sort !== 'newest') out.set('sort', state.sort);
+      const qs = out.toString();
+      history.replaceState(history.state, '', `${location.pathname}${qs ? `?${qs}` : ''}${location.hash}`);
+    }
+    // Cards slide to their new places where the browser can animate it.
+    const change = (fn: () => void) => {
+      fn();
+      const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+      if (doc.startViewTransition && !calm.matches) doc.startViewTransition(apply);
+      else apply();
+    };
+
+    tools.addEventListener('click', (ev) => {
+      const b = (ev.target as Element).closest<HTMLButtonElement>('button');
+      if (!b) return;
+      if (b.dataset.where !== undefined) change(() => { state.where = b.dataset.where!; });
+      if (b.dataset.only) change(() => { const k = b.dataset.only!; state.only.has(k) ? state.only.delete(k) : state.only.add(k); });
+    });
+    sortBox.addEventListener('change', () => change(() => { state.sort = sortBox.value; }));
+    none.querySelector('[data-clear]')!.addEventListener('click', () => change(() => { state.where = ''; state.only.clear(); }));
+    apply();
+
+    // ---- flip through a trip's photographs by moving across the picture ----
+    const fine = matchMedia('(hover: hover) and (pointer: fine)');
+    grid.querySelectorAll<HTMLElement>('.trip__media[data-photos]').forEach((media) => {
+      const photos: string[] = JSON.parse(media.dataset.photos!);
+      const img = media.querySelector('img')!;
+      const ticks = [...media.querySelectorAll('.trip__tick')];
+      // These are full-size originals, so each is fetched only when someone moves onto
+      // it, and the current picture stays up until the next one is ready.
+      const ready = new Set([photos[0]]);
+      let shown = 0;
+      const show = (k: number) => {
+        if (k === shown) return;
+        shown = k;
+        ticks.forEach((t, j) => t.classList.toggle('on', j === k));
+        const src = photos[k];
+        if (ready.has(src)) { img.src = src; return; }
+        const next = new Image();
+        next.decoding = 'async';
+        next.onload = () => { ready.add(src); if (shown === k) img.src = src; };
+        next.src = src;
+      };
+      media.addEventListener('pointermove', (ev) => {
+        if (!fine.matches) return;
+        const r = media.getBoundingClientRect();
+        show(Math.min(photos.length - 1, Math.max(0, Math.floor(((ev.clientX - r.left) / r.width) * photos.length))));
+      });
+      media.addEventListener('pointerleave', () => show(0));
+    });
+
+    // ---- the timeline and the cards point at each other ----
+    const dotFor = (id: string) => document.querySelector<HTMLElement>(`.ribbon__dot[data-for="${CSS.escape(id)}"]`);
+    cards.forEach((li) => {
+      li.addEventListener('pointerenter', () => dotFor(li.id)?.classList.add('is-hot'));
+      li.addEventListener('pointerleave', () => dotFor(li.id)?.classList.remove('is-hot'));
+    });
+    document.querySelectorAll<HTMLAnchorElement>('.ribbon__dot').forEach((dot) => {
+      const li = document.getElementById(dot.dataset.for!);
+      if (!li) return;
+      dot.addEventListener('pointerenter', () => li.classList.add('is-hot'));
+      dot.addEventListener('pointerleave', () => li.classList.remove('is-hot'));
+      dot.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        if (li.hidden) { state.where = ''; state.only.clear(); apply(); }
+        li.scrollIntoView({ behavior: calm.matches ? 'auto' : 'smooth', block: 'center' });
+        li.classList.remove('is-flash');
+        void li.offsetWidth;
+        li.classList.add('is-flash');
+        li.querySelector<HTMLAnchorElement>('.trip__link')?.focus({ preventScroll: true });
+      });
+    });
+
+    // ---- the countdown stays true after the page was built ----
+    document.querySelectorAll<HTMLElement>('[data-countdown]').forEach((el) => {
+      const start = Number(el.dataset.countdown);
+      const end = Number(el.dataset.until);
+      const today = new Date();
+      const startDay = new Date(start);
+      const days = Math.round((Date.UTC(startDay.getUTCFullYear(), startDay.getUTCMonth(), startDay.getUTCDate()) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000);
+      const kicker = el.parentElement?.querySelector('.trip__soon-kicker');
+      if (days > 1) el.textContent = `In ${days} days`;
+      else if (days === 1) el.textContent = 'Tomorrow';
+      else if (Date.now() <= end + 86_400_000) {
+        el.textContent = `Day ${1 - days}`;
+        if (kicker) kicker.textContent = 'On the road';
+      } else {
+        el.textContent = 'Just back';
+        if (kicker) kicker.textContent = 'Writing it up';
+      }
+    });
+
+    // ---- somewhere at random ----
+    const picks: string[] = JSON.parse(document.getElementById('trip-picks')?.textContent ?? '[]');
+    const dice = document.querySelector<HTMLAnchorElement>('[data-dice]');
+    if (dice && picks.length) {
+      const roll = () => { dice.href = picks[Math.floor(Math.random() * picks.length)]; };
+      roll();
+      dice.addEventListener('pointerenter', roll);
+      dice.addEventListener('focus', roll);
+    }
+  }
+</script>
+
 <style>
-  .head {
-    max-width: 68rem;
+  .trips {
+    --gutter: clamp(1rem, 4vw, 4rem);
+    max-width: 120rem;
     margin: 0 auto;
-    padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
+    padding: 0 var(--gutter) clamp(2rem, 5vw, 4rem);
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ---- header ---- */
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem 3rem;
+    padding-top: clamp(2rem, 5vw, 3.5rem);
   }
   .head h1 {
-    font-size: clamp(2.4rem, 6vw, 3.75rem);
+    font-size: clamp(2.4rem, 6vw, 4.25rem);
     margin: 0;
   }
   .head__note {
     color: var(--color-stone);
     margin: 0.6rem 0 0;
   }
+  .dice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--color-ink);
+    color: var(--color-ink);
+    text-decoration: none;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .dice:hover {
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .dice__face {
+    display: inline-block;
+    font-size: 1rem;
+    transition: transform 400ms cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .dice:hover .dice__face {
+    transform: rotate(200deg) scale(1.15);
+  }
+  .totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem clamp(1.25rem, 3vw, 2.75rem);
+    margin: 0;
+  }
+  .totals__item {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .totals dt {
+    color: var(--color-stone);
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .totals dd {
+    margin: 0;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-stretch: 112%;
+    line-height: 1.1;
+  }
 
+  /* ---- timeline ---- */
+  .ribbon {
+    margin: clamp(1.5rem, 3vw, 2.25rem) calc(-1 * var(--gutter)) 0;
+    padding: 1.1rem var(--gutter) 0.6rem;
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .ribbon__track {
+    position: relative;
+    height: calc(var(--lanes) * 1.1rem + 2.6rem);
+  }
+  .ribbon__year {
+    position: absolute;
+    bottom: 0;
+    padding-left: 0.3rem;
+    border-left: 1px solid var(--color-rule-dark);
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    color: var(--color-stone-on-dark);
+    font-size: 0.625rem;
+    line-height: 1;
+  }
+  .ribbon__year--empty {
+    color: #3d4652;
+  }
+  .ribbon__dot {
+    position: absolute;
+    top: calc(var(--lane) * 1.1rem + 0.35rem);
+    width: max(0.7rem, var(--w));
+    height: 0.7rem;
+    border-radius: 999px;
+    background: var(--color-headlamp);
+    transition: transform 150ms ease, opacity 150ms ease;
+  }
+  .ribbon__dot--bare {
+    background: var(--color-been);
+  }
+  .ribbon__dot--upcoming {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--color-headlamp);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .ribbon__dot--upcoming {
+      animation: beacon 2s ease-in-out infinite;
+    }
+  }
+  @keyframes beacon {
+    50% { box-shadow: inset 0 0 0 2px var(--color-headlamp), 0 0 0 5px rgb(255 194 75 / 0.25); }
+  }
+  .ribbon__dot.is-out {
+    opacity: 0.2;
+  }
+  .ribbon__dot:hover,
+  .ribbon__dot:focus-visible,
+  .ribbon__dot.is-hot {
+    transform: scale(1.5);
+    z-index: 2;
+  }
+  .ribbon__label {
+    position: absolute;
+    bottom: calc(100% + 0.45rem);
+    left: 50%;
+    transform: translateX(-50%) scale(0.66);
+    transform-origin: bottom center;
+    padding: 0.25rem 0.5rem;
+    background: var(--color-snow);
+    color: var(--color-ink);
+    font-size: 0.6875rem;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .ribbon__when {
+    color: var(--color-stone);
+  }
+  .ribbon__dot:hover .ribbon__label,
+  .ribbon__dot:focus-visible .ribbon__label,
+  .ribbon__dot.is-hot .ribbon__label {
+    opacity: 1;
+  }
+
+  /* ---- filters ---- */
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.25rem;
+    margin-top: 1.25rem;
+  }
+  .tools[hidden] {
+    display: none;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .chip {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 0.6875rem;
+    cursor: pointer;
+    border-radius: 999px;
+  }
+  .chip:hover {
+    border-color: var(--color-stone);
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .chip__n {
+    color: var(--color-stone);
+    margin-left: 0.2rem;
+  }
+  .chip[aria-pressed='true'] .chip__n {
+    color: var(--color-headlamp);
+  }
+  .sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    color: var(--color-stone);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .sort select {
+    font: inherit;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    padding: 0.3rem 0.5rem;
+    border-radius: 2px;
+  }
+  .tools__count {
+    margin: 0 0 0 auto;
+    font-size: 0.6875rem;
+    color: var(--color-stone);
+  }
+
+  /* ---- the cards ---- */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
-    gap: clamp(1.25rem, 3vw, 2rem);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    grid-auto-flow: dense;
+    gap: clamp(1.25rem, 2.5vw, 2.25rem);
     list-style: none;
-    max-width: 68rem;
-    margin: clamp(1.75rem, 4vw, 2.75rem) auto 0;
-    padding: 0 clamp(1rem, 4vw, 3rem);
+    margin: clamp(1.25rem, 3vw, 2rem) 0 0;
+    padding: 0;
+  }
+  @media (min-width: 64rem) {
+    .trip.is-lead {
+      grid-column: span 2;
+      grid-row: span 2;
+    }
+    .trip.is-lead .trip__media {
+      aspect-ratio: auto;
+      flex: 1;
+      min-height: 22rem;
+    }
+    .trip.is-lead .trip__title {
+      font-size: clamp(1.6rem, 2.4vw, 2.3rem);
+    }
+  }
+  .trip {
+    display: flex;
+    flex-direction: column;
+    scroll-margin: 6rem;
+  }
+  .trip[hidden] {
+    display: none;
   }
   .trip__link {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     text-decoration: none;
+    color: inherit;
   }
   .trip__media {
+    position: relative;
     display: block;
     aspect-ratio: 3 / 2;
     background: var(--color-rule);
     overflow: hidden;
   }
+  .trip__media[data-photos] {
+    cursor: ew-resize;
+  }
   .trip__media img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 150ms ease;
+    transition: transform 300ms ease;
   }
-  .trip__link:hover .trip__media img {
-    transform: scale(1.02);
+  .trip__link:hover .trip__media img,
+  .trip.is-hot .trip__media img {
+    transform: scale(1.03);
   }
-  /* Honest about the two trips that have none. */
-  .trip__media--none {
+  .trip__ticks {
+    position: absolute;
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 0.55rem;
     display: flex;
-    align-items: center;
+    gap: 3px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .trip__link:hover .trip__ticks {
+    opacity: 1;
+  }
+  .trip__tick {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: rgb(248 250 251 / 0.45);
+  }
+  .trip__tick.on {
+    background: var(--color-snow);
+  }
+
+  /* No pictures yet: the trip that hasn't happened, said with some excitement. */
+  .trip__soon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
     justify-content: center;
-    height: 100%;
+    gap: 0.4rem;
+    padding: 1.5rem;
+    background:
+      radial-gradient(circle at 85% 20%, rgb(255 194 75 / 0.22), transparent 55%),
+      var(--color-ink);
+    color: var(--color-snow);
+  }
+  .trip__soon-kicker {
+    color: var(--color-headlamp);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .trip__soon-big {
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-stretch: 118%;
+    line-height: 1;
+  }
+  .trip__soon-where {
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+  }
+  /* Honest about the trips that have none. */
+  .trip__none {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1.25rem;
     color: var(--color-stone);
-    background: var(--color-paper);
+    background:
+      repeating-linear-gradient(135deg, transparent 0 14px, rgb(127 216 232 / 0.12) 14px 15px),
+      var(--color-paper);
     border: 1px solid var(--color-rule);
     font-size: 0.6875rem;
+  }
+  .trip__none-where {
+    color: var(--color-rime-on-light);
+    font-size: clamp(1.3rem, 2.2vw, 1.75rem);
+    font-stretch: 115%;
+    line-height: 1.1;
+  }
+
+  .trip__body {
+    display: block;
+    padding-top: 0.7rem;
   }
   .trip__dates {
     display: block;
     color: var(--color-stone);
-    margin-top: 0.7rem;
     font-size: 0.6875rem;
   }
   .trip__title {
     display: block;
     font-size: 1.35rem;
     font-stretch: 112%;
-    margin: 0.3rem 0 0.35rem;
+    margin: 0.3rem 0 0.45rem;
     line-height: 1.15;
   }
   .trip__link:hover .trip__title {
     text-decoration: underline;
     text-underline-offset: 0.18em;
   }
+  .trip__codes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-bottom: 0.45rem;
+  }
+  .trip__codes abbr {
+    text-decoration: none;
+    font-size: 0.5625rem;
+    padding: 0.1rem 0.3rem;
+    border: 1px solid var(--color-rule);
+    color: var(--color-stone);
+    border-radius: 2px;
+  }
   .trip__stats {
     display: block;
     color: var(--color-stone);
     font-size: 0.625rem;
+  }
+  .trip__marks {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .trip__cried {
+    margin-left: 0.3rem;
+    font-size: 0.625rem;
+    color: var(--color-stone);
+  }
+  .trip.is-hot .trip__title {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+  .trip.is-flash .trip__media {
+    animation: flash 1.4s ease-out;
+  }
+  @keyframes flash {
+    0%, 30% { box-shadow: 0 0 0 4px var(--color-ember); }
+    100% { box-shadow: 0 0 0 4px transparent; }
+  }
+
+  .none {
+    margin-top: 2rem;
+    color: var(--color-stone);
+  }
+  .none button {
+    font-size: 0.75rem;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid currentColor;
+    color: var(--color-ink);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  @media (max-width: 40rem) {
+    .ribbon__label {
+      display: none;
+    }
+    .ribbon__year {
+      font-size: 0;
+    }
+    .ribbon__year:nth-child(5n + 1) {
+      font-size: 0.5625rem;
+    }
+    .tools__count {
+      margin-left: 0;
+    }
+    /* One swipeable row each, rather than five rows of chips before the first trip. */
+    .chips {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      max-width: 100%;
+      scrollbar-width: none;
+      margin-inline: calc(-1 * var(--gutter));
+      padding-inline: var(--gutter);
+    }
+    .chip {
+      flex: none;
+    }
   }
 </style>

@@ -11,27 +11,27 @@ A snapshot from the last run. The live list — and the editor — is /admin/tri
 - **japan-2022** — hero is just the first photograph of the first entry (`04-6C24EE77-AEF9-4B60-8C71-1CEBCB17E1E0.jpeg`). Pick the one that should carry the trip.
 - **japan-2022** — summary is auto-derived: _"5 entries from Japan, 26 December 2022 – 5 January 2023."_ — replace with two sentences in your own voice.
 - **africa-and-egypt-2018** — hero is just the first photograph of the first entry (`01-IMG_8744.HEIC`). Pick the one that should carry the trip.
-- **africa-and-egypt-2018** — summary is auto-derived: _"41 entries from Tanzania, Egypt, Austria, 16 September – 4 November 2018."_ — replace with two sentences in your own voice.
+- **africa-and-egypt-2018** — summary is auto-derived: _"41 entries from Tanzania, Egypt, Austria, 15 September – 1 November 2018."_ — replace with two sentences in your own voice.
   - ⚠ Austria inferred from the Innsbruck posts at the end of the trip. Confirm whether that belongs to this trip or should be split out.
 - **seasiamikerachwedding2017** — hero is just the first photograph of the first entry (`01-3Mantas.jpg`). Pick the one that should carry the trip.
-- **seasiamikerachwedding2017** — summary is auto-derived: _"9 entries from Indonesia, 16 April – 24 April 2017."_ — replace with two sentences in your own voice.
+- **seasiamikerachwedding2017** — summary is auto-derived: _"9 entries from Indonesia, 15 April – 23 April 2017."_ — replace with two sentences in your own voice.
   - ⚠ Only Bali is named in the post titles. Were there other stops?
 - **patagoniapt2andcolumbia2017** — no photographs anywhere in this trip; hero is null and cards fall back to a rule.
-- **patagoniapt2andcolumbia2017** — summary is auto-derived: _"22 entries from Chile, Argentina, Colombia, 14 December – 6 January 2017."_ — replace with two sentences in your own voice.
+- **patagoniapt2andcolumbia2017** — summary is auto-derived: _"22 entries from Chile, Argentina, Colombia, 14 December – 5 January 2017."_ — replace with two sentences in your own voice.
 - **nepal-tibet-india-golden-triangle-2015** — hero is just the first photograph of the first entry (`01-blogger-image-2031314787.jpg`). Pick the one that should carry the trip.
-- **nepal-tibet-india-golden-triangle-2015** — summary is auto-derived: _"61 entries from Nepal, China, India and 1 more, 27 November – 31 January 2016."_ — replace with two sentences in your own voice.
+- **nepal-tibet-india-golden-triangle-2015** — summary is auto-derived: _"61 entries from Nepal, China, India and 1 more, 27 November – 29 January 2016."_ — replace with two sentences in your own voice.
   - ⚠ Germany comes from the Schnapps/Rotwurst posts that close the trip. Confirm it belongs here.
 - **patagoniaspectacular2015** — hero is just the first photograph of the first entry (`01-blogger-image--1258730053.jpg`). Pick the one that should carry the trip.
-- **patagoniaspectacular2015** — summary is auto-derived: _"15 entries from Chile, Argentina, 19 December – 3 January 2015."_ — replace with two sentences in your own voice.
+- **patagoniaspectacular2015** — summary is auto-derived: _"15 entries from Chile, Argentina, 19 December – 2 January 2015."_ — replace with two sentences in your own voice.
 - **iceland-germany-austria-croatia-bosnia-2013** — hero is just the first photograph of the first entry (`01-P8290011.JPG`). Pick the one that should carry the trip.
 - **iceland-germany-austria-croatia-bosnia-2013** — summary is auto-derived: _"18 entries from Iceland, Germany, Austria and 2 more, 28 August – 17 September 2013."_ — replace with two sentences in your own voice.
 - **guatemalabelize2012** — hero is just the first photograph of the first entry (`01-P6290139.JPG`). Pick the one that should carry the trip.
 - **guatemalabelize2012** — summary is auto-derived: _"9 entries from Guatemala, Belize, 30 June – 7 July 2012."_ — replace with two sentences in your own voice.
 - **china-2011** — hero is just the first photograph of the first entry (`01-P3270068.JPG`). Pick the one that should carry the trip.
-- **china-2011** — summary is auto-derived: _"19 entries from China, Hong Kong, Thailand, 17 March – 9 April 2011."_ — replace with two sentences in your own voice.
+- **china-2011** — summary is auto-derived: _"19 entries from China, Hong Kong, Thailand, 17 March – 5 April 2011."_ — replace with two sentences in your own voice.
   - ⚠ Hong Kong and Bangkok both appear in post titles at the end of the trip.
 - **ecuador-galapagos-bolivia-peru-macchu-picchu-2011** — hero is just the first photograph of the first entry (`01-054.JPG`). Pick the one that should carry the trip.
-- **ecuador-galapagos-bolivia-peru-macchu-picchu-2011** — summary is auto-derived: _"32 entries from Ecuador, Bolivia, Peru, 26 May – 20 July 2011."_ — replace with two sentences in your own voice.
+- **ecuador-galapagos-bolivia-peru-macchu-picchu-2011** — summary is auto-derived: _"32 entries from Ecuador, Bolivia, Peru, 26 May – 24 June 2011."_ — replace with two sentences in your own voice.
 - **india-sjsu-trip-2009** — hero is just the first photograph of the first entry (`01-bed.gif`). Pick the one that should carry the trip.
 - **india-sjsu-trip-2009** — summary is auto-derived: _"25 entries from India, Indonesia, Singapore, 1 June – 30 July 2009."_ — replace with two sentences in your own voice.
   - ⚠ Indonesia (Bintan) and Singapore appear at the end of the trip.

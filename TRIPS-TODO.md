@@ -26,7 +26,7 @@ A snapshot from the last run. The live list — and the editor — is /admin/tri
 - **iceland-germany-austria-croatia-bosnia-2013** — hero is just the first photograph of the first entry (`01-P8290011.JPG`). Pick the one that should carry the trip.
 - **iceland-germany-austria-croatia-bosnia-2013** — summary is auto-derived: _"18 entries from Iceland, Germany, Austria and 2 more, 28 August – 17 September 2013."_ — replace with two sentences in your own voice.
 - **guatemalabelize2012** — hero is just the first photograph of the first entry (`01-P6290139.JPG`). Pick the one that should carry the trip.
-- **guatemalabelize2012** — summary is auto-derived: _"9 entries from Guatemala, Belize, 30 June – 7 July 2012."_ — replace with two sentences in your own voice.
+- **guatemalabelize2012** — summary is auto-derived: _"9 entries from Guatemala, Belize, 29 June – 7 July 2012."_ — replace with two sentences in your own voice.
 - **china-2011** — hero is just the first photograph of the first entry (`01-P3270068.JPG`). Pick the one that should carry the trip.
 - **china-2011** — summary is auto-derived: _"19 entries from China, Hong Kong, Thailand, 17 March – 5 April 2011."_ — replace with two sentences in your own voice.
   - ⚠ Hong Kong and Bangkok both appear in post titles at the end of the trip.

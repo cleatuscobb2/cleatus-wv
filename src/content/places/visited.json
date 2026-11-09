@@ -34,5 +34,8 @@
   {"id":"koh-tachai-th","name":"Koh Tachai","country":"TH","lat":9.07,"lng":97.81,"when":"2008-01","dived":true},
   {"id":"gunung-agung-id","name":"Gunung Agung","country":"ID","lat":-8.3423,"lng":115.5083,"when":"2008-01"},
   {"id":"amed-id","name":"Amed","country":"ID","lat":-8.3446,"lng":115.6593,"when":"2008-01"},
-  {"id":"ubud-id","name":"Ubud","country":"ID","lat":-8.5069,"lng":115.2625,"when":"2008-01"}
+  {"id":"ubud-id","name":"Ubud","country":"ID","lat":-8.5069,"lng":115.2625,"when":"2008-01"},
+  {"id":"marrakech-ma","name":"Marrakech","country":"MA","lat":31.6295,"lng":-7.989,"when":"2009-12"},
+  {"id":"fes-ma","name":"Fes","country":"MA","lat":34.0646,"lng":-4.9737,"when":"2009-12"},
+  {"id":"chefchaouen-ma","name":"Chefchaouen","country":"MA","lat":35.1688,"lng":-5.2636,"when":"2009-12"}
 ]

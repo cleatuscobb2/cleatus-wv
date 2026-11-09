@@ -21,6 +21,7 @@ const BASE_SPAN = 9; // degrees either side of the centre line, for a place on i
 const WIDEN = 4; // added per neighbour in the band, up to MAX_SPAN
 const MAX_SPAN = 24;
 const LINGER = 3; // a card already open stays a little past the edge, so it doesn't flicker
+const TURN = 2800; // ms each overlapping card spends in front before the next comes forward
 
 const km = (a: [number, number], b: [number, number]) => {
   const r = Math.PI / 180;
@@ -156,6 +157,37 @@ export function startCameos<P extends CameoPhoto>(
     for (const g of want) {
       if (shown.size >= max) break;
       openCard(g, span);
+    }
+    takeTurns(now);
+  };
+
+  /**
+   * Cards drift into each other as the globe turns and leans. Where they overlap, each
+   * comes to the front in turn, the others stepping back and dimming, so all get seen.
+   */
+  const takeTurns = (now: number) => {
+    const live = [...shown.entries()].filter(([, s]) => !s.el.classList.contains('is-out'));
+    const rects = live.map(([, s]) => s.el.getBoundingClientRect());
+    const touch = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right - 4 && b.left < a.right - 4 && a.top < b.bottom - 4 && b.top < a.bottom - 4;
+    // Bunch cards that overlap, directly or through a neighbour.
+    const bunch = live.map((_, i) => i);
+    const root = (i: number): number => (bunch[i] === i ? i : (bunch[i] = root(bunch[i])));
+    for (let i = 0; i < live.length; i++) {
+      for (let j = i + 1; j < live.length; j++) if (touch(rects[i], rects[j])) bunch[root(i)] = root(j);
+    }
+    const members = new Map<number, number[]>();
+    live.forEach((_, i) => members.set(root(i), [...(members.get(root(i)) ?? []), i]));
+    for (const idx of members.values()) {
+      // A steady order, so the turns go round rather than jumping about.
+      idx.sort((a, b) => groups.indexOf(live[a][0]) - groups.indexOf(live[b][0]));
+      const front = idx.length > 1 ? idx[Math.floor(now / TURN) % idx.length] : idx[0];
+      for (const i of idx) {
+        const { el } = live[i][1];
+        const back = i !== front;
+        el.classList.toggle('is-back', back);
+        el.parentElement!.style.zIndex = back ? '1' : '2';
+      }
     }
   };
 

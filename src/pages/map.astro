@@ -695,9 +695,15 @@ const globeConfig = {
     background: rgba(18, 22, 28, 0.94); border: 1px solid rgba(255, 143, 184, 0.75); border-radius: 5px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); overflow: hidden;
     opacity: 0; transform: translateY(6px) scale(0.96);
-    transition: opacity 750ms cubic-bezier(0.22, 0.61, 0.36, 1), transform 750ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition: opacity 900ms cubic-bezier(0.22, 0.61, 0.36, 1), transform 900ms cubic-bezier(0.22, 0.61, 0.36, 1), filter 900ms ease;
   }
   :global(.cameo.is-in) { opacity: 1; transform: none; }
+  /* Overlapping cards take turns in front; the ones behind step back and dim. */
+  :global(.cameo.is-in.is-back) { opacity: 0.42; transform: scale(0.95); filter: saturate(0.6); }
+  :global(.cameo) { will-change: opacity, transform; }
+  /* Pointing at a card that's behind brings it forward while you look. */
+  :global(.cameo.is-in.is-back:hover), :global(.cameo.is-in.is-back:focus-visible) { opacity: 1; transform: none; filter: none; }
+  :global(.cameo-pin:has(.cameo:hover)), :global(.cameo-pin:has(.cameo:focus-visible)) { z-index: 3 !important; }
   /* Leaving is slower than arriving, so a card eases away rather than blinking out. */
   :global(.cameo.is-out) { opacity: 0; transform: translateY(-4px) scale(0.98); transition-duration: 950ms; }
   :global(.cameo:hover), :global(.cameo:focus-visible) { border-color: #ff8fb8; box-shadow: 0 8px 28px rgba(255, 143, 184, 0.25); }

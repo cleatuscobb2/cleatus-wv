@@ -8,6 +8,7 @@
 import type { Map as MLMap, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl';
 import { openLightbox, plainClick } from './lightbox.ts';
 import { startCameos } from './globe-cameos.ts';
+import { leanToward, spinLatitude, turnStep } from './globe-tilt.ts';
 import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, firstSymbolLayer, loadMaplibre, reducedMotion, webglOk } from './map-kit.ts';
 
 interface Country {
@@ -322,10 +323,17 @@ async function start(stage: HTMLElement) {
   // The photo teasers belong to the spin; they go as soon as someone takes the globe.
   let clearCameos = () => {};
   const stopSpin = () => { spinning = false; clearCameos(); };
+  // As it turns it leans north or south toward the densest photos and entries coming up.
+  const latFor = spinLatitude([
+    ...data.photos.map((p) => ({ lat: p.lat, lng: p.lng, w: p.media.length })),
+    ...data.events.map((e) => ({ lat: e.lat, lng: e.lng, w: 1 })),
+  ]);
   const spin = () => {
     if (!spinning || map.isMoving() || map.getZoom() > homeZ + 0.3) return;
     const c = map.getCenter();
-    map.easeTo({ center: [c.lng + 4, c.lat], duration: 1000, easing: (t) => t });
+    // It turns more slowly while it has a long way to lean, so the dip or climb reads as one movement.
+    const lng = c.lng + turnStep(c.lat, latFor(c.lng + 4));
+    map.easeTo({ center: [lng, leanToward(c.lat, latFor(lng))], duration: 1000, easing: (t) => t });
   };
   map.on('moveend', spin);
   for (const ev of ['mousedown', 'touchstart', 'wheel', 'dragstart'] as const) map.on(ev, stopSpin);

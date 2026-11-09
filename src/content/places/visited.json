@@ -21,5 +21,6 @@
   {"id":"auckland-nz","name":"Auckland","country":"NZ","lat":-36.8485,"lng":174.7633,"when":"2026-06"},
   {"id":"bangkok-th","name":"Bangkok","country":"TH","lat":13.7563,"lng":100.5018,"when":"2007-12"},
   {"id":"bonifacio-fr","name":"Bonifacio","country":"FR","lat":41.3874,"lng":9.1594,"when":"2022-07"},
-  {"id":"oaxaca-mx","name":"Oaxaca","country":"MX","lat":17.064,"lng":-96.724,"when":"2026-01"}
+  {"id":"oaxaca-mx","name":"Oaxaca","country":"MX","lat":17.064,"lng":-96.724,"when":"2026-01"},
+  {"id":"mexico-city-mx","name":"Mexico City","country":"MX","lat":19.4326,"lng":-99.1332,"when":"2025-12"}
 ]

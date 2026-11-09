@@ -24,5 +24,8 @@
   {"id":"oaxaca-mx","name":"Oaxaca","country":"MX","lat":17.064,"lng":-96.724,"when":"2026-01"},
   {"id":"mexico-city-mx","name":"Mexico City","country":"MX","lat":19.4326,"lng":-99.1332,"when":"2025-12"},
   {"id":"calella-de-palafrugell-es","name":"Calella de Palafrugell","country":"ES","lat":41.8865,"lng":3.1853,"when":"2019-09"},
-  {"id":"muriwai-nz","name":"Muriwai","country":"NZ","lat":-36.8328,"lng":174.4247,"when":"2026-06"}
+  {"id":"muriwai-nz","name":"Muriwai","country":"NZ","lat":-36.8328,"lng":174.4247,"when":"2026-06"},
+  {"id":"lisbon-pt","name":"Lisbon","country":"PT","lat":38.7139,"lng":-9.1405,"when":"2025-06"},
+  {"id":"sintra-pt","name":"Sintra","country":"PT","lat":38.7876,"lng":-9.3906,"when":"2025-06"},
+  {"id":"cascais-pt","name":"Cascais","country":"PT","lat":38.6913,"lng":-9.4209,"when":"2025-06"}
 ]

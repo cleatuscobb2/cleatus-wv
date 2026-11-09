@@ -29,5 +29,7 @@
   {"id":"sintra-pt","name":"Sintra","country":"PT","lat":38.7876,"lng":-9.3906,"when":"2025-06"},
   {"id":"cascais-pt","name":"Cascais","country":"PT","lat":38.6913,"lng":-9.4209,"when":"2025-06"},
   {"id":"cobano-cr","name":"Cóbano","country":"CR","lat":9.579,"lng":-85.1031,"when":"2025-12"},
-  {"id":"half-moon-caye-bz","name":"Half Moon Caye","country":"BZ","lat":17.205,"lng":-87.547,"when":"2006-03"}
+  {"id":"half-moon-caye-bz","name":"Half Moon Caye","country":"BZ","lat":17.205,"lng":-87.547,"when":"2006-03"},
+  {"id":"similan-islands-th","name":"Similan Islands","country":"TH","lat":8.65,"lng":97.64,"when":"2008-01","dived":true},
+  {"id":"koh-tachai-th","name":"Koh Tachai","country":"TH","lat":9.07,"lng":97.81,"when":"2008-01","dived":true}
 ]

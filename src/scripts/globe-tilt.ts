@@ -67,5 +67,5 @@ export const leanToward = (lat: number, goal: number, max = 5.5) =>
  * Degrees of longitude for that second. The turn slows while there is a long way to lean,
  * so the globe drifts down to Patagonia or up to Norway instead of sweeping past them.
  */
-export const turnStep = (lat: number, goal: number, full = 4) =>
+export const turnStep = (lat: number, goal: number, full = 2) =>
   full * Math.max(0.25, 1 - Math.abs(goal - lat) / 45);

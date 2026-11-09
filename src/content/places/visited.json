@@ -20,5 +20,6 @@
   {"id":"tulum-mx-2","name":"Tulum","country":"MX","lat":20.2114,"lng":-87.4654,"when":"2021-12"},
   {"id":"auckland-nz","name":"Auckland","country":"NZ","lat":-36.8485,"lng":174.7633,"when":"2026-06"},
   {"id":"bangkok-th","name":"Bangkok","country":"TH","lat":13.7563,"lng":100.5018,"when":"2007-12"},
-  {"id":"bonifacio-fr","name":"Bonifacio","country":"FR","lat":41.3874,"lng":9.1594,"when":"2022-07"}
+  {"id":"bonifacio-fr","name":"Bonifacio","country":"FR","lat":41.3874,"lng":9.1594,"when":"2022-07"},
+  {"id":"oaxaca-mx","name":"Oaxaca","country":"MX","lat":17.064,"lng":-96.724,"when":"2026-01"}
 ]

@@ -15,13 +15,15 @@ export interface CameoPhoto {
   media: { src: string; thumb?: string; poster?: string; video?: boolean }[];
 }
 
-interface Group<P> { lat: number; lng: number; posts: P[]; best: P; pic: string; title: string; score: number }
+interface Group<P> { lat: number; lng: number; posts: P[]; best: P; pics: string[]; title: string; score: number }
 
 const BASE_SPAN = 9; // degrees either side of the centre line, for a place on its own
 const WIDEN = 4; // added per neighbour in the band, up to MAX_SPAN
 const MAX_SPAN = 24;
 const LINGER = 3; // a card already open stays a little past the edge, so it doesn't flicker
 const TURN = 2800; // ms each overlapping card spends in front before the next comes forward
+const FLIP = 2400; // ms each picture shows on a card before the next fades in
+const MAX_PICS = 6;
 
 const km = (a: [number, number], b: [number, number]) => {
   const r = Math.PI / 180;
@@ -43,11 +45,14 @@ function groupsOf<P extends CameoPhoto>(photos: P[]): Group<P>[] {
   const scoreOf = (p: P) => Math.min(words(p.caption), 160) + 25 * Math.min(p.media.length, 4)
     + (p.icon ? 300 : 0) + (p.media.some((m) => !m.video) ? 40 : 0);
   return groups.flatMap(({ at, posts }) => {
-    const best = [...posts].sort((a, b) => scoreOf(b) - scoreOf(a))[0];
-    const still = best.media.find((m) => !m.video);
-    const pic = still ? (still.thumb ?? still.src) : best.media[0]?.poster;
-    if (!pic) return [];
-    return [{ lng: at[0], lat: at[1], posts, best, pic, title: best.place, score: scoreOf(best) + 10 * posts.length }];
+    const ranked = [...posts].sort((a, b) => scoreOf(b) - scoreOf(a));
+    const best = ranked[0];
+    // Every picture from the place, the best post's first: stills as they are, videos by their poster.
+    const pics = [...new Set(ranked.flatMap((p) => p.media.map((m) => (m.video ? m.poster : (m.thumb ?? m.src)))))]
+      .filter((x): x is string => Boolean(x))
+      .slice(0, MAX_PICS);
+    if (!pics.length) return [];
+    return [{ lng: at[0], lat: at[1], posts, best, pics, title: best.place, score: scoreOf(best) + 10 * posts.length }];
   });
 }
 
@@ -62,13 +67,14 @@ export function startCameos<P extends CameoPhoto>(
 ) {
   const groups = groupsOf(photos);
   // Each card keeps the band it opened with, so a neighbour leaving doesn't cut it short.
-  const shown = new Map<Group<P>, { marker: Marker; el: HTMLElement; span: number }>();
+  const shown = new Map<Group<P>, { marker: Marker; el: HTMLElement; span: number; flip?: number }>();
   let last = 0;
 
   const close = (g: Group<P>) => {
     const s = shown.get(g);
     if (!s) return;
     shown.delete(g);
+    clearInterval(s.flip);
     s.el.classList.remove('is-in');
     s.el.classList.add('is-out');
     // Gone once the fade out (map.astro, .cameo.is-out) has run.
@@ -104,7 +110,7 @@ export function startCameos<P extends CameoPhoto>(
     el.className = 'cameo';
     el.style.width = `${w}px`;
     el.setAttribute('aria-label', `Photos from ${g.title}`);
-    el.innerHTML = `<img src="${esc(g.pic)}" alt="" decoding="async" /><span class="cameo__text"><b>${esc(g.title)}</b></span>`;
+    el.innerHTML = `<span class="cameo__pic"><img class="is-shown" src="${esc(g.pics[0])}" alt="" decoding="async" /></span><span class="cameo__text"><b>${esc(g.title)}</b></span>`;
     const pos = place(g, w, h);
     el.classList.add(`cameo--${pos.side}`);
     // A press on a card is not the globe being grabbed, so it doesn't stop the spin before the click lands.
@@ -131,6 +137,29 @@ export function startCameos<P extends CameoPhoto>(
     };
     img.decode().then(show, show);
     setTimeout(show, 1500);
+    if (g.pics.length > 1) shown.get(g)!.flip = flipThrough(el, g.pics);
+  };
+
+  /** A place with several pictures cross-fades through them while its card is up. */
+  const flipThrough = (el: HTMLElement, pics: string[]) => {
+    const frame = el.querySelector<HTMLElement>('.cameo__pic')!;
+    let at = 0;
+    return window.setInterval(() => {
+      const next = (at + 1) % pics.length;
+      const img = new Image();
+      img.alt = '';
+      img.decoding = 'async';
+      img.src = pics[next];
+      // Fade the next one in over the current, once it can be drawn, then drop the old.
+      img.decode().then(() => {
+        if (!el.isConnected) return;
+        const old = frame.querySelector('img.is-shown');
+        frame.append(img);
+        requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add('is-shown')));
+        setTimeout(() => old?.remove(), 1000);
+        at = next;
+      }, () => { at = next; });
+    }, FLIP);
   };
 
   const tick = () => {

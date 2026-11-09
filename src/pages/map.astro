@@ -707,7 +707,10 @@ const globeConfig = {
   /* Leaving is slower than arriving, so a card eases away rather than blinking out. */
   :global(.cameo.is-out) { opacity: 0; transform: translateY(-4px) scale(0.98); transition-duration: 950ms; }
   :global(.cameo:hover), :global(.cameo:focus-visible) { border-color: #ff8fb8; box-shadow: 0 8px 28px rgba(255, 143, 184, 0.25); }
-  :global(.cameo img) { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #0b0e12; }
+  :global(.cameo__pic) { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; background: #0b0e12; overflow: hidden; }
+  /* Pictures stack and cross-fade as a place's card cycles through them. */
+  :global(.cameo__pic img) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 900ms ease; }
+  :global(.cameo__pic img.is-shown) { opacity: 1; }
   :global(.cameo__text) { display: block; padding: 0.18rem 0.3rem 0.22rem; }
   :global(.cameo__text b) { font-family: var(--font-display); font-size: 0.5rem; line-height: 1.2; color: var(--color-rime); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: reduce) {

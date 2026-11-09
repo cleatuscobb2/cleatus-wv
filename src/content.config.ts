@@ -166,6 +166,8 @@ const instagram = defineCollection({
     entry: z.string().optional(),
     /** An emoji that marks it on the globe in place of the camera, for a moment worth flagging. */
     icon: z.string().optional(),
+    /** Shown instead of the date when only the season is known ("Winter 2025–26"). */
+    dateLabel: z.string().optional(),
     media: z.array(z.object({
       src: z.string(),
       thumb: z.string(),

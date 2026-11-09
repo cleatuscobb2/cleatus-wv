@@ -29,6 +29,11 @@ import { COUNTRY_NUMERIC } from '../src/data/trip-meta.ts';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WORK = resolve(process.env.IG_WORK ?? join(ROOT, '../cleatus-wv-instagram'));
 const CATALOGUE = join(WORK, 'posts.json');
+/**
+ * Photos that never went to Instagram, added by hand in the same shape as the catalogue.
+ * Kept apart so a fresh import can't drop them; published like any ticked post.
+ */
+const MANUAL = join(WORK, 'manual.json');
 const DECISIONS = join(WORK, 'decisions.json');
 const CONFIG = join(WORK, 'config.json');
 const GEOCACHE = join(WORK, 'geocache.json');
@@ -41,6 +46,8 @@ interface Post {
   id: string; account: string; author: string; root: string; ts: number; date: string; caption: string;
   media: Media[]; lat: number | null; lng: number | null; pin: 'gps' | 'date' | null; pinNote?: string;
   home: string | null; country: string; place: string; trip: string | null;
+  /** Shown instead of the date when only the season is known ("Winter 2025–26"). */
+  dateLabel?: string;
 }
 interface Decision {
   publish?: boolean; trip?: string | null; pin?: { lat: number; lng: number } | null; place?: string; caption?: string;
@@ -276,7 +283,7 @@ const run = (cmd: string, args: string[]) => new Promise<string>((ok, no) => {
 
 async function publish() {
   const config = await readJson<{ homes: Home[] }>(CONFIG, { homes: [] });
-  const posts = await readJson<Post[]>(CATALOGUE, []);
+  const posts = [...await readJson<Post[]>(CATALOGUE, []), ...await readJson<Post[]>(MANUAL, [])];
   const decisions = await readJson<Record<string, Decision>>(DECISIONS, {});
   const out: Record<string, unknown>[] = [];
   const refused: string[] = [];
@@ -317,7 +324,7 @@ async function publish() {
     }
     const trip = d.trip === undefined ? p.trip : d.trip;
     out.push({
-      id: p.id, author: p.author, date: p.date, caption: d.caption ?? p.caption,
+      id: p.id, author: p.author, date: p.date, ...(p.dateLabel ? { dateLabel: p.dateLabel } : {}), caption: d.caption ?? p.caption,
       ...(lat != null && lng != null ? { lat: Math.round(lat * 1e4) / 1e4, lng: Math.round(lng * 1e4) / 1e4 } : {}),
       ...((d.place ?? p.place) ? { place: d.place ?? p.place } : {}),
       ...((d.country ?? p.country) ? { country: d.country ?? p.country } : {}),

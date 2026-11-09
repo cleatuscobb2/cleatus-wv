@@ -317,7 +317,7 @@ export async function GET() {
         : undefined;
       return {
         lat: p.data.lat, lng: p.data.lng, author: p.data.author, caption: p.data.caption,
-        when: `${fmtDateShort(d)} ${d.getUTCFullYear()}`,
+        when: p.data.dateLabel ?? `${fmtDateShort(d)} ${d.getUTCFullYear()}`,
         place: [p.data.place, p.data.country ? COUNTRY_NAMES[p.data.country] ?? '' : ''].filter(Boolean).join(', '),
         // Links to its entry if it has one, otherwise to its trip.
         link: entryTitle

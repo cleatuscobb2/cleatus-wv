@@ -28,5 +28,6 @@
   {"id":"lisbon-pt","name":"Lisbon","country":"PT","lat":38.7139,"lng":-9.1405,"when":"2025-06"},
   {"id":"sintra-pt","name":"Sintra","country":"PT","lat":38.7876,"lng":-9.3906,"when":"2025-06"},
   {"id":"cascais-pt","name":"Cascais","country":"PT","lat":38.6913,"lng":-9.4209,"when":"2025-06"},
-  {"id":"cobano-cr","name":"Cóbano","country":"CR","lat":9.579,"lng":-85.1031,"when":"2025-12"}
+  {"id":"cobano-cr","name":"Cóbano","country":"CR","lat":9.579,"lng":-85.1031,"when":"2025-12"},
+  {"id":"half-moon-caye-bz","name":"Half Moon Caye","country":"BZ","lat":17.205,"lng":-87.547,"when":"2006-03"}
 ]

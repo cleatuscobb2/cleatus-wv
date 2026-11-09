@@ -1,7 +1,7 @@
 /**
  * Teasers on the spinning globe: as a place with photographs turns past the middle
- * of the globe, a small card opens beside it with its best picture and a line about
- * it, so a visitor sees there is something there before they stop and look.
+ * of the globe, a small card opens beside it with its best picture and the place's
+ * name, so a visitor sees there is something there before they stop and look.
  *
  * Places are opened as they come within a band either side of the centre line and
  * closed as they leave it. When several are in the band together, the band widens,
@@ -15,7 +15,7 @@ export interface CameoPhoto {
   media: { src: string; thumb?: string; poster?: string; video?: boolean }[];
 }
 
-interface Group<P> { lat: number; lng: number; posts: P[]; best: P; pic: string; title: string; line: string; meta: string; score: number }
+interface Group<P> { lat: number; lng: number; posts: P[]; best: P; pic: string; title: string; score: number }
 
 const BASE_SPAN = 9; // degrees either side of the centre line, for a place on its own
 const WIDEN = 4; // added per neighbour in the band, up to MAX_SPAN
@@ -28,12 +28,9 @@ const km = (a: [number, number], b: [number, number]) => {
   return 12742 * Math.asin(Math.sqrt(h));
 };
 
-/** A caption cut to its first sentence, without hashtags or links. */
-function teaser(caption: string, max = 78): string {
-  const plain = caption.replace(/https?:\/\/\S+|www\.\S+/g, '').replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\s+/g, ' ').trim();
-  const first = plain.split(/(?<=[.!?])\s/)[0] ?? plain;
-  return first.length > max ? `${first.slice(0, max - 1).replace(/[\s,;:–-]+\S*$/, '')}…` : first;
-}
+/** How much a caption says, without hashtags or links. */
+const words = (caption: string) =>
+  caption.replace(/https?:\/\/\S+|www\.\S+/g, '').replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\s+/g, ' ').trim().length;
 
 /** Posts within 60 km of each other count as one place. The best is the one with the most to say. */
 function groupsOf<P extends CameoPhoto>(photos: P[]): Group<P>[] {
@@ -42,22 +39,14 @@ function groupsOf<P extends CameoPhoto>(photos: P[]): Group<P>[] {
     const g = groups.find((x) => km(x.at, [p.lng, p.lat]) < 60);
     if (g) g.posts.push(p); else groups.push({ at: [p.lng, p.lat], posts: [p] });
   }
-  const scoreOf = (p: P) => Math.min(teaser(p.caption, 400).length, 160) + 25 * Math.min(p.media.length, 4)
+  const scoreOf = (p: P) => Math.min(words(p.caption), 160) + 25 * Math.min(p.media.length, 4)
     + (p.icon ? 300 : 0) + (p.media.some((m) => !m.video) ? 40 : 0);
   return groups.flatMap(({ at, posts }) => {
     const best = [...posts].sort((a, b) => scoreOf(b) - scoreOf(a))[0];
     const still = best.media.find((m) => !m.video);
     const pic = still ? (still.thumb ?? still.src) : best.media[0]?.poster;
     if (!pic) return [];
-    const n = posts.reduce((s, p) => s + p.media.length, 0);
-    const years = [...new Set(posts.map((p) => p.when.match(/\d{4}/)?.[0]).filter(Boolean))].sort();
-    return [{
-      lng: at[0], lat: at[1], posts, best, pic,
-      title: best.place,
-      line: (best.icon ? `${best.icon} ` : '') + (teaser(best.caption) || 'Photographs from here'),
-      meta: [`${n} ${n === 1 ? 'photo' : 'photos'}`, years.length > 1 ? `${years[0]}–${years.at(-1)}` : best.when].join(' · '),
-      score: scoreOf(best) + 10 * posts.length,
-    }];
+    return [{ lng: at[0], lat: at[1], posts, best, pic, title: best.place, score: scoreOf(best) + 10 * posts.length }];
   });
 }
 
@@ -103,16 +92,15 @@ export function startCameos<P extends CameoPhoto>(
 
   const openCard = (g: Group<P>) => {
     const narrow = map.getContainer().clientWidth < 700;
-    const w = narrow ? 104 : 132;
-    // A 16:10 picture over two or three short lines of text.
-    const h = Math.round(w * 0.625) + (narrow ? 56 : 70);
+    const w = narrow ? 73 : 92;
+    // A 16:10 picture over the place's name.
+    const h = Math.round(w * 0.625) + (narrow ? 22 : 26); // up to two lines of name
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'cameo';
     el.style.width = `${w}px`;
-    el.setAttribute('aria-label', `Photos from ${g.title}: ${g.line}`);
-    el.innerHTML = `<img src="${esc(g.pic)}" alt="" decoding="async" />
-      <span class="cameo__text"><b>${esc(g.title)}</b><span class="cameo__line">${esc(g.line)}</span><span class="cameo__meta mono">${esc(g.meta)}</span></span>`;
+    el.setAttribute('aria-label', `Photos from ${g.title}`);
+    el.innerHTML = `<img src="${esc(g.pic)}" alt="" decoding="async" /><span class="cameo__text"><b>${esc(g.title)}</b></span>`;
     const pos = place(g, w, h);
     el.classList.add(`cameo--${pos.side}`);
     el.addEventListener('click', (e) => {

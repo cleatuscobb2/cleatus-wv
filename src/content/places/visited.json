@@ -31,5 +31,8 @@
   {"id":"cobano-cr","name":"Cóbano","country":"CR","lat":9.579,"lng":-85.1031,"when":"2025-12"},
   {"id":"half-moon-caye-bz","name":"Half Moon Caye","country":"BZ","lat":17.205,"lng":-87.547,"when":"2006-03"},
   {"id":"similan-islands-th","name":"Similan Islands","country":"TH","lat":8.65,"lng":97.64,"when":"2008-01","dived":true},
-  {"id":"koh-tachai-th","name":"Koh Tachai","country":"TH","lat":9.07,"lng":97.81,"when":"2008-01","dived":true}
+  {"id":"koh-tachai-th","name":"Koh Tachai","country":"TH","lat":9.07,"lng":97.81,"when":"2008-01","dived":true},
+  {"id":"gunung-agung-id","name":"Gunung Agung","country":"ID","lat":-8.3423,"lng":115.5083,"when":"2008-01"},
+  {"id":"amed-id","name":"Amed","country":"ID","lat":-8.3446,"lng":115.6593,"when":"2008-01"},
+  {"id":"ubud-id","name":"Ubud","country":"ID","lat":-8.5069,"lng":115.2625,"when":"2008-01"}
 ]

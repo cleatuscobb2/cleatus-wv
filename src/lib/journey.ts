@@ -43,6 +43,9 @@ export interface JourneyPoint {
   /** The day's leg, where a trek entry logged one — labels the line into this stop. */
   distanceMi: number | null;
   photo: string | null;
+  /** The road or track in from the previous point, where it isn't a straight line. */
+  path: [number, number][] | null;
+  pathLabel: string | null;
 }
 
 export const firstPhoto = (e: Entry) => e.body?.match(/<Photo src="([^"]+)"/)?.[1] ?? null;
@@ -66,6 +69,8 @@ export function journeyPoints(entries: Entry[]): JourneyPoint[] {
       elevationFt: e.data.leg?.elevationHighFt ?? e.data.location?.elevationFt ?? null,
       distanceMi: e.data.leg?.distanceMi ?? null,
       photo: firstPhoto(e),
+      path: e.data.pathIn?.coords ?? null,
+      pathLabel: e.data.pathIn?.label ?? null,
     }));
 }
 

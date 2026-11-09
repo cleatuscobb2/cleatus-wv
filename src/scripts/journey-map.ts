@@ -10,6 +10,8 @@ import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, km, loadMaplibre,
 interface Pt {
   slug: string; href: string; title: string; when: string; day: number | null;
   place: string; lat: number; lng: number; kinds: string[]; elevationFt: number | null; distanceMi: number | null;
+  /** The road in from the previous point, where a straight line would lie. */
+  path?: [number, number][] | null; pathLabel?: string | null;
 }
 interface Cfg { points: Pt[]; icons: Record<string, string>; live: boolean; tripTitle: string }
 
@@ -50,6 +52,7 @@ function stopsOf(pts: Pt[], coords: [number, number][]): { stops: Stop[]; stopOf
  */
 function legLabel(prev: Stop, next: Stop, pts: Pt[]): string {
   const p = pts[next.from];
+  if (p.pathLabel) return p.pathLabel;
   if (p.day != null) return p.distanceMi != null ? `Day ${p.day} · ${p.distanceMi} mi` : `Day ${p.day}`;
   if (km(prev.at, next.at) < 150) return '';
   const a = pts[prev.to].when;
@@ -95,9 +98,17 @@ async function start(root: HTMLElement, box: HTMLElement) {
   addEmojiIcons(map, Object.fromEntries(Object.entries(cfg.icons).map(([k, v]) => [`k-${k}`, v])));
   addEmojiIcons(map, { 'k-none': '•' });
 
+  // The drawn route: straight between points, except where an entry brings the road it came in on.
+  const routeCoords: [number, number][] = [];
+  const endOf: number[] = [];
+  pts.forEach((p, i) => {
+    if (i > 0 && p.path?.length) routeCoords.push(...p.path);
+    routeCoords.push(coords[i]);
+    endOf.push(routeCoords.length - 1);
+  });
   const line = (n: number) => ({
     type: 'Feature' as const, properties: {},
-    geometry: { type: 'LineString' as const, coordinates: coords.slice(0, Math.max(1, n)) },
+    geometry: { type: 'LineString' as const, coordinates: routeCoords.slice(0, endOf[Math.max(1, n) - 1] + 1) },
   });
   map.addSource('route', { type: 'geojson', data: line(coords.length) });
   map.addSource('progress', { type: 'geojson', data: line(1) });
@@ -118,8 +129,9 @@ async function start(root: HTMLElement, box: HTMLElement) {
       type: 'FeatureCollection',
       features: stops.slice(1).flatMap((s, i) => {
         const label = legLabel(stops[i], s, pts);
+        const path = pts[s.from].path ?? [];
         return label
-          ? [{ type: 'Feature' as const, properties: { label }, geometry: { type: 'LineString' as const, coordinates: [stops[i].at, s.at] } }]
+          ? [{ type: 'Feature' as const, properties: { label }, geometry: { type: 'LineString' as const, coordinates: [stops[i].at, ...path, s.at] } }]
           : [];
       }),
     },

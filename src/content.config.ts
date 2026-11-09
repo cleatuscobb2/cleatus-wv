@@ -51,6 +51,17 @@ const entries = defineCollection({
         elevationFt: z.number().optional(),
       })
       .optional(),
+    /**
+     * The way here from the previous place, where a straight line would lie: the
+     * off-road drive from Skardu to Askole. [lng, lat] pairs, drawn on the trip's
+     * journey map. Its own line, so the admin's location editor leaves it alone.
+     */
+    pathIn: z
+      .object({
+        label: z.string().optional(),
+        coords: z.array(z.tuple([z.number(), z.number()])).min(1),
+      })
+      .optional(),
     leg: z
       .object({
         from: z.string().nullable(),

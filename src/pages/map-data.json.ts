@@ -323,7 +323,7 @@ export async function GET() {
         link: entryTitle
           ? { href: `/${p.data.trip}/${p.data.entry}/`, title: entryTitle }
           : trip ? { href: `/${trip.id}/`, title: trip.data.shortTitle } : null,
-        media: p.data.media.map(({ src, poster, video }) => ({ src, poster, video })),
+        media: p.data.media.map(({ src, thumb, poster, video }) => ({ src, thumb, poster, video })),
         ...(p.data.icon ? { icon: p.data.icon } : {}),
       };
     });

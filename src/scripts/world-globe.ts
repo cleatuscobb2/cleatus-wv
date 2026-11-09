@@ -7,6 +7,7 @@
  */
 import type { Map as MLMap, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl';
 import { openLightbox, plainClick } from './lightbox.ts';
+import { startCameos } from './globe-cameos.ts';
 import { addEmojiIcons, addRelief, tintWater, BASE_STYLE, esc, firstSymbolLayer, loadMaplibre, reducedMotion, webglOk } from './map-kit.ts';
 
 interface Country {
@@ -23,7 +24,7 @@ interface Place {
 interface Photo {
   lat: number; lng: number; author: string; caption: string; when: string; place: string;
   link: { href: string; title: string } | null;
-  media: { src: string; poster?: string; video?: boolean }[];
+  media: { src: string; thumb?: string; poster?: string; video?: boolean }[];
   /** Marks a moment worth flagging in place of the camera. */
   icon?: string;
 }
@@ -318,7 +319,9 @@ async function start(stage: HTMLElement) {
   const popup = new ml.Popup({ closeButton: false, maxWidth: '280px', offset: 18, className: 'globe-pop' });
 
   let spinning = !reducedMotion();
-  const stopSpin = () => { spinning = false; };
+  // The photo teasers belong to the spin; they go as soon as someone takes the globe.
+  let clearCameos = () => {};
+  const stopSpin = () => { spinning = false; clearCameos(); };
   const spin = () => {
     if (!spinning || map.isMoving() || map.getZoom() > homeZ + 0.3) return;
     const c = map.getCenter();
@@ -479,6 +482,13 @@ async function start(stage: HTMLElement) {
     map.easeTo({ center: at, offset: [0, -map.getContainer().clientHeight * 0.24], duration: reducedMotion() ? 0 : 400 });
     igPopup.setLngLat(at).setDOMContent(root).addTo(map);
   };
+  // As the globe turns, a place with photographs opens a small card as it crosses the middle.
+  const igToggle = stage.querySelector<HTMLInputElement>('[data-layer-toggle][value="instagram"]');
+  clearCameos = startCameos(map, ml, data.photos, {
+    active: () => spinning && map.getZoom() <= homeZ + 0.3 && (igToggle?.checked ?? true) && !document.hidden,
+    open: (posts, at) => { stopSpin(); showPhotos(posts, at); },
+  }).clear;
+
   map.on('click', ['ig-icon', 'ig-moment'], (e) => {
     stopSpin();
     if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
@@ -597,6 +607,9 @@ async function start(stage: HTMLElement) {
     light([], null);
     caption.hidden = true;
     panel.hidden = true;
+    igPopup.remove();
+    // Back home it turns again, and the teasers with it.
+    spinning = !reducedMotion();
     map.easeTo({ center: HOME, zoom: homeZ, pitch: 0, bearing: 0, duration: 1200 });
   });
 }

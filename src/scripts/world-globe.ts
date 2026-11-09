@@ -75,6 +75,9 @@ const stage = document.querySelector<HTMLElement>('[data-globe]');
 if (stage && webglOk()) start(stage).catch((err) => {
   console.warn('globe unavailable, keeping the static map', err);
   stage.removeAttribute('data-live');
+  // Put the flat map back: the page hid it before the globe had loaded.
+  document.documentElement.removeAttribute('data-globe-soon');
+  document.querySelector('[data-map-wrap]')?.removeAttribute('data-globe-live');
 });
 
 async function start(stage: HTMLElement) {

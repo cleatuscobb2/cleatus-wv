@@ -181,6 +181,29 @@ const globeConfig = {
     fills the screen and the SVG steps aside (see [data-live] in the styles).
   */}
   <section class="stage" data-globe aria-label="Interactive globe">
+    {/*
+      Before anything paints: where the globe can run, go straight to its full-screen
+      stage and keep the flat map hidden, so it doesn't flash up first. If the globe
+      fails, or hasn't drawn within 15 s, world-globe.ts (or the timer here) puts the
+      flat map back. Same WebGL test as webglOk() in map-kit.ts.
+    */}
+    <script is:inline>
+      (function () {
+        try {
+          var c = document.createElement('canvas');
+          if (!(c.getContext('webgl2') || c.getContext('webgl'))) return;
+        } catch (e) { return; }
+        var stage = document.currentScript.parentElement;
+        var root = document.documentElement;
+        stage.setAttribute('data-live', '');
+        root.setAttribute('data-globe-soon', '');
+        setTimeout(function () {
+          if (stage.querySelector('canvas')) return;
+          stage.removeAttribute('data-live');
+          root.removeAttribute('data-globe-soon');
+        }, 15000);
+      })();
+    </script>
     <script type="application/json" id="globe-config" set:html={JSON.stringify(globeConfig)} />
     <div class="stage__map" data-globe-map></div>
 
@@ -536,6 +559,13 @@ const globeConfig = {
     overflow: hidden;
   }
   .stage[data-live] .stage__map { display: block; position: absolute; inset: 0; }
+  /* While the globe loads: a quiet word in the middle of the dark stage. */
+  .stage[data-live] .stage__map:empty::after {
+    content: 'Loading the globe…';
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--color-stone-on-dark);
+  }
   .stage[data-live] .head__static { display: none; }
   .stage[data-live] .head__live { display: inline; }
 
@@ -736,7 +766,9 @@ const globeConfig = {
   }
   /* The globe replaces the flat map; the timeline below stays. */
   .mapwrap[data-globe-live] > nav,
-  .mapwrap[data-globe-live] > figcaption { display: none; }
+  .mapwrap[data-globe-live] > figcaption,
+  :global(html[data-globe-soon]) .mapwrap > nav,
+  :global(html[data-globe-soon]) .mapwrap > figcaption { display: none; }
   .worldmap {
     display: block;
     width: 100%;
@@ -865,7 +897,8 @@ const globeConfig = {
   }
   /* The timeline runs the full width too, so the years get room to breathe. */
   .tlwrap :global(.tl) { max-width: none; }
-  .mapwrap[data-globe-live] .tlwrap { margin-top: 0; padding-top: 0; border-top: 0; }
+  .mapwrap[data-globe-live] .tlwrap,
+  :global(html[data-globe-soon]) .mapwrap .tlwrap { margin-top: 0; padding-top: 0; border-top: 0; }
   .tlwrap__head {
     color: var(--color-stone-on-dark);
     margin: 0 0 1rem;

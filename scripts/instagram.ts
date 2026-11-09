@@ -48,6 +48,8 @@ interface Decision {
   country?: string;
   /** Shows the post on this entry of its trip, rather than in the trip's own list. */
   entry?: string;
+  /** Marks a moment on the globe with this emoji instead of the camera (🤥 for the whales). */
+  icon?: string;
 }
 interface Home { name: string; lat: number; lng: number; km: number }
 interface Trip { id: string; title: string; start: string; end: string; countries: string[] }
@@ -321,6 +323,7 @@ async function publish() {
       ...((d.country ?? p.country) ? { country: d.country ?? p.country } : {}),
       ...(trip ? { trip } : {}),
       ...(trip && d.entry ? { entry: d.entry } : {}),
+      ...(d.icon ? { icon: d.icon } : {}),
       media,
     });
   }
@@ -388,4 +391,6 @@ const cmd = process.argv[2];
 if (cmd === 'import') await runImport();
 else if (cmd === 'geocode') await runGeocode();
 else if (cmd === 'review') await runReview();
-else console.error('npm run ig -- import | geocode | review');
+// The review page's Publish button, for when decisions.json was edited by hand.
+else if (cmd === 'publish') console.log(await publish());
+else console.error('npm run ig -- import | geocode | review | publish');

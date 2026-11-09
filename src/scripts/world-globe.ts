@@ -24,6 +24,8 @@ interface Photo {
   lat: number; lng: number; author: string; caption: string; when: string; place: string;
   link: { href: string; title: string } | null;
   media: { src: string; poster?: string; video?: boolean }[];
+  /** Marks a moment worth flagging in place of the camera. */
+  icon?: string;
 }
 interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; photos: Photo[]; trips: TripOut[] }
 
@@ -238,15 +240,22 @@ async function start(stage: HTMLElement) {
   });
 
   // --- Instagram posts, under the events so a photo never hides a story -------------------
-  addEmojiIcons(map, { 'ig-photo': '📷' }, '#ff8fb8');
+  // A post can flag a moment with its own emoji (🤥 for the whales off Nordreisa).
+  const igIcons = [...new Set(data.photos.map((p) => p.icon).filter((x): x is string => Boolean(x)))];
+  addEmojiIcons(map, { 'ig-photo': '📷', ...Object.fromEntries(igIcons.map((e, n) => [`ig-m${n}`, e])) }, '#ff8fb8');
+  const igFeature = (p: Photo, i: number) => ({
+    type: 'Feature' as const,
+    properties: { i, icon: p.icon ? `ig-m${igIcons.indexOf(p.icon)}` : 'ig-photo' },
+    geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+  });
   map.addSource('ig', {
     type: 'geojson', cluster: true, clusterRadius: 30, clusterMaxZoom: 11,
-    data: {
-      type: 'FeatureCollection',
-      features: data.photos.map((p, i) => ({
-        type: 'Feature' as const, properties: { i }, geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
-      })),
-    },
+    data: { type: 'FeatureCollection', features: data.photos.flatMap((p, i) => (p.icon ? [] : [igFeature(p, i)])) },
+  });
+  // Flagged moments stay out of the clusters, so their emoji shows at every zoom.
+  map.addSource('igm', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: data.photos.flatMap((p, i) => (p.icon ? [igFeature(p, i)] : [])) },
   });
   map.addLayer({
     id: 'ig-cluster', type: 'circle', source: 'ig', filter: ['has', 'point_count'],
@@ -263,6 +272,11 @@ async function start(stage: HTMLElement) {
   map.addLayer({
     id: 'ig-icon', type: 'symbol', source: 'ig', filter: ['!', ['has', 'point_count']],
     layout: { 'icon-image': 'ig-photo', 'icon-size': 0.5, 'icon-allow-overlap': true },
+  });
+  // Drawn larger than a plain photo, and above the photo clusters.
+  map.addLayer({
+    id: 'ig-moment', type: 'symbol', source: 'igm',
+    layout: { 'icon-image': ['get', 'icon'], 'icon-size': 0.85, 'icon-allow-overlap': true },
   });
   const igRow = stage.querySelector<HTMLElement>('[data-ig-row]');
   if (igRow) igRow.hidden = !data.photos.length;
@@ -348,7 +362,7 @@ async function start(stage: HTMLElement) {
   const onCountry = (e: { point: { x: number; y: number }; features?: { properties: Record<string, unknown> }[] }) => {
     stopSpin();
     // An icon or cluster on top of the country gets the click, not the country.
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster', 'pl-dot', 'pl-label'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-moment', 'ig-cluster', 'pl-dot', 'pl-label'] }).length) return;
     const code = e.features?.[0]?.properties?.code as string | undefined;
     if (code) showCountry(code);
   };
@@ -369,7 +383,7 @@ async function start(stage: HTMLElement) {
   });
   map.on('click', 'st-fill', (e) => {
     stopSpin();
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster', 'pl-dot', 'pl-label'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-moment', 'ig-cluster', 'pl-dot', 'pl-label'] }).length) return;
     const name = e.features?.[0]?.properties?.name as string | undefined;
     if (!name) return;
     popup
@@ -407,7 +421,7 @@ async function start(stage: HTMLElement) {
   // A place: what's written from there, or a note that nothing is yet.
   const onPlace = (e: { point: { x: number; y: number }; features?: { properties: Record<string, unknown> }[] }) => {
     stopSpin();
-    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster'] }).length) return;
+    if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-moment', 'ig-cluster'] }).length) return;
     const p = data.places[e.features![0].properties!.i as number];
     const SHOW = 5;
     const list = p.entries.slice(0, SHOW).map((x) =>
@@ -429,7 +443,7 @@ async function start(stage: HTMLElement) {
   // An Instagram post: its photos and write-up. Posts on the same spot share one popup.
   const igPopup = new ml.Popup({ closeButton: true, maxWidth: '340px', offset: 16, className: 'globe-pop globe-pop--ig' });
   function photosAt(pt: { x: number; y: number }) {
-    const near = map.queryRenderedFeatures([[pt.x - 8, pt.y - 8], [pt.x + 8, pt.y + 8]], { layers: ['ig-icon'] });
+    const near = map.queryRenderedFeatures([[pt.x - 8, pt.y - 8], [pt.x + 8, pt.y + 8]], { layers: ['ig-icon', 'ig-moment'] });
     const seen = new Set<number>();
     return near.map((f) => f.properties!.i as number).filter((i) => !seen.has(i) && seen.add(i)).map((i) => data.photos[i]);
   }
@@ -465,7 +479,7 @@ async function start(stage: HTMLElement) {
     map.easeTo({ center: at, offset: [0, -map.getContainer().clientHeight * 0.24], duration: reducedMotion() ? 0 : 400 });
     igPopup.setLngLat(at).setDOMContent(root).addTo(map);
   };
-  map.on('click', 'ig-icon', (e) => {
+  map.on('click', ['ig-icon', 'ig-moment'], (e) => {
     stopSpin();
     if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster'] }).length) return;
     const list = photosAt(e.point);
@@ -479,7 +493,7 @@ async function start(stage: HTMLElement) {
     map.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom: z + 0.3 });
   });
 
-  for (const l of ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-cluster', 'cc-dot', 'pl-dot', 'pl-label']) {
+  for (const l of ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-moment', 'ig-cluster', 'cc-dot', 'pl-dot', 'pl-label']) {
     map.on('mouseenter', l, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', l, () => { map.getCanvas().style.cursor = ''; });
   }
@@ -501,7 +515,7 @@ async function start(stage: HTMLElement) {
     (map.getSource('ev') as GeoJSONSource).setData(evFeatures());
   });
 
-  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'], states: ['st-fill', 'st-line'], instagram: ['ig-cluster', 'ig-count', 'ig-icon'] };
+  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'], states: ['st-fill', 'st-line'], instagram: ['ig-cluster', 'ig-count', 'ig-icon', 'ig-moment'] };
   stage.querySelectorAll<HTMLInputElement>('[data-layer-toggle]').forEach((box) => {
     box.addEventListener('change', () => {
       for (const id of LAYERS[box.value] ?? []) map.setLayoutProperty(id, 'visibility', box.checked ? 'visible' : 'none');

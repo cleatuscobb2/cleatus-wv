@@ -324,6 +324,7 @@ export async function GET() {
           ? { href: `/${p.data.trip}/${p.data.entry}/`, title: entryTitle }
           : trip ? { href: `/${trip.id}/`, title: trip.data.shortTitle } : null,
         media: p.data.media.map(({ src, poster, video }) => ({ src, poster, video })),
+        ...(p.data.icon ? { icon: p.data.icon } : {}),
       };
     });
 

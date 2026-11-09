@@ -164,6 +164,8 @@ const instagram = defineCollection({
     trip: z.string().optional(),
     /** The entry of that trip it belongs with: shown there, not in the trip's own list. */
     entry: z.string().optional(),
+    /** An emoji that marks it on the globe in place of the camera, for a moment worth flagging. */
+    icon: z.string().optional(),
     media: z.array(z.object({
       src: z.string(),
       thumb: z.string(),

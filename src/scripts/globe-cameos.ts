@@ -60,7 +60,8 @@ export function startCameos<P extends CameoPhoto>(
   opts: { active: () => boolean; open: (posts: P[], at: [number, number]) => void },
 ) {
   const groups = groupsOf(photos);
-  const shown = new Map<Group<P>, { marker: Marker; el: HTMLElement }>();
+  // Each card keeps the band it opened with, so a neighbour leaving doesn't cut it short.
+  const shown = new Map<Group<P>, { marker: Marker; el: HTMLElement; span: number }>();
   let last = 0;
 
   const close = (g: Group<P>) => {
@@ -68,7 +69,9 @@ export function startCameos<P extends CameoPhoto>(
     if (!s) return;
     shown.delete(g);
     s.el.classList.remove('is-in');
-    setTimeout(() => s.marker.remove(), 350);
+    s.el.classList.add('is-out');
+    // Gone once the fade out (map.astro, .cameo.is-out) has run.
+    setTimeout(() => s.marker.remove(), 1000);
   };
   const clear = () => { for (const g of [...shown.keys()]) close(g); };
 
@@ -90,7 +93,7 @@ export function startCameos<P extends CameoPhoto>(
     return options.find(clearOf) ?? options[0];
   };
 
-  const openCard = (g: Group<P>) => {
+  const openCard = (g: Group<P>, span: number) => {
     const narrow = map.getContainer().clientWidth < 700;
     const w = narrow ? 73 : 92;
     // A 16:10 picture over the place's name.
@@ -103,18 +106,30 @@ export function startCameos<P extends CameoPhoto>(
     el.innerHTML = `<img src="${esc(g.pic)}" alt="" decoding="async" /><span class="cameo__text"><b>${esc(g.title)}</b></span>`;
     const pos = place(g, w, h);
     el.classList.add(`cameo--${pos.side}`);
+    // A press on a card is not the globe being grabbed, so it doesn't stop the spin before the click lands.
+    for (const ev of ['mousedown', 'touchstart', 'pointerdown'] as const) el.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       clear();
       // The picture on the card comes up first.
       opts.open([g.best, ...g.posts.filter((p) => p !== g.best)], [g.best.lng, g.best.lat]);
     });
-    const marker = new ml.Marker({ element: el, offset: pos.off }).setLngLat([g.lng, g.lat]).addTo(map);
-    shown.set(g, { marker, el });
-    // Fade in once the picture is there, or shortly anyway.
+    // MapLibre sets the marker element's own position and opacity, so the fade runs on the card inside it.
+    const pin = document.createElement('div');
+    pin.className = 'cameo-pin';
+    pin.append(el);
+    const marker = new ml.Marker({ element: pin, offset: pos.off }).setLngLat([g.lng, g.lat]).addTo(map);
+    shown.set(g, { marker, el, span });
+    // Fade in once the picture is ready to draw, so it never pops in after the card.
     const img = el.querySelector('img')!;
-    const show = () => requestAnimationFrame(() => el.classList.add('is-in'));
-    if (img.complete) show(); else { img.addEventListener('load', show, { once: true }); setTimeout(show, 600); }
+    let shownYet = false;
+    const show = () => {
+      if (shownYet || el.classList.contains('is-out')) return;
+      shownYet = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('is-in')));
+    };
+    img.decode().then(show, show);
+    setTimeout(show, 1500);
   };
 
   const tick = () => {
@@ -127,15 +142,20 @@ export function startCameos<P extends CameoPhoto>(
     // Neighbours widen the band, so a crowd of places each stays up longer.
     const near = groups.filter((g) => Math.abs(offsetFrom(centre.lng, g.lng)) < MAX_SPAN && Math.abs(g.lat - centre.lat) < 62);
     const span = Math.min(MAX_SPAN, BASE_SPAN + WIDEN * Math.max(0, near.length - 1));
-    for (const g of [...shown.keys()]) {
-      if (Math.abs(offsetFrom(centre.lng, g.lng)) > span + LINGER) close(g);
+    for (const [g, s] of [...shown]) {
+      if (Math.abs(offsetFrom(centre.lng, g.lng)) > Math.max(span, s.span) + LINGER) close(g);
     }
+    // Places come in from the east as the globe turns. One already past the middle would
+    // only flash up before it leaves, so it waits for the next time round.
     const want = near
-      .filter((g) => !shown.has(g) && Math.abs(offsetFrom(centre.lng, g.lng)) < span)
+      .filter((g) => {
+        const d = offsetFrom(centre.lng, g.lng);
+        return !shown.has(g) && d < span && d > -LINGER;
+      })
       .sort((a, b) => b.score - a.score);
     for (const g of want) {
       if (shown.size >= max) break;
-      openCard(g);
+      openCard(g, span);
     }
   };
 

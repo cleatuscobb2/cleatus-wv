@@ -694,15 +694,18 @@ const globeConfig = {
     font: inherit; color: var(--color-snow);
     background: rgba(18, 22, 28, 0.94); border: 1px solid rgba(255, 143, 184, 0.75); border-radius: 5px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); overflow: hidden;
-    opacity: 0; transform: scale(0.92); transition: opacity 320ms ease, transform 320ms ease;
+    opacity: 0; transform: translateY(6px) scale(0.96);
+    transition: opacity 750ms cubic-bezier(0.22, 0.61, 0.36, 1), transform 750ms cubic-bezier(0.22, 0.61, 0.36, 1);
   }
-  :global(.cameo.is-in) { opacity: 1; transform: scale(1); }
+  :global(.cameo.is-in) { opacity: 1; transform: none; }
+  /* Leaving is slower than arriving, so a card eases away rather than blinking out. */
+  :global(.cameo.is-out) { opacity: 0; transform: translateY(-4px) scale(0.98); transition-duration: 950ms; }
   :global(.cameo:hover), :global(.cameo:focus-visible) { border-color: #ff8fb8; box-shadow: 0 8px 28px rgba(255, 143, 184, 0.25); }
   :global(.cameo img) { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #0b0e12; }
   :global(.cameo__text) { display: block; padding: 0.18rem 0.3rem 0.22rem; }
   :global(.cameo__text b) { font-family: var(--font-display); font-size: 0.5rem; line-height: 1.2; color: var(--color-rime); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: reduce) {
-    :global(.cameo) { transition: none; transform: none; }
+    :global(.cameo), :global(.cameo.is-out) { transform: none; transition: opacity 400ms linear; }
   }
 
   /* On a phone the legend folds under the header and the panel takes the bottom. */

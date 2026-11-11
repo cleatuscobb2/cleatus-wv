@@ -2,14 +2,17 @@
 /**
  * §7.1 — the fourteen-item nav moved here, where it can grow.
  *
- * Every trip as a card, across the whole width, under a strip that lays them out
- * in time. Filters, sorting and the photo flip-through are added by the script at
- * the bottom; without it this is still the full list, newest first.
+ * The page opens in the dark with one trip at a time: a photograph, what the
+ * trip was and a way in, turning over on its own and steered by the strip of
+ * years beneath it. Below, on the pale ground, is every trip as a card with
+ * filters and sorting. The script at the bottom adds all the movement; without
+ * it this is still the full list, newest first, under the featured trip.
  */
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
-import { fmtRange, chronological, tripIdOf, entryPath } from '../../lib/entries.ts';
+import { fmtRange, chronological, tripIdOf, entrySlug } from '../../lib/entries.ts';
 import { firstPhoto } from '../../lib/journey.ts';
+import { cover, coverSize, stagePhoto } from '../../lib/covers.ts';
 import { COUNTRY_CONTINENT, COUNTRY_NAMES } from '../../data/trip-meta.ts';
 import { TAG_ICONS, TAG_LABELS, BETH_CRIED_ICON, type Tag } from '../../data/tags.ts';
 
@@ -30,6 +33,18 @@ function photosOf(hero: string | null, list: typeof entries): string[] {
   return Array.from({ length: 8 }, (_, i) => all[Math.round((i * (all.length - 1)) / 7)]);
 }
 
+/** The picture a trip shows large, at the size it will really be drawn. */
+function bigPhoto(id: string, hero: string | null) {
+  const src = stagePhoto(id, hero);
+  if (!src) return null;
+  const size = coverSize(src);
+  const shrink = size ? Math.min(1, 1800 / Math.max(size.w, size.h)) : 1;
+  const w = size ? Math.round(size.w * shrink) : 0;
+  const h = size ? Math.round(size.h * shrink) : 0;
+  // Only a wide, sharp picture fills the frame; a small one sits in it as a print.
+  return { src: cover(src, 'lg'), wash: cover(src), w, h, full: w >= 1000 && w >= h };
+}
+
 const DAY = 86_400_000;
 const statusOf = (start: Date, end: Date) =>
   +now < +start ? 'upcoming' : +now <= +end + DAY ? 'away' : 'done';
@@ -39,10 +54,17 @@ const cards = trips.map((t) => {
   const tags = new Map<Tag, number>();
   for (const e of list) for (const g of e.data.tags) tags.set(g, (tags.get(g) ?? 0) + 1);
   const continents = [...new Set(t.data.countries.map((c) => COUNTRY_CONTINENT[c]).filter(Boolean))];
+  const photos = photosOf(t.data.hero, list);
   return {
     t,
     entries: list.length,
-    photos: photosOf(t.data.hero, list),
+    photos: photos.map((p) => cover(p)),
+    // The big tile is twice the size of the others, so the cover has a larger copy to hand.
+    coverLg: photos[0] ? cover(photos[0], 'lg') : null,
+    // A cover that is itself small would only blur at that size.
+    sharp: photos[0] ? (coverSize(photos[0])?.w ?? 0) >= 900 : false,
+    big: bigPhoto(t.id, t.data.hero),
+    startAt: t.data.startHere ? list.find((e) => entrySlug(e) === t.data.startHere) : undefined,
     topTags: [...tags].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([g]) => g),
     cried: list.filter((e) => e.data.bethCried).length,
     continents,
@@ -85,61 +107,180 @@ const dots = [...cards].sort((a, b) => +a.t.data.dateStart - +b.t.data.dateStart
   return { c, left, width, lane };
 });
 
-const pickFrom = entries.map(entryPath);
+// The stage runs oldest to newest, the way the years read, and opens on the featured trip.
+const slides = dots.map((d) => d.c);
+const opensOn = Math.max(
+  0,
+  slides.findIndex((c) => c.t.data.featured && c.big) !== -1
+    ? slides.findIndex((c) => c.t.data.featured && c.big)
+    : slides.findLastIndex((c) => c.status !== 'upcoming' && c.big),
+);
+
 const fmtN = (n: number) => n.toLocaleString('en-US');
 const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
+const soonText = (c: (typeof cards)[number]) =>
+  c.status === 'away' ? 'Away now' : c.daysUntil === 1 ? 'Tomorrow' : `In ${c.daysUntil} days`;
 ---
 
 <Base
   title="Trips"
   description="Fifteen years of long, hard trips — Pakistan's Karakoram, Patagonia, the Himalaya, Borneo, the Galápagos and more, 2009 to now."
 >
-  <div class="trips">
-    <header class="head">
-      <div class="head__words">
-        <h1 class="display">Trips</h1>
-        <p class="head__note">
-          {trips.length} trips, newest first. Each one reads forward from day one.
-        </p>
-        {pickFrom.length > 0 && (
-          <a class="dice mono" href={pickFrom[0]} data-dice>
-            <span class="dice__face" aria-hidden="true">🎲</span> Take me somewhere
-          </a>
-        )}
-      </div>
-      <dl class="totals">
-        {totals.map((x) => (
-          <div class="totals__item">
-            <dt class="mono">{x.label}</dt>
-            <dd class="display">{fmtN(x.n)}</dd>
+  <div class="top">
+    <div class="top__in">
+      <header class="head">
+        <div class="head__words">
+          <h1 class="display">Trips</h1>
+          <p class="head__note">
+            {trips.length} trips since {firstYear}. Each one reads forward from day one.
+          </p>
+        </div>
+        <dl class="totals">
+          {totals.map((x) => (
+            <div class="totals__item">
+              <dt class="mono">{x.label}</dt>
+              <dd class="display">{fmtN(x.n)}</dd>
+            </div>
+          ))}
+        </dl>
+      </header>
+
+      <section class="stage" data-stage data-opens={opensOn} aria-roledescription="carousel" aria-label="The trips, one at a time">
+        <div class="stage__frame" data-frame>
+          {[0, 1].map((k) => {
+            const first = k === 0 ? slides[opensOn] : null;
+            const b = first?.big;
+            return (
+              <div
+                class:list={['layer', { 'is-on': k === 0, 'layer--full': b?.full, 'layer--print': b && !b.full }]}
+                style={b && !b.full ? `--nw: ${b.w}; --nh: ${b.h}` : undefined}
+                data-layer
+              >
+                {b && (
+                  <>
+                    <span class="layer__wash" style={`background-image: url("${b.wash}")`} />
+                    <img class="layer__img" src={b.src} alt="" fetchpriority="high" decoding="async" />
+                  </>
+                )}
+              </div>
+            );
+          })}
+          <span class="stage__progress" data-progress aria-hidden="true" />
+        </div>
+
+        <div class="stage__words">
+          {slides.map((c, i) => {
+            const { t } = c;
+            const s = t.data.stats;
+            const real = t.data.summary && !t.data.summaryNeedsReview;
+            return (
+              <article
+                class="slide"
+                data-slide={i}
+                data-id={t.id}
+                data-photo={c.big?.src}
+                data-wash={c.big?.wash}
+                hidden={i !== opensOn}
+                aria-roledescription="slide"
+                aria-label={`${i + 1} of ${slides.length}`}
+              >
+                <p class="mono slide__kicker">
+                  {c.status === 'upcoming' ? 'Up next · ' : c.status === 'away' ? 'On the road · ' : ''}
+                  {fmtRange(t.data.dateStart, t.data.dateEnd)} · {s.days} days
+                </p>
+                <h2 class="display slide__title">{t.data.title}</h2>
+                <p class="mono slide__where">{t.data.countries.map(nameOf).join(' · ')}</p>
+                {real && <p class="slide__sum">{t.data.summary}</p>}
+                <p class="mono slide__facts">
+                  {[
+                    c.entries ? `${c.entries} ${c.entries === 1 ? 'entry' : 'entries'}` : 'Nothing written yet',
+                    s.trekMiles ? `${s.trekMiles} mi on foot` : null,
+                    s.maxElevationFt ? `${fmtN(s.maxElevationFt)} ft` : null,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+                {(c.topTags.length > 0 || c.cried > 0) && (
+                  <p class="slide__marks mono">
+                    {c.topTags.map((g) => <span><span aria-hidden="true">{TAG_ICONS[g]}</span> {TAG_LABELS[g]}</span>)}
+                    {c.cried > 0 && <span><span aria-hidden="true">{BETH_CRIED_ICON}</span> Beth cried ×{c.cried}</span>}
+                  </p>
+                )}
+                <p class="slide__go">
+                  <a class="btn btn--main mono" href={`/${t.id}/`}>Open the trip <span aria-hidden="true">→</span></a>
+                  {c.startAt && (
+                    <a class="btn mono" href={`/${t.id}/${entrySlug(c.startAt)}/`}>
+                      <span>Start here</span><span class="btn__more">— {c.startAt.data.title}</span>
+                    </a>
+                  )}
+                </p>
+                {!c.big && (
+                  <template data-blank>
+                    {c.status === 'done' ? (
+                      <div class="blank blank--none">
+                        <span class="display blank__big">{t.data.countries.map(nameOf).join(' · ')}</span>
+                        <span class="mono">No photographs from this one</span>
+                      </div>
+                    ) : (
+                      <div class="blank blank--soon">
+                        <span class="mono blank__kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
+                        <span class="display blank__big" data-countdown={+t.data.dateStart} data-until={+t.data.dateEnd}>{soonText(c)}</span>
+                        <span class="mono blank__clock" data-clock={+t.data.dateStart} />
+                        <span class="mono blank__where">{t.data.countries.map(nameOf).join(' · ')}</span>
+                      </div>
+                    )}
+                  </template>
+                )}
+              </article>
+            );
+          })}
+          <article class="slide slide--dice" data-dice-slide hidden aria-live="polite">
+            <p class="mono slide__kicker"><span aria-hidden="true">🎲</span> A day at random</p>
+            <h2 class="display slide__title" data-dice-title></h2>
+            <p class="mono slide__where" data-dice-where></p>
+            <p class="slide__go">
+              <a class="btn btn--main mono" href="/archive/" data-dice-go>Read this day <span aria-hidden="true">→</span></a>
+              <button type="button" class="btn mono" data-dice>Roll again</button>
+            </p>
+          </article>
+
+          <div class="stage__bar" data-bar hidden>
+            <button type="button" class="ctl" data-prev aria-label="Earlier trip"><span aria-hidden="true">←</span></button>
+            <span class="mono stage__count" data-count>{opensOn + 1} / {slides.length}</span>
+            <button type="button" class="ctl" data-next aria-label="Later trip"><span aria-hidden="true">→</span></button>
+            <button type="button" class="ctl ctl--play" data-play aria-label="Pause"><span aria-hidden="true" data-play-icon>❚❚</span></button>
+            <button type="button" class="dice mono" data-dice>
+              <span class="dice__face" aria-hidden="true">🎲</span> Take me somewhere
+            </button>
           </div>
-        ))}
-      </dl>
-    </header>
+        </div>
+      </section>
 
-    <section class="ribbon" aria-label="The trips in time">
-      <div class="ribbon__track" style={`--lanes: ${laneEnds.length}`}>
-        {years.map((y) => (
-          <span
-            class:list={['ribbon__year mono', { 'ribbon__year--empty': !tripYears.has(y) }]}
-            style={`left: ${at(new Date(Date.UTC(y, 0, 1)))}%; width: ${100 / years.length}%`}
-          >{y}</span>
-        ))}
-        {dots.map(({ c, left, width, lane }) => (
-          <a
-            href={`#${c.t.id}`}
-            class:list={['ribbon__dot', `ribbon__dot--${c.status}`, { 'ribbon__dot--bare': !c.photos.length }]}
-            style={`left: ${left}%; --w: ${width}%; --lane: ${lane}`}
-            data-for={c.t.id}
-          >
-            <span class="ribbon__label mono">
-              {c.t.data.shortTitle} <span class="ribbon__when">{c.t.data.dateStart.getUTCFullYear()}</span>
-            </span>
-          </a>
-        ))}
-      </div>
-    </section>
+      <section class="ribbon" aria-label="The trips in time">
+        <div class="ribbon__track" style={`--lanes: ${laneEnds.length}`}>
+          {years.map((y) => (
+            <span
+              class:list={['ribbon__year mono', { 'ribbon__year--empty': !tripYears.has(y) }]}
+              style={`left: ${at(new Date(Date.UTC(y, 0, 1)))}%; width: ${100 / years.length}%`}
+            >{y}</span>
+          ))}
+          {dots.map(({ c, left, width, lane }, i) => (
+            <a
+              href={`#${c.t.id}`}
+              class:list={['ribbon__dot', `ribbon__dot--${c.status}`, { 'ribbon__dot--bare': !c.photos.length, 'is-on': i === opensOn }]}
+              style={`left: ${left}%; --w: ${width}%; --lane: ${lane}`}
+              data-for={c.t.id}
+              data-go={i}
+            >
+              <span class:list={['ribbon__label mono', { 'ribbon__label--left': left > 80, 'ribbon__label--right': left < 12 }]}>
+                {c.t.data.shortTitle} <span class="ribbon__when">{c.t.data.dateStart.getUTCFullYear()}</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      </section>
+    </div>
+  </div>
 
+  <div class="trips">
     <div class="tools" data-tools hidden>
       <div class="chips" role="group" aria-label="Show trips in">
         <button type="button" class="chip mono" data-where="" aria-pressed="true">Everywhere <span class="chip__n">{cards.length}</span></button>
@@ -172,7 +313,7 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
         return (
           <li
             id={t.id}
-            class:list={['trip', `trip--${c.status}`, { 'is-lead': i === cards.findIndex((x) => x.photos.length > 0) }]}
+            class:list={['trip', `trip--${c.status}`, { 'is-lead': c.sharp && i === cards.findIndex((x) => x.photos.length > 0) }]}
             style={`view-transition-name: trip-${i}`}
             data-start={+t.data.dateStart}
             data-end={+t.data.dateEnd}
@@ -183,12 +324,20 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
             data-trek={s.trekMiles ? '1' : ''}
             data-cried={c.cried ? '1' : ''}
             data-tears={c.cried}
+            data-sharp={c.sharp ? '1' : ''}
           >
             <a href={`/${t.id}/`} class="trip__link">
               <span class="trip__media" data-photos={c.photos.length > 1 ? JSON.stringify(c.photos) : undefined}>
                 {c.photos.length > 0 ? (
                   <>
-                    <img src={c.photos[0]} alt="" loading={i < 3 ? 'eager' : 'lazy'} decoding="async" />
+                    <img
+                      src={c.photos[0]}
+                      srcset={c.coverLg && c.coverLg !== c.photos[0] ? `${c.photos[0]} 960w, ${c.coverLg} 1800w` : undefined}
+                      sizes={c.coverLg && c.coverLg !== c.photos[0] ? '(min-width: 64rem) 25vw, (min-width: 40rem) 50vw, 100vw' : undefined}
+                      alt=""
+                      loading={i < 3 ? 'eager' : 'lazy'}
+                      decoding="async"
+                    />
                     {c.photos.length > 1 && (
                       <span class="trip__ticks" aria-hidden="true">
                         {c.photos.map((_, k) => <span class:list={['trip__tick', { on: k === 0 }]} />)}
@@ -198,9 +347,7 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
                 ) : c.status === 'upcoming' || c.status === 'away' ? (
                   <span class="trip__soon">
                     <span class="mono trip__soon-kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
-                    <span class="display trip__soon-big" data-countdown={+t.data.dateStart} data-until={+t.data.dateEnd}>
-                      {c.status === 'away' ? 'Away now' : c.daysUntil === 1 ? 'Tomorrow' : `In ${c.daysUntil} days`}
-                    </span>
+                    <span class="display trip__soon-big" data-countdown={+t.data.dateStart} data-until={+t.data.dateEnd}>{soonText(c)}</span>
                     <span class="mono trip__soon-where">{t.data.countries.map(nameOf).join(' · ')}</span>
                   </span>
                 ) : (
@@ -209,6 +356,7 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
                     <span class="mono">No photographs</span>
                   </span>
                 )}
+                <span class="trip__year mono" aria-hidden="true">{t.data.dateStart.getUTCFullYear()}</span>
               </span>
               <span class="trip__body">
                 <span class="mono trip__dates">{fmtRange(t.data.dateStart, t.data.dateEnd)} · {s.days} days</span>
@@ -222,6 +370,11 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
                     s.trekMiles ? `${s.trekMiles} mi trek` : null,
                     s.maxElevationFt ? `${fmtN(s.maxElevationFt)} ft` : null,
                   ].filter(Boolean).join(' · ')}
+                </span>
+                {/* Filled in by the script: how this trip measures against the others on the chosen sort. */}
+                <span class="trip__meter mono" data-meter hidden>
+                  <span class="trip__meter-bar"><span class="trip__meter-fill" /></span>
+                  <span data-meter-label></span>
                 </span>
                 {(c.topTags.length > 0 || c.cried > 0) && (
                   <span class="trip__marks">
@@ -243,10 +396,283 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
       No trips match that. <button type="button" class="mono" data-clear>Show them all</button>
     </p>
   </div>
-  <script type="application/json" id="trip-picks" set:html={JSON.stringify(pickFrom)} />
 </Base>
 
 <script>
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+
+  // ---- the countdown stays true after the page was built ----
+  function countdowns(root: ParentNode) {
+    root.querySelectorAll<HTMLElement>('[data-countdown]').forEach((el) => {
+      const start = Number(el.dataset.countdown);
+      const end = Number(el.dataset.until);
+      const today = new Date();
+      const startDay = new Date(start);
+      const days = Math.round((Date.UTC(startDay.getUTCFullYear(), startDay.getUTCMonth(), startDay.getUTCDate()) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000);
+      const kicker = el.parentElement?.querySelector('.trip__soon-kicker, .blank__kicker');
+      if (days > 1) el.textContent = `In ${days} days`;
+      else if (days === 1) el.textContent = 'Tomorrow';
+      else if (Date.now() <= end + 86_400_000) {
+        el.textContent = `Day ${1 - days}`;
+        if (kicker) kicker.textContent = 'On the road';
+      } else {
+        el.textContent = 'Just back';
+        if (kicker) kicker.textContent = 'Writing it up';
+      }
+    });
+  }
+  countdowns(document);
+
+  /** Hours, minutes and seconds to midnight on the day they leave, ticking. */
+  let clockTimer = 0;
+  function clocks() {
+    clearInterval(clockTimer);
+    const draw = () => {
+      const els = document.querySelectorAll<HTMLElement>('[data-clock]');
+      if (!els.length) { clearInterval(clockTimer); return; }
+      els.forEach((el) => {
+        const d = new Date(Number(el.dataset.clock));
+        const left = +new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.now();
+        if (left <= 0) { el.textContent = ''; return; }
+        const two = (n: number) => String(n).padStart(2, '0');
+        const sec = Math.floor(left / 1000);
+        el.textContent = `${Math.floor(sec / 86400)}d ${two(Math.floor(sec / 3600) % 24)}h ${two(Math.floor(sec / 60) % 60)}m ${two(sec % 60)}s`;
+      });
+    };
+    draw();
+    clockTimer = window.setInterval(draw, 1000);
+  }
+
+  // ---- the stage: one trip at a time ----
+  const stage = document.querySelector<HTMLElement>('[data-stage]');
+  if (stage) {
+    const frame = stage.querySelector<HTMLElement>('[data-frame]')!;
+    const layers = [...frame.querySelectorAll<HTMLElement>('[data-layer]')];
+    const progress = frame.querySelector<HTMLElement>('[data-progress]')!;
+    const slides = [...stage.querySelectorAll<HTMLElement>('[data-slide]')];
+    const diceSlide = stage.querySelector<HTMLElement>('[data-dice-slide]')!;
+    const bar = stage.querySelector<HTMLElement>('[data-bar]')!;
+    const count = bar.querySelector<HTMLElement>('[data-count]')!;
+    const playBtn = bar.querySelector<HTMLButtonElement>('[data-play]')!;
+    const playIcon = bar.querySelector<HTMLElement>('[data-play-icon]')!;
+    const dots = [...document.querySelectorAll<HTMLAnchorElement>('.ribbon__dot')];
+    const DWELL = 7000;
+    bar.hidden = false;
+
+    let cur = Number(stage.dataset.opens ?? 0);
+    let front = 0;       // which of the two layers is showing
+    let paintId = 0;     // so a slow picture can't land after a newer one
+    let playing = !calm.matches;
+    let timer = 0;
+    const held = new Set<string>();
+
+    interface Shot { photo?: string | null; wash?: string | null; blank?: Node | null }
+
+    // Astro scopes this page's styles to the elements it rendered; anything made
+    // here has to carry the same mark or the styles pass it by.
+    const scope = [...frame.attributes].find((a) => a.name.startsWith('data-astro-cid-'))?.name;
+    const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
+      const el = document.createElement(tag);
+      el.className = className;
+      if (scope) el.setAttribute(scope, '');
+      if (text !== undefined) el.textContent = text;
+      return el;
+    };
+
+    /** Put a picture (or a trip's no-picture panel) on the back layer, then bring it forward. */
+    function paint(shot: Shot) {
+      const id = ++paintId;
+      const back = layers[1 - front];
+      back.replaceChildren();
+      back.className = 'layer';
+      back.removeAttribute('style');
+      const swap = () => {
+        if (id !== paintId) return;
+        layers[front].classList.remove('is-on');
+        back.classList.add('is-on');
+        front = 1 - front;
+        clocks();
+      };
+      if (!shot.photo) {
+        if (shot.blank) back.append(shot.blank);
+        countdowns(back);
+        swap();
+        return;
+      }
+      const wash = make('span', 'layer__wash');
+      wash.style.backgroundImage = `url("${shot.wash ?? shot.photo}")`;
+      const img = make('img', 'layer__img');
+      img.alt = '';
+      img.decoding = 'async';
+      img.src = shot.photo;
+      back.append(wash, img);
+      const ready = () => {
+        // A wide, sharp picture fills the frame. A small one sits in it as a print, never stretched far.
+        const w = img.naturalWidth, h = img.naturalHeight;
+        if (w >= 1000 && w >= h) back.classList.add('layer--full');
+        else {
+          back.classList.add('layer--print');
+          back.style.setProperty('--nw', String(w || 600));
+          back.style.setProperty('--nh', String(h || 400));
+        }
+        swap();
+      };
+      img.decode().then(ready, ready);
+    }
+
+    const shotOf = (el: HTMLElement): Shot => ({
+      photo: el.dataset.photo,
+      wash: el.dataset.wash,
+      blank: el.querySelector<HTMLTemplateElement>('template[data-blank]')?.content.cloneNode(true),
+    });
+
+    function mark(i: number | null) {
+      slides.forEach((el, k) => { el.hidden = k !== i; });
+      diceSlide.hidden = i !== null;
+      dots.forEach((d) => {
+        const on = i !== null && Number(d.dataset.go) === i;
+        d.classList.toggle('is-on', on);
+        if (on) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current');
+      });
+      count.textContent = i === null ? '🎲' : `${i + 1} / ${slides.length}`;
+    }
+
+    function show(i: number) {
+      cur = (i + slides.length) % slides.length;
+      mark(cur);
+      paint(shotOf(slides[cur]));
+      // Have the next picture ready before it is asked for.
+      const next = slides[(cur + 1) % slides.length].dataset.photo;
+      if (next) new Image().src = next;
+      arm();
+    }
+
+    // -- turning over on its own --
+    const running = () => playing && held.size === 0;
+    function arm() {
+      clearTimeout(timer);
+      progress.classList.remove('is-run');
+      if (!running()) return;
+      void progress.offsetWidth;
+      progress.classList.add('is-run');
+      timer = window.setTimeout(() => show(cur + 1), DWELL);
+    }
+    function setPlaying(on: boolean) {
+      playing = on;
+      playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
+      playIcon.textContent = on ? '❚❚' : '▶';
+      arm();
+    }
+    const hold = (why: string, on: boolean) => { on ? held.add(why) : held.delete(why); arm(); };
+    stage.addEventListener('pointerenter', () => fine.matches && hold('hover', true));
+    stage.addEventListener('pointerleave', () => hold('hover', false));
+    stage.addEventListener('focusin', () => hold('focus', true));
+    stage.addEventListener('focusout', () => hold('focus', false));
+    document.addEventListener('visibilitychange', () => hold('tab', document.hidden));
+    new IntersectionObserver(([e]) => hold('away', !e.isIntersecting), { threshold: 0.35 }).observe(frame);
+
+    // -- steering it: someone who picks a trip keeps it until they say otherwise --
+    const go = (i: number) => { setPlaying(false); show(i); };
+    bar.querySelector('[data-prev]')!.addEventListener('click', () => go(cur - 1));
+    bar.querySelector('[data-next]')!.addEventListener('click', () => go(cur + 1));
+    playBtn.addEventListener('click', () => {
+      // Coming back from a random day, play picks up at the trip it left.
+      if (!diceSlide.hidden) show(cur);
+      setPlaying(!playing);
+    });
+    stage.addEventListener('keydown', (ev) => {
+      if ((ev.target as Element).closest('select, input, textarea')) return;
+      if (ev.key === 'ArrowLeft') { ev.preventDefault(); go(cur - 1); }
+      if (ev.key === 'ArrowRight') { ev.preventDefault(); go(cur + 1); }
+    });
+    let downX: number | null = null;
+    frame.addEventListener('pointerdown', (ev) => { downX = ev.clientX; });
+    frame.addEventListener('pointerup', (ev) => {
+      if (downX === null) return;
+      const dx = ev.clientX - downX;
+      downX = null;
+      if (Math.abs(dx) > 40) go(cur + (dx < 0 ? 1 : -1));
+    });
+    frame.addEventListener('pointercancel', () => { downX = null; });
+
+    // -- the strip of years steers it too, and still lights up the card below --
+    dots.forEach((dot) => {
+      const li = document.getElementById(dot.dataset.for!);
+      dot.addEventListener('pointerenter', () => li?.classList.add('is-hot'));
+      dot.addEventListener('pointerleave', () => li?.classList.remove('is-hot'));
+      dot.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        go(Number(dot.dataset.go));
+        if (stage.getBoundingClientRect().top < 0) stage.scrollIntoView({ behavior: calm.matches ? 'auto' : 'smooth', block: 'start' });
+      });
+    });
+
+    // -- somewhere at random: a single day, from any trip --
+    type Picks = { trips: [string, string][]; picks: [number, string, string, string, string | null][] };
+    let picks: Promise<Picks> | null = null;
+    const loadPicks = () => (picks ??= fetch('/picks.json').then((r) => r.json()));
+    const diceTitle = diceSlide.querySelector<HTMLElement>('[data-dice-title]')!;
+    const diceWhere = diceSlide.querySelector<HTMLElement>('[data-dice-where]')!;
+    const diceGo = diceSlide.querySelector<HTMLAnchorElement>('[data-dice-go]')!;
+    let rolling = false;
+    async function roll() {
+      if (rolling) return;
+      rolling = true;
+      setPlaying(false);
+      try {
+        const data = await loadPicks();
+        const any = () => data.picks[Math.floor(Math.random() * data.picks.length)];
+        // Mostly a day with a photograph to land on, but the trips without any still get a turn.
+        const withPhoto = data.picks.filter((p) => p[4]);
+        const [trip, slug, title, date, photo] = withPhoto.length && Math.random() < 0.85
+          ? withPhoto[Math.floor(Math.random() * withPhoto.length)]
+          : any();
+        const [tripId, tripTitle] = data.trips[trip];
+        mark(null);
+        diceWhere.textContent = '';
+        // Titles flick past before it settles, like a departures board.
+        if (!calm.matches) {
+          stage.classList.add('is-rolling');
+          for (let k = 0; k < 9; k++) {
+            diceTitle.textContent = any()[2];
+            await new Promise((r) => setTimeout(r, 60 + k * 12));
+          }
+          stage.classList.remove('is-rolling');
+        }
+        diceTitle.textContent = title;
+        diceWhere.textContent = `${tripTitle} · ${date}`;
+        diceGo.href = `/${tripId}/${slug}/`;
+        // The strip of years shows which trip the day came from.
+        dots.forEach((d) => d.classList.toggle('is-on', d.dataset.for === tripId));
+        let blank: Node | null = null;
+        if (!photo) {
+          blank = make('div', 'blank blank--none');
+          blank.appendChild(make('span', 'display blank__big', tripTitle));
+          blank.appendChild(make('span', 'mono', 'No photograph on this day'));
+        }
+        paint({ photo, wash: photo, blank });
+      } catch {
+        // No list to pick from: the archive is the next best place to wander.
+        location.href = '/archive/';
+      } finally {
+        rolling = false;
+      }
+    }
+    stage.querySelectorAll<HTMLElement>('[data-dice]').forEach((b) => {
+      b.addEventListener('click', roll);
+      b.addEventListener('pointerenter', loadPicks, { once: true });
+      b.addEventListener('focus', loadPicks, { once: true });
+    });
+
+    // A link can open the stage on one trip: /trips/?trip=japan-2022
+    const asked = slides.findIndex((el) => el.dataset.id === new URLSearchParams(location.search).get('trip'));
+    if (asked !== -1 && asked !== cur) go(asked);
+    else arm();
+    clocks();
+  }
+
+  // ---- the cards ----
   const grid = document.querySelector<HTMLOListElement>('[data-grid]');
   const tools = document.querySelector<HTMLElement>('[data-tools]');
   if (grid && tools) {
@@ -254,7 +680,6 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     const count = tools.querySelector<HTMLElement>('[data-count]')!;
     const sortBox = tools.querySelector<HTMLSelectElement>('[data-sort]')!;
     const none = document.querySelector<HTMLElement>('[data-none]')!;
-    const calm = matchMedia('(prefers-reduced-motion: reduce)');
     tools.hidden = false;
 
     // ---- filters and sorting, kept in the address so a view can be shared ----
@@ -274,6 +699,13 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
       tears: (a, b) => num(b, 'tears') - num(a, 'tears'),
     };
     if (!SORTS[state.sort]) state.sort = 'newest';
+    // What a sort is measuring, so each card can show how it compares.
+    const MEASURES: Record<string, [key: string, one: string, many: string]> = {
+      longest: ['days', 'day', 'days'],
+      written: ['written', 'entry', 'entries'],
+      countries: ['countries', 'country', 'countries'],
+      tears: ['tears', 'time Beth cried', 'times Beth cried'],
+    };
 
     const shows = (li: HTMLElement) =>
       (!state.where || (li.dataset.where ?? '').split('|').includes(state.where)) &&
@@ -281,16 +713,30 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
 
     function apply() {
       const order = [...cards].sort((a, b) => SORTS[state.sort](a, b) || num(b, 'start') - num(a, 'start'));
+      const measure = MEASURES[state.sort];
+      const most = measure ? Math.max(1, ...cards.map((li) => num(li, measure[0]))) : 1;
       let shown = 0;
       let lead = false;
       for (const li of order) {
         const on = shows(li);
         li.hidden = !on;
         if (on) shown++;
-        // The first match with photographs gets the big tile.
-        const isLead = on && !lead && Boolean(li.querySelector('.trip__media img'));
+        // The first match with photographs gets the big tile, if its cover is sharp enough to carry it.
+        const img = li.querySelector<HTMLImageElement>('.trip__media img');
+        const first = on && !lead && Boolean(img);
+        const isLead = first && li.dataset.sharp === '1';
         li.classList.toggle('is-lead', isLead);
-        if (isLead) lead = true;
+        if (img?.srcset) img.sizes = isLead ? '(min-width: 64rem) 50vw, 100vw' : '(min-width: 64rem) 25vw, (min-width: 40rem) 50vw, 100vw';
+        if (first) lead = true;
+        const meter = li.querySelector<HTMLElement>('[data-meter]');
+        if (meter) {
+          meter.hidden = !measure;
+          if (measure) {
+            const v = num(li, measure[0]);
+            meter.style.setProperty('--v', String(v / most));
+            meter.querySelector('[data-meter-label]')!.textContent = `${v} ${v === 1 ? measure[1] : measure[2]}`;
+          }
+        }
         grid!.append(li);
       }
       count.textContent = shown === cards.length ? '' : `${shown} of ${cards.length} trips`;
@@ -328,24 +774,29 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     apply();
 
     // ---- flip through a trip's photographs by moving across the picture ----
-    const fine = matchMedia('(hover: hover) and (pointer: fine)');
     grid.querySelectorAll<HTMLElement>('.trip__media[data-photos]').forEach((media) => {
       const photos: string[] = JSON.parse(media.dataset.photos!);
       const img = media.querySelector('img')!;
+      const cover = img.getAttribute('srcset');
       const ticks = [...media.querySelectorAll('.trip__tick')];
-      // These are full-size originals, so each is fetched only when someone moves onto
-      // it, and the current picture stays up until the next one is ready.
+      // Each is fetched only when someone moves onto it, and the current picture
+      // stays up until the next one is ready.
       const ready = new Set([photos[0]]);
       let shown = 0;
+      const put = (k: number) => {
+        // The cover has a larger copy for the big tile; the others have one size.
+        if (k === 0 && cover) img.srcset = cover; else img.removeAttribute('srcset');
+        img.src = photos[k];
+      };
       const show = (k: number) => {
         if (k === shown) return;
         shown = k;
         ticks.forEach((t, j) => t.classList.toggle('on', j === k));
         const src = photos[k];
-        if (ready.has(src)) { img.src = src; return; }
+        if (ready.has(src)) { put(k); return; }
         const next = new Image();
         next.decoding = 'async';
-        next.onload = () => { ready.add(src); if (shown === k) img.src = src; };
+        next.onload = () => { ready.add(src); if (shown === k) put(k); };
         next.src = src;
       };
       media.addEventListener('pointermove', (ev) => {
@@ -356,66 +807,16 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
       media.addEventListener('pointerleave', () => show(0));
     });
 
-    // ---- the timeline and the cards point at each other ----
+    // ---- a card lights its place on the strip of years ----
     const dotFor = (id: string) => document.querySelector<HTMLElement>(`.ribbon__dot[data-for="${CSS.escape(id)}"]`);
     cards.forEach((li) => {
       li.addEventListener('pointerenter', () => dotFor(li.id)?.classList.add('is-hot'));
       li.addEventListener('pointerleave', () => dotFor(li.id)?.classList.remove('is-hot'));
     });
-    document.querySelectorAll<HTMLAnchorElement>('.ribbon__dot').forEach((dot) => {
-      const li = document.getElementById(dot.dataset.for!);
-      if (!li) return;
-      dot.addEventListener('pointerenter', () => li.classList.add('is-hot'));
-      dot.addEventListener('pointerleave', () => li.classList.remove('is-hot'));
-      dot.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        if (li.hidden) { state.where = ''; state.only.clear(); apply(); }
-        li.scrollIntoView({ behavior: calm.matches ? 'auto' : 'smooth', block: 'center' });
-        li.classList.remove('is-flash');
-        void li.offsetWidth;
-        li.classList.add('is-flash');
-        li.querySelector<HTMLAnchorElement>('.trip__link')?.focus({ preventScroll: true });
-      });
-    });
-
-    // ---- the countdown stays true after the page was built ----
-    document.querySelectorAll<HTMLElement>('[data-countdown]').forEach((el) => {
-      const start = Number(el.dataset.countdown);
-      const end = Number(el.dataset.until);
-      const today = new Date();
-      const startDay = new Date(start);
-      const days = Math.round((Date.UTC(startDay.getUTCFullYear(), startDay.getUTCMonth(), startDay.getUTCDate()) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000);
-      const kicker = el.parentElement?.querySelector('.trip__soon-kicker');
-      if (days > 1) el.textContent = `In ${days} days`;
-      else if (days === 1) el.textContent = 'Tomorrow';
-      else if (Date.now() <= end + 86_400_000) {
-        el.textContent = `Day ${1 - days}`;
-        if (kicker) kicker.textContent = 'On the road';
-      } else {
-        el.textContent = 'Just back';
-        if (kicker) kicker.textContent = 'Writing it up';
-      }
-    });
-
-    // ---- somewhere at random ----
-    const picks: string[] = JSON.parse(document.getElementById('trip-picks')?.textContent ?? '[]');
-    const dice = document.querySelector<HTMLAnchorElement>('[data-dice]');
-    if (dice && picks.length) {
-      const roll = () => { dice.href = picks[Math.floor(Math.random() * picks.length)]; };
-      roll();
-      dice.addEventListener('pointerenter', roll);
-      dice.addEventListener('focus', roll);
-    }
   }
 </script>
 
 <style>
-  .trips {
-    --gutter: clamp(1rem, 4vw, 4rem);
-    max-width: 120rem;
-    margin: 0 auto;
-    padding: 0 var(--gutter) clamp(2rem, 5vw, 4rem);
-  }
   .sr {
     position: absolute;
     width: 1px;
@@ -425,47 +826,33 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     white-space: nowrap;
   }
 
-  /* ---- header ---- */
+  /* ---- the dark opening: header, stage, years ---- */
+  .top {
+    --gutter: clamp(1rem, 4vw, 4rem);
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .top__in {
+    max-width: 120rem;
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
   .head {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 1.5rem 3rem;
-    padding-top: clamp(2rem, 5vw, 3.5rem);
+    gap: 1.25rem 3rem;
+    padding-top: clamp(1.5rem, 4vw, 2.75rem);
   }
   .head h1 {
     font-size: clamp(2.4rem, 6vw, 4.25rem);
     margin: 0;
-  }
-  .head__note {
-    color: var(--color-stone);
-    margin: 0.6rem 0 0;
-  }
-  .dice {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    padding: 0.5rem 0.9rem;
-    border: 1px solid var(--color-ink);
-    color: var(--color-ink);
-    text-decoration: none;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .dice:hover {
-    background: var(--color-ink);
     color: var(--color-snow);
   }
-  .dice__face {
-    display: inline-block;
-    font-size: 1rem;
-    transition: transform 400ms cubic-bezier(0.3, 1.6, 0.5, 1);
-  }
-  .dice:hover .dice__face {
-    transform: rotate(200deg) scale(1.15);
+  .head__note {
+    color: var(--color-stone-on-dark);
+    margin: 0.5rem 0 0;
   }
   .totals {
     display: flex;
@@ -478,7 +865,7 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     flex-direction: column-reverse;
   }
   .totals dt {
-    color: var(--color-stone);
+    color: var(--color-stone-on-dark);
     font-size: 0.625rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -490,16 +877,348 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     line-height: 1.1;
   }
 
-  /* ---- timeline ---- */
-  .ribbon {
-    margin: clamp(1.5rem, 3vw, 2.25rem) calc(-1 * var(--gutter)) 0;
-    padding: 1.1rem var(--gutter) 0.6rem;
-    background: var(--color-ink);
+  /* ---- the stage ---- */
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+    gap: clamp(1.25rem, 3vw, 3rem);
+    margin-top: clamp(1.5rem, 3vw, 2.5rem);
+  }
+  .stage__frame {
+    grid-column: 2;
+    grid-row: 1;
+    position: relative;
+    height: clamp(20rem, 58vh, 38rem);
+    background: #0b0e12;
+    overflow: hidden;
+    container-type: size;
+    touch-action: pan-y;
+  }
+  .layer {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    transition: opacity 700ms ease;
+  }
+  .layer.is-on {
+    opacity: 1;
+  }
+  /* The same picture, out of focus, fills whatever the picture itself doesn't. */
+  .layer__wash {
+    position: absolute;
+    inset: -10%;
+    background-size: cover;
+    background-position: center;
+    filter: blur(30px) brightness(0.5) saturate(1.15);
+  }
+  .layer__img {
+    position: relative;
+    display: block;
+  }
+  .layer--full .layer__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* A small picture is shown as a print: no more than about half again its real size. */
+  .layer--print .layer__img {
+    --ar: calc(var(--nw) / var(--nh));
+    width: min(100cqw - 3rem, var(--nw) * 1.6px, (100cqh - 3rem) * var(--ar));
+    height: auto;
+    aspect-ratio: var(--nw) / var(--nh);
+    box-shadow: 0 0 0 5px var(--color-snow), 0 1.25rem 2.5rem rgb(0 0 0 / 0.55);
+  }
+  .stage__progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background: var(--color-headlamp);
+    transform: scaleX(0);
+    transform-origin: left;
+    z-index: 2;
+  }
+  .stage__progress.is-run {
+    animation: fill 7s linear forwards;
+  }
+  @keyframes fill {
+    to { transform: scaleX(1); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .layer.is-on.layer--full .layer__img {
+      animation: drift 9s ease-out forwards;
+    }
+    .slide:not([hidden]) > * {
+      animation: rise 420ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+    }
+    .slide:not([hidden]) > :nth-child(2) { animation-delay: 50ms; }
+    .slide:not([hidden]) > :nth-child(3) { animation-delay: 100ms; }
+    .slide:not([hidden]) > :nth-child(n + 4) { animation-delay: 150ms; }
+    .stage.is-rolling .layer.is-on {
+      filter: blur(6px) brightness(0.7);
+      transition: filter 150ms ease, opacity 700ms ease;
+    }
+    .stage.is-rolling .dice__face {
+      animation: tumble 500ms linear infinite;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .layer {
+      transition: none;
+    }
+  }
+  @keyframes drift {
+    from { transform: scale(1); }
+    to { transform: scale(1.05); }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(0.6rem); }
+  }
+  @keyframes tumble {
+    to { transform: rotate(360deg); }
+  }
+
+  .blank {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: clamp(1.5rem, 5vw, 4rem);
+  }
+  .blank--soon {
+    background:
+      radial-gradient(circle at 82% 18%, rgb(255 194 75 / 0.24), transparent 55%),
+      #0b0e12;
+  }
+  .blank--none {
+    justify-content: flex-end;
+    color: var(--color-stone-on-dark);
+    background:
+      repeating-linear-gradient(135deg, transparent 0 18px, rgb(127 216 232 / 0.09) 18px 19px),
+      #0b0e12;
+    font-size: 0.75rem;
+  }
+  .blank__kicker {
+    color: var(--color-headlamp);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .blank__big {
+    font-size: clamp(2.5rem, 7cqw, 5.5rem);
+    font-stretch: 118%;
+    line-height: 1;
     color: var(--color-snow);
+  }
+  .blank--none .blank__big {
+    font-size: clamp(1.6rem, 4.5cqw, 3rem);
+    color: var(--color-rime);
+  }
+  .blank__clock {
+    color: var(--color-snow);
+    font-size: clamp(0.9rem, 2.2cqw, 1.35rem);
+    font-variant-numeric: tabular-nums;
+    min-height: 1.4em;
+  }
+  .blank__where {
+    color: var(--color-stone-on-dark);
+    font-size: 0.75rem;
+  }
+
+  .stage__words {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .slide {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+  .slide[hidden] {
+    display: none;
+  }
+  .slide__kicker {
+    margin: 0;
+    color: var(--color-rime);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .slide__title {
+    margin: 0.6rem 0 0;
+    font-size: clamp(2rem, 4.4vw, 4rem);
+    font-stretch: 114%;
+    line-height: 1.02;
+    color: var(--color-snow);
+    text-wrap: balance;
+  }
+  .slide__where {
+    margin: 0.9rem 0 0;
+    color: var(--color-stone-on-dark);
+    font-size: 0.75rem;
+    line-height: 1.6;
+  }
+  .slide__sum {
+    margin: 0.9rem 0 0;
+    max-width: 44ch;
+    color: #c5ccd3;
+    font-size: 1rem;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+  }
+  .slide__facts {
+    margin: 0.9rem 0 0;
+    font-size: 0.75rem;
+    color: var(--color-snow);
+  }
+  .slide__marks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.6875rem;
+    color: var(--color-stone-on-dark);
+  }
+  .slide__go {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.4rem 0 0;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 100%;
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--color-rime);
+    background: none;
+    color: var(--color-rime);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .btn:hover,
+  .btn:focus-visible {
+    background: var(--color-rime);
+    color: var(--color-ink);
+  }
+  .btn--main {
+    background: var(--color-snow);
+    border-color: var(--color-snow);
+    color: var(--color-ink);
+  }
+  .btn--main:hover,
+  .btn--main:focus-visible {
+    background: var(--color-headlamp);
+    border-color: var(--color-headlamp);
+    color: var(--color-ink);
+  }
+  .btn__more {
+    min-width: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stage__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 1.25rem;
+  }
+  .stage__bar[hidden] {
+    display: none;
+  }
+  .ctl {
+    display: inline-grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--color-rule-dark);
+    background: none;
+    color: var(--color-snow);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: border-color 150ms ease, color 150ms ease;
+  }
+  .ctl:hover,
+  .ctl:focus-visible {
+    border-color: var(--color-rime);
+    color: var(--color-rime);
+  }
+  .ctl--play {
+    font-size: 0.7rem;
+  }
+  .stage__count {
+    min-width: 4.5rem;
+    text-align: center;
+    color: var(--color-stone-on-dark);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .dice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    margin-left: auto;
+    padding: 0 0.9rem;
+    border: 1px solid var(--color-rule-dark);
+    background: none;
+    color: var(--color-snow);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: border-color 150ms ease, color 150ms ease;
+  }
+  .dice:hover,
+  .dice:focus-visible {
+    border-color: var(--color-rime);
+    color: var(--color-rime);
+  }
+  .dice__face {
+    display: inline-block;
+    font-size: 1rem;
+    transition: transform 400ms cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .dice:hover .dice__face {
+    transform: rotate(200deg) scale(1.15);
+  }
+
+  /* ---- the years ---- */
+  .ribbon {
+    margin-top: clamp(1.25rem, 2.5vw, 2rem);
+    padding: 2.1rem 0 0.7rem;
+    border-top: 1px solid var(--color-rule-dark);
   }
   .ribbon__track {
     position: relative;
-    height: calc(var(--lanes) * 1.1rem + 2.6rem);
+    height: calc(var(--lanes) * 1.25rem + 2.4rem);
   }
   .ribbon__year {
     position: absolute;
@@ -518,68 +1237,103 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
   }
   .ribbon__dot {
     position: absolute;
-    top: calc(var(--lane) * 1.1rem + 0.35rem);
-    width: max(0.7rem, var(--w));
-    height: 0.7rem;
+    top: calc(var(--lane) * 1.25rem + 0.3rem);
+    width: max(0.8rem, var(--w));
+    height: 0.8rem;
     border-radius: 999px;
-    background: var(--color-headlamp);
-    transition: transform 150ms ease, opacity 150ms ease;
+    background: var(--color-rime);
+    transition: transform 150ms ease, opacity 150ms ease, background 150ms ease;
+  }
+  /* A bigger target than the dot itself. */
+  .ribbon__dot::after {
+    content: '';
+    position: absolute;
+    inset: -0.5rem;
   }
   .ribbon__dot--bare {
     background: var(--color-been);
   }
   .ribbon__dot--upcoming {
     background: transparent;
-    box-shadow: inset 0 0 0 2px var(--color-headlamp);
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .ribbon__dot--upcoming {
-      animation: beacon 2s ease-in-out infinite;
-    }
-  }
-  @keyframes beacon {
-    50% { box-shadow: inset 0 0 0 2px var(--color-headlamp), 0 0 0 5px rgb(255 194 75 / 0.25); }
+    box-shadow: inset 0 0 0 2px var(--color-rime);
   }
   .ribbon__dot.is-out {
-    opacity: 0.2;
+    opacity: 0.25;
   }
   .ribbon__dot:hover,
   .ribbon__dot:focus-visible,
   .ribbon__dot.is-hot {
-    transform: scale(1.5);
+    transform: scale(1.35);
     z-index: 2;
+  }
+  /* The beam: the trip on the stage, and only that one. */
+  .ribbon__dot.is-on {
+    background: var(--color-headlamp);
+    box-shadow: 0 0 0 4px rgb(255 194 75 / 0.22);
+    opacity: 1;
+    z-index: 3;
+  }
+  .ribbon__dot--upcoming.is-on {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--color-headlamp), 0 0 0 4px rgb(255 194 75 / 0.22);
   }
   .ribbon__label {
     position: absolute;
-    bottom: calc(100% + 0.45rem);
+    bottom: calc(100% + 0.5rem);
     left: 50%;
-    transform: translateX(-50%) scale(0.66);
-    transform-origin: bottom center;
-    padding: 0.25rem 0.5rem;
+    transform: translateX(-50%);
+    padding: 0.2rem 0.45rem;
     background: var(--color-snow);
     color: var(--color-ink);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     white-space: nowrap;
     pointer-events: none;
     opacity: 0;
     transition: opacity 120ms ease;
+  }
+  /* Near either end the label hangs inward, so it stays on the page. */
+  .ribbon__label--left {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  .ribbon__label--right {
+    left: 0;
+    transform: none;
   }
   .ribbon__when {
     color: var(--color-stone);
   }
   .ribbon__dot:hover .ribbon__label,
   .ribbon__dot:focus-visible .ribbon__label,
-  .ribbon__dot.is-hot .ribbon__label {
+  .ribbon__dot.is-hot .ribbon__label,
+  .ribbon__dot.is-on .ribbon__label {
     opacity: 1;
   }
+  .ribbon__dot.is-on .ribbon__label {
+    background: var(--color-headlamp);
+  }
+  .ribbon__dot.is-on .ribbon__when {
+    color: var(--color-ink);
+  }
+  .ribbon__dot:hover:not(.is-on),
+  .ribbon__dot.is-hot:not(.is-on) {
+    z-index: 4;
+  }
 
-  /* ---- filters ---- */
+  /* ---- the pale ground: every trip ---- */
+  .trips {
+    --gutter: clamp(1rem, 4vw, 4rem);
+    max-width: 120rem;
+    margin: 0 auto;
+    padding: 0 var(--gutter) clamp(2rem, 5vw, 4rem);
+  }
   .tools {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem 1.25rem;
-    margin-top: 1.25rem;
+    margin-top: clamp(1.25rem, 2.5vw, 2rem);
   }
   .tools[hidden] {
     display: none;
@@ -683,6 +1437,13 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     aspect-ratio: 3 / 2;
     background: var(--color-rule);
     overflow: hidden;
+    transition: box-shadow 150ms ease, transform 150ms ease;
+  }
+  .trip__link:hover .trip__media,
+  .trip__link:focus-visible .trip__media,
+  .trip.is-hot .trip__media {
+    box-shadow: 0 0.9rem 1.75rem -0.9rem rgb(18 22 28 / 0.55);
+    transform: translateY(-3px);
   }
   .trip__media[data-photos] {
     cursor: ew-resize;
@@ -699,6 +1460,16 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
   .trip__link:hover .trip__media img,
   .trip.is-hot .trip__media img {
     transform: scale(1.03);
+  }
+  .trip__year {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0.3rem 0.55rem;
+    background: var(--color-ink);
+    color: var(--color-snow);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
   }
   .trip__ticks {
     position: absolute;
@@ -814,6 +1585,29 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     color: var(--color-stone);
     font-size: 0.625rem;
   }
+  .trip__meter {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    font-size: 0.625rem;
+    color: var(--color-ink);
+    white-space: nowrap;
+  }
+  .trip__meter[hidden] {
+    display: none;
+  }
+  .trip__meter-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--color-rule);
+  }
+  .trip__meter-fill {
+    display: block;
+    height: 100%;
+    width: calc(var(--v, 0) * 100%);
+    background: var(--color-rime-on-light);
+  }
   .trip__marks {
     display: flex;
     align-items: center;
@@ -831,13 +1625,6 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     text-decoration: underline;
     text-underline-offset: 0.18em;
   }
-  .trip.is-flash .trip__media {
-    animation: flash 1.4s ease-out;
-  }
-  @keyframes flash {
-    0%, 30% { box-shadow: 0 0 0 4px var(--color-ember); }
-    100% { box-shadow: 0 0 0 4px transparent; }
-  }
 
   .none {
     margin-top: 2rem;
@@ -853,9 +1640,43 @@ const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
     padding: 0;
   }
 
+  /* ---- narrower: the picture first, the words under it ---- */
+  @media (max-width: 56rem) {
+    .stage {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .stage__frame {
+      grid-column: 1;
+      grid-row: 1;
+      height: auto;
+      aspect-ratio: 3 / 2;
+      margin-inline: calc(-1 * var(--gutter));
+    }
+    .stage__words {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    /* Trips say different amounts; this keeps the years from jumping about under them. */
+    .slide {
+      justify-content: flex-start;
+      min-height: 15rem;
+    }
+    .dice {
+      margin-left: 0;
+    }
+    .totals {
+      gap: 0.75rem 1.4rem;
+    }
+    .totals dd {
+      font-size: 1.3rem;
+    }
+  }
   @media (max-width: 40rem) {
     .ribbon__label {
       display: none;
+    }
+    .ribbon__dot.is-on .ribbon__label {
+      display: block;
     }
     .ribbon__year {
       font-size: 0;

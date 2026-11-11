@@ -1,22 +1,90 @@
 ---
+/**
+ * The front door. The mosaic and the introduction open it; under them the page
+ * leads on: the trip that is coming, the trip to start with (and its line, to
+ * pick a day from), every trip in a row to run a thumb along, the map, and the
+ * themes that cut across all of it. Everything is there without JavaScript; the
+ * script at the bottom makes the clock tick and the pictures turn.
+ */
 import { getCollection } from 'astro:content';
 import { Picture, getImage } from 'astro:assets';
 import Base from '../layouts/Base.astro';
+import RouteLine from '../components/RouteLine.astro';
 import mosaic from '../assets/home-mosaic.png';
 import mosaicOg from '../assets/home-og.png';
-import { fmtRange, entriesForTrip, entrySlug, entryCounts } from '../lib/entries.ts';
+import { fmtRange, chronological, tripIdOf, entrySlug, routeNodes } from '../lib/entries.ts';
+import { firstPhoto } from '../lib/journey.ts';
+import { cover } from '../lib/covers.ts';
+import { travelMetrics } from '../lib/travel.ts';
+import { beenTo } from '../data/been-to.ts';
+import { COUNTRY_NAMES } from '../data/trip-meta.ts';
+import { TAGS, TAG_ICONS, TAG_LABELS, BETH_CRIED_ICON } from '../data/tags.ts';
 
+const now = new Date();
+const DAY = 86_400_000;
 const trips = (await getCollection('trips')).sort((a, b) => +b.data.dateStart - +a.data.dateStart);
-const featured = trips.find((t) => t.data.featured) ?? trips[0];
-const rest = trips.filter((t) => t.id !== featured?.id).slice(0, 6);
+const entries = chronological(await getCollection('entries', (e) => !e.data.draft));
+const entriesOf = (id: string) => entries.filter((e) => tripIdOf(e) === id);
+const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
+const fmtN = (n: number) => n.toLocaleString('en-US');
 
-const featuredEntries = featured ? await entriesForTrip(featured.id) : [];
+// A trip started in the admin ahead of time isn't one they've taken yet.
+const taken = trips.filter((t) => +t.data.dateStart <= +now);
+const featured = taken.find((t) => t.data.featured) ?? taken[0];
+/** The soonest trip that isn't over: the one to count down to, or the one they're on. */
+const next = [...trips].reverse().find((t) => +t.data.dateEnd + DAY >= +now && t.id !== featured?.id);
+const nextAway = next ? +next.data.dateStart <= +now : false;
+
+const featuredEntries = featured ? entriesOf(featured.id) : [];
 const start = featured?.data.startHere
   ? featuredEntries.find((e) => entrySlug(e) === featured.data.startHere)
   : featuredEntries[0];
+/** Up to eight pictures spread across the trip, starting with its cover. */
+const featuredPhotos = (() => {
+  if (!featured) return [];
+  const all = [...new Set([featured.data.hero, ...featuredEntries.map(firstPhoto)].filter((p): p is string => Boolean(p)))];
+  const spread = all.length <= 8 ? all : Array.from({ length: 8 }, (_, i) => all[Math.round((i * (all.length - 1)) / 7)]);
+  return spread.map((p, i) => cover(p, i === 0 ? 'lg' : 'sm'));
+})();
+const nodes = routeNodes(featuredEntries);
 
-const counts = await entryCounts();
-const totalEntries = trips.reduce((n, t) => n + (counts.get(t.id) ?? 0), 0);
+const totalEntries = entries.filter((e) => trips.some((t) => t.id === tripIdOf(e))).length;
+
+// The row of every trip, newest first.
+const film = trips.map((t) => ({
+  t,
+  photo: t.data.hero ? cover(t.data.hero) : null,
+  status: +now < +t.data.dateStart ? 'upcoming' : +now <= +t.data.dateEnd + DAY ? 'away' : 'done',
+  daysUntil: Math.ceil((+t.data.dateStart - +now) / DAY),
+}));
+
+// The map: how far it reaches, and a reel of what is pinned to it.
+const travel = travelMetrics(taken.map((t) => t.data), beenTo(now), now);
+const pinned = (await getCollection('instagram'))
+  .filter((p) => p.data.lat != null && p.data.lng != null)
+  .sort((a, b) => a.data.date.localeCompare(b.data.date));
+const reel = (() => {
+  // One picture a place, then an even spread across the years.
+  const seen = new Set<string>();
+  const one = pinned.filter((p) => {
+    const key = p.data.place ?? p.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const want = Math.min(24, one.length);
+  return Array.from({ length: want }, (_, i) => one[Math.round((i * (one.length - 1)) / Math.max(1, want - 1))]).map((p) => ({
+    src: cover(p.data.media[0].thumb),
+    label: [p.data.place, p.data.date.slice(0, 4)].filter(Boolean).join(', '),
+  }));
+})();
+
+// The themes with the most written under them.
+const themes = TAGS.map((tag) => ({ tag, n: entries.filter((e) => e.data.tags.includes(tag)).length }))
+  .filter((x) => x.n > 0)
+  .sort((a, b) => b.n - a.n)
+  .slice(0, 8);
+const cried = entries.filter((e) => e.data.bethCried).length;
 
 /*
  * §7.8 — the mosaic makes a far better share card than the generated one: it is
@@ -39,9 +107,10 @@ const ogMosaic = await getImage({ src: mosaicOg, width: 1200, height: 630, forma
 const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
 ---
 
+
 <Base
   title="Cleatus and the West Virginian"
-  description={`Andy and Beth have been taking long, hard trips since 2009 — ${trips.length} of them, ${totalEntries} entries, from the Karakoram to Patagonia. Written mostly by Beth, mostly while exhausted.`}
+  description={`Andy and Beth have been taking long, hard trips since 2009 — ${taken.length} of them, ${totalEntries} entries, from the Karakoram to Patagonia. Written mostly by Beth, mostly while exhausted.`}
   ogImage={ogMosaic.src}
 >
   {/*
@@ -77,49 +146,346 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     <h1 class="display lede__title">{TAGLINE}</h1>
     <p class="lede__body">
       Andy and Beth met on a study-abroad trip to Bangalore and have been going
-      somewhere difficult ever since. {trips.length} trips, {totalEntries} entries,
+      somewhere difficult ever since. {taken.length} trips, {totalEntries} entries,
       written mostly by Beth — usually the same night, usually exhausted.
     </p>
     <p class="mono lede__links">
-      <a href="/trips/">All trips</a> · <a href="/archive/">Archive</a>
+      <a href="/trips/">All trips</a> · <a href="/map/">The map</a> · <a href="/archive/">Archive</a>
+      {/* Shown by the script, which is what makes it work. */}
+      <span data-dice-wrap> · <button type="button" class="lede__dice" data-dice hidden>🎲 A day at random</button></span>
     </p>
   </section>
 
-  {featured && (
-    <section class="feat">
-      <a href={`/${featured.id}/`} class="feat__link">
-        {featured.data.hero && (
-          <img class="feat__img" src={featured.data.hero} alt="" loading="eager" fetchpriority="high" />
-        )}
-        <span class="feat__meta mono">
-          Most recent · {fmtRange(featured.data.dateStart, featured.data.dateEnd)}
+  {next && (
+    <a
+      class="next"
+      href={`/${next.id}/`}
+      data-next
+      data-start={+next.data.dateStart}
+      data-end={+next.data.dateEnd}
+    >
+      <span class="next__in">
+        <span class="next__words">
+          <span class="mono next__kicker" data-next-kicker>{nextAway ? 'On the road now' : 'Up next'}</span>
+          <span class="display next__title">{next.data.title}</span>
+          <span class="mono next__where">
+            {next.data.countries.map(nameOf).join(' · ')} · {fmtRange(next.data.dateStart, next.data.dateEnd)}
+          </span>
         </span>
-        <span class="display feat__title">{featured.data.title}</span>
-      </a>
-      <p class="feat__sum">{featured.data.summary}</p>
-      {start && (
-        <p><a href={`/${featured.id}/${entrySlug(start)}/`} class="feat__start">
-          <span class="mono">Start here</span> — {start.data.title}
-        </a></p>
+        {/* Days only until the script takes over; it adds the hours, minutes and seconds. */}
+        <span class="next__clock mono" data-next-clock>
+          {nextAway ? (
+            <span class="next__cell"><b class="display">{Math.floor((+now - +next.data.dateStart) / DAY) + 1}</b> day of {next.data.stats.days}</span>
+          ) : (
+            <span class="next__cell"><b class="display">{Math.ceil((+next.data.dateStart - +now) / DAY)}</b> days</span>
+          )}
+        </span>
+        <span class="next__go mono" aria-hidden="true">→</span>
+      </span>
+    </a>
+  )}
+
+  {featured && (
+    <section class="feat" aria-labelledby="feat-title">
+      <div class="feat__grid">
+        <a
+          href={`/${featured.id}/`}
+          class="feat__media"
+          data-turn={featuredPhotos.length > 1 ? JSON.stringify(featuredPhotos) : undefined}
+          tabindex="-1"
+          aria-hidden="true"
+        >
+          {featuredPhotos.length > 0 && (
+            <>
+              <img class="is-on" src={featuredPhotos[0]} alt="" loading="eager" decoding="async" />
+              <img alt="" decoding="async" />
+              {featuredPhotos.length > 1 && (
+                <span class="feat__ticks">
+                  {featuredPhotos.map((_, k) => <span class:list={['feat__tick', { on: k === 0 }]} />)}
+                </span>
+              )}
+            </>
+          )}
+        </a>
+        <div class="feat__words">
+          <p class="mono feat__meta">
+            {featured.id === taken[0]?.id ? 'Most recent' : 'Start with this one'} · {fmtRange(featured.data.dateStart, featured.data.dateEnd)}
+          </p>
+          <h2 class="display feat__title" id="feat-title">
+            <a href={`/${featured.id}/`}>{featured.data.title}</a>
+          </h2>
+          <p class="feat__sum">{featured.data.summary}</p>
+          <p class="mono feat__facts">
+            {[
+              `${featuredEntries.length} entries`,
+              `${featured.data.stats.days} days`,
+              featured.data.stats.trekMiles ? `${featured.data.stats.trekMiles} mi on foot` : null,
+              featured.data.stats.maxElevationFt ? `${fmtN(featured.data.stats.maxElevationFt)} ft` : null,
+            ].filter(Boolean).join(' · ')}
+          </p>
+          <p class="feat__go">
+            {start && (
+              <a href={`/${featured.id}/${entrySlug(start)}/`} class="btn btn--main mono">
+                <span>Start here</span><span class="btn__more">— {start.data.title}</span>
+              </a>
+            )}
+            <a href={`/${featured.id}/`} class="btn mono">The whole trip <span aria-hidden="true">→</span></a>
+          </p>
+        </div>
+      </div>
+      {nodes.length > 1 && (
+        <div class="feat__line" data-line>
+          <RouteLine nodes={nodes} tripSlug={featured.id} />
+          <p class="mono feat__readout" data-readout aria-live="polite">
+            {featured.data.stats.maxElevationFt ? 'Every dot is a day, at the height it was walked' : 'Every dot is an entry, spaced by date'} — pick one
+          </p>
+        </div>
       )}
     </section>
   )}
 
-  <section class="more">
-    <h2 class="mono more__head">Further back</h2>
-    <ul>
-      {rest.map((t) => (
-        <li>
-          <a href={`/${t.id}/`}>
-            <span class="mono more__year">{t.data.year}</span>
-            <span class="more__title">{t.data.title}</span>
+  <section class="film" data-film aria-labelledby="film-title">
+    <header class="film__head">
+      <h2 class="mono film__title" id="film-title">Every trip</h2>
+      <span class="film__ctl" data-film-ctl hidden>
+        <button type="button" class="ctl" data-film-prev aria-label="Scroll back"><span aria-hidden="true">←</span></button>
+        <button type="button" class="ctl" data-film-next aria-label="Scroll on"><span aria-hidden="true">→</span></button>
+      </span>
+      <a href="/trips/" class="mono film__all">All {trips.length} on one page →</a>
+    </header>
+    <ol class="film__row" data-film-row>
+      {film.map(({ t, photo, status, daysUntil }) => (
+        <li class="film__item">
+          <a href={`/${t.id}/`} class="film__link">
+            <span class="film__pic">
+              {photo ? (
+                <img src={photo} alt="" loading="lazy" decoding="async" />
+              ) : status === 'done' ? (
+                <span class="film__none">
+                  <span class="display">{t.data.countries.map(nameOf).join(' · ')}</span>
+                  <span class="mono">No photographs</span>
+                </span>
+              ) : (
+                <span class="film__soon">
+                  <span class="mono film__soon-kicker">{status === 'away' ? 'On the road' : 'Up next'}</span>
+                  <span class="display film__soon-big">{status === 'away' ? 'Away now' : `In ${daysUntil} days`}</span>
+                </span>
+              )}
+            </span>
+            <span class="mono film__when">{t.data.dateStart.getUTCFullYear()} · {t.data.stats.days} days</span>
+            <span class="display film__name">{t.data.shortTitle}</span>
           </a>
         </li>
       ))}
-    </ul>
-    <p><a href="/trips/" class="mono">All {trips.length} trips →</a></p>
+    </ol>
   </section>
+
+  <section class="globe" aria-labelledby="globe-title">
+    <div class="globe__in">
+      <div class="globe__words">
+        <h2 class="display globe__title" id="globe-title">Everywhere we've been</h2>
+        <p class="mono globe__facts">
+          {travel.countries} countries · {travel.continents.length} continents{pinned.length > 0 && ` · ${pinned.length} photographs pinned to the map`}
+        </p>
+      </div>
+      <a href="/map/" class="btn btn--main mono globe__go">Spin the globe <span aria-hidden="true">→</span></a>
+    </div>
+    {/* One link for the whole reel, for the pointer only: the button above is the way in for
+        everyone else, and two dozen identical stops would be no kindness to a keyboard. */}
+    {reel.length > 0 && (
+      <a class="reel" href="/map/" tabindex="-1" aria-hidden="true">
+        {/* The row is there twice so it can loop without a seam. */}
+        <span class="reel__row">
+          {[0, 1].map((pass) => reel.map((r) => (
+            <span class:list={['reel__pic', { 'reel__pic--again': pass === 1 }]} title={r.label}>
+              <img src={r.src} alt="" loading="lazy" decoding="async" width="240" height="300" />
+            </span>
+          )))}
+        </span>
+      </a>
+    )}
+  </section>
+
+  {themes.length > 0 && (
+    <section class="themes" aria-labelledby="themes-title">
+      <h2 class="mono themes__title" id="themes-title">Or read by what happened</h2>
+      <ul class="themes__list">
+        {themes.map(({ tag, n }) => (
+          <li>
+            <a href={`/tags/${tag}/`} class="theme">
+              <span class="theme__icon" aria-hidden="true">{TAG_ICONS[tag]}</span>
+              <span class="theme__label">{TAG_LABELS[tag]}</span>
+              <span class="mono theme__n">{n}</span>
+            </a>
+          </li>
+        ))}
+        {cried > 0 && (
+          <li>
+            <a href="/beth-cried-here/" class="theme">
+              <span class="theme__icon" aria-hidden="true">{BETH_CRIED_ICON}</span>
+              <span class="theme__label">Beth cried here</span>
+              <span class="mono theme__n">{cried}</span>
+            </a>
+          </li>
+        )}
+      </ul>
+      <p class="mono themes__more">
+        <a href="/tags/">Every theme</a> · <a href="/numbers/">By the numbers</a> · <a href="/archive/">The whole archive</a>
+      </p>
+    </section>
+  )}
 </Base>
+
+<script>
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+
+  // ---- the trip that is coming: a clock to the day they leave ----
+  const next = document.querySelector<HTMLElement>('[data-next]');
+  if (next) {
+    const clock = next.querySelector<HTMLElement>('[data-next-clock]')!;
+    const kicker = next.querySelector<HTMLElement>('[data-next-kicker]')!;
+    // Astro scopes this page's styles to what it rendered; the cells made here carry the same mark.
+    const scope = [...clock.attributes].find((a) => a.name.startsWith('data-astro-cid-'))?.name;
+    const s = new Date(Number(next.dataset.start));
+    const e = new Date(Number(next.dataset.end));
+    // The dates are calendar days, so the clock runs to midnight where the reader is.
+    const leaves = +new Date(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
+    const back = +new Date(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate() + 1);
+    const days = Math.round((back - leaves) / 86_400_000);
+    const cell = (n: number | string, unit: string) => {
+      const el = document.createElement('span');
+      el.className = 'next__cell';
+      const b = document.createElement('b');
+      b.className = 'display';
+      b.textContent = String(n);
+      if (scope) { el.setAttribute(scope, ''); b.setAttribute(scope, ''); }
+      el.append(b, ` ${unit}`);
+      return el;
+    };
+    const two = (n: number) => String(n).padStart(2, '0');
+    let timer = 0;
+    const draw = () => {
+      const left = leaves - Date.now();
+      if (left > 0) {
+        const sec = Math.floor(left / 1000);
+        clock.replaceChildren(
+          cell(Math.floor(sec / 86400), 'days'),
+          cell(two(Math.floor(sec / 3600) % 24), 'hrs'),
+          cell(two(Math.floor(sec / 60) % 60), 'min'),
+          cell(two(sec % 60), 'sec'),
+        );
+      } else if (Date.now() < back) {
+        kicker.textContent = 'On the road now';
+        clock.replaceChildren(cell(Math.floor(-left / 86_400_000) + 1, `day of ${days}`));
+      } else {
+        // The page was built before they got home; there's nothing left to count.
+        next.hidden = true;
+        clearInterval(timer);
+      }
+    };
+    draw();
+    timer = window.setInterval(draw, 1000);
+  }
+
+  // ---- the featured trip's pictures turn over; move across them to flip through ----
+  const media = document.querySelector<HTMLElement>('[data-turn]');
+  if (media) {
+    const photos: string[] = JSON.parse(media.dataset.turn!);
+    const imgs = [...media.querySelectorAll('img')];
+    const ticks = [...media.querySelectorAll('.feat__tick')];
+    let front = 0;
+    let shown = 0;
+    let asked = 0;
+    const show = (k: number) => {
+      if (k === shown) return;
+      const id = ++asked;
+      const back = imgs[1 - front];
+      const land = () => {
+        if (id !== asked) return;
+        imgs[front].classList.remove('is-on');
+        back.classList.add('is-on');
+        front = 1 - front;
+        shown = k;
+        ticks.forEach((t, j) => t.classList.toggle('on', j === k));
+      };
+      back.src = photos[k];
+      back.decode().then(land, land);
+    };
+    let timer = 0;
+    const play = () => {
+      clearInterval(timer);
+      if (calm.matches) return;
+      timer = window.setInterval(() => { if (!document.hidden) show((shown + 1) % photos.length); }, 4500);
+    };
+    media.addEventListener('pointermove', (ev) => {
+      if (!fine.matches) return;
+      clearInterval(timer);
+      const r = media.getBoundingClientRect();
+      show(Math.min(photos.length - 1, Math.max(0, Math.floor(((ev.clientX - r.left) / r.width) * photos.length))));
+    });
+    media.addEventListener('pointerleave', play);
+    play();
+  }
+
+  // ---- the line says which day is under the pointer ----
+  const line = document.querySelector<HTMLElement>('[data-line]');
+  const readout = line?.querySelector<HTMLElement>('[data-readout]');
+  if (line && readout) {
+    const idle = readout.textContent ?? '';
+    line.querySelectorAll<SVGAElement>('.rl-node-link').forEach((a) => {
+      const say = () => { readout.textContent = a.querySelector('title')?.textContent ?? idle; readout.classList.add('is-live'); };
+      const hush = () => { readout.textContent = idle; readout.classList.remove('is-live'); };
+      a.addEventListener('pointerenter', say);
+      a.addEventListener('focus', say);
+      a.addEventListener('pointerleave', hush);
+      a.addEventListener('blur', hush);
+    });
+  }
+
+  // ---- the row of trips: arrows for anyone without a trackpad ----
+  const film = document.querySelector<HTMLElement>('[data-film]');
+  if (film) {
+    const row = film.querySelector<HTMLElement>('[data-film-row]')!;
+    const ctl = film.querySelector<HTMLElement>('[data-film-ctl]')!;
+    const prev = film.querySelector<HTMLButtonElement>('[data-film-prev]')!;
+    const nextBtn = film.querySelector<HTMLButtonElement>('[data-film-next]')!;
+    const by = (dir: number) => row.scrollBy({ left: dir * row.clientWidth * 0.8, behavior: calm.matches ? 'auto' : 'smooth' });
+    const ends = () => {
+      prev.disabled = row.scrollLeft < 4;
+      nextBtn.disabled = row.scrollLeft + row.clientWidth > row.scrollWidth - 4;
+      ctl.hidden = row.scrollWidth <= row.clientWidth + 4;
+    };
+    prev.addEventListener('click', () => by(-1));
+    nextBtn.addEventListener('click', () => by(1));
+    row.addEventListener('scroll', ends, { passive: true });
+    addEventListener('resize', ends);
+    ends();
+  }
+
+  // ---- somewhere at random ----
+  const dice = document.querySelector<HTMLButtonElement>('[data-dice]');
+  if (dice) {
+    type Picks = { trips: [string, string][]; picks: [number, string, string, string, string | null][] };
+    let picks: Promise<Picks> | null = null;
+    const load = () => (picks ??= fetch('/picks.json').then((r) => r.json()));
+    dice.hidden = false;
+    dice.addEventListener('pointerenter', load, { once: true });
+    dice.addEventListener('focus', load, { once: true });
+    dice.addEventListener('click', async () => {
+      try {
+        const data = await load();
+        // A day with a photograph, so it lands somewhere worth looking at.
+        const withPhoto = data.picks.filter((p) => p[4]);
+        const pool = withPhoto.length ? withPhoto : data.picks;
+        const [trip, slug] = pool[Math.floor(Math.random() * pool.length)];
+        location.href = `/${data.trips[trip][0]}/${slug}/`;
+      } catch {
+        location.href = '/archive/';
+      }
+    });
+  }
+</script>
 
 <style>
   /* The mosaic's own stone-tile border is its frame; the dark band gives that
@@ -199,34 +565,235 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
       0 0 8px #fff, 0 0 13px #fff;
   }
 
+  /* ---- shared: the buttons and the square controls ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 100%;
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--color-ink);
+    background: none;
+    color: var(--color-ink);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .btn:hover,
+  .btn:focus-visible {
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .btn--main {
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .btn--main:hover,
+  .btn--main:focus-visible {
+    background: var(--color-ember);
+    border-color: var(--color-ember);
+    color: var(--color-snow);
+  }
+  .btn__more {
+    min-width: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ctl {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: border-color 150ms ease, opacity 150ms ease;
+  }
+  .ctl:hover,
+  .ctl:focus-visible {
+    border-color: var(--color-ink);
+  }
+  .ctl:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .lede__dice {
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    text-shadow: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  /* The dot before it goes too, when there is no script to roll the dice. */
+  [data-dice-wrap]:has([hidden]) {
+    display: none;
+  }
+
+  /* ---- the trip that is coming ---- */
+  .next {
+    display: block;
+    margin-top: clamp(1.5rem, 4vw, 2.5rem);
+    background:
+      radial-gradient(circle at 88% 0%, rgb(255 194 75 / 0.2), transparent 45%),
+      var(--color-ink);
+    color: var(--color-snow);
+    text-decoration: none;
+  }
+  .next[hidden] {
+    display: none;
+  }
+  .next__in {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem clamp(1.5rem, 4vw, 3rem);
+    max-width: 82rem;
+    margin: 0 auto;
+    padding: clamp(1.1rem, 2.5vw, 1.6rem) clamp(1rem, 4vw, 3rem);
+  }
+  .next__words {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    flex: 1 1 16rem;
+    min-width: 0;
+  }
+  .next__kicker {
+    color: var(--color-headlamp);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .next__title {
+    font-size: clamp(1.3rem, 2.6vw, 1.9rem);
+    font-stretch: 112%;
+    line-height: 1.1;
+  }
+  .next:hover .next__title,
+  .next:focus-visible .next__title {
+    text-decoration: underline;
+    text-underline-offset: 0.16em;
+  }
+  .next__where {
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+  }
+  .next__clock {
+    display: flex;
+    gap: clamp(0.9rem, 2vw, 1.6rem);
+    font-size: 0.625rem;
+    color: var(--color-stone-on-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .next__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .next__cell b {
+    color: var(--color-snow);
+    font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+    font-stretch: 112%;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    min-width: 2ch;
+  }
+  .next__go {
+    color: var(--color-rime);
+    font-size: 1.25rem;
+    transition: transform 150ms ease;
+  }
+  .next:hover .next__go {
+    transform: translateX(0.3rem);
+  }
+
+  /* ---- the trip to start with ---- */
   .feat {
-    max-width: 68rem;
+    max-width: 82rem;
     margin: clamp(2.5rem, 6vw, 4rem) auto 0;
     padding-inline: clamp(1rem, 4vw, 3rem);
   }
-  .feat__link {
-    display: block;
-    text-decoration: none;
+  .feat__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
+    gap: clamp(1.25rem, 3vw, 3rem);
+    align-items: center;
   }
-  .feat__img {
+  .feat__media {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 2;
+    background: var(--color-rule);
+    overflow: hidden;
+  }
+  .feat__media[data-turn] {
+    cursor: ew-resize;
+  }
+  .feat__media img {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    aspect-ratio: 16 / 9;
+    height: 100%;
     object-fit: cover;
     display: block;
-    background: var(--color-rule);
+    opacity: 0;
+    transition: opacity 500ms ease;
+  }
+  .feat__media img.is-on {
+    opacity: 1;
+  }
+  .feat__ticks {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.7rem;
+    display: flex;
+    gap: 4px;
+  }
+  .feat__tick {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: rgb(248 250 251 / 0.45);
+    transition: background 150ms ease;
+  }
+  .feat__tick.on {
+    background: var(--color-snow);
   }
   .feat__meta {
-    display: block;
     color: var(--color-stone);
-    margin-top: 0.85rem;
+    margin: 0;
     font-size: 0.6875rem;
   }
   .feat__title {
-    display: block;
-    font-size: clamp(1.7rem, 4vw, 2.6rem);
-    margin-top: 0.3rem;
+    font-size: clamp(1.9rem, 3.6vw, 3.1rem);
+    font-stretch: 112%;
+    line-height: 1.05;
+    margin: 0.5rem 0 0;
+    text-wrap: balance;
   }
-  .feat__link:hover .feat__title {
+  .feat__title a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .feat__title a:hover {
     text-decoration: underline;
     text-underline-offset: 0.14em;
   }
@@ -235,43 +802,320 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     margin: 0.9rem 0 0;
     color: var(--color-stone);
   }
-  .feat__start .mono {
-    color: var(--color-stone);
+  .feat__facts {
+    margin: 0.9rem 0 0;
+    font-size: 0.6875rem;
+  }
+  .feat__go {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.3rem 0 0;
+  }
+  /* Its line, on the dark like every instrument on the site. */
+  .feat__line {
+    margin-top: clamp(1.25rem, 3vw, 2rem);
+    padding: clamp(1.1rem, 2.5vw, 1.6rem) clamp(1rem, 3vw, 2rem) 1rem;
+    background: var(--color-ink);
+    color: var(--color-snow);
+  }
+  .feat__readout {
+    margin: 0.75rem 0 0;
+    min-height: 1.5em;
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+  }
+  .feat__readout.is-live {
+    color: var(--color-headlamp);
   }
 
-  .more {
-    max-width: 68rem;
+  /* ---- every trip, in a row ---- */
+  .film {
+    --gutter: clamp(1rem, 4vw, 3rem);
+    margin-top: clamp(2.5rem, 6vw, 4rem);
+  }
+  .film__head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: 82rem;
+    margin: 0 auto;
+    padding-inline: var(--gutter);
+  }
+  .film__title {
+    color: var(--color-stone);
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+  .film__ctl {
+    display: inline-flex;
+    gap: 0.35rem;
+    margin-left: auto;
+  }
+  .film__ctl[hidden] {
+    display: none;
+  }
+  .film__ctl[hidden] + .film__all {
+    margin-left: auto;
+  }
+  .film__all {
+    font-size: 0.6875rem;
+  }
+  .film__row {
+    display: flex;
+    gap: clamp(0.9rem, 1.8vw, 1.4rem);
+    list-style: none;
+    margin: 1rem 0 0;
+    /* It runs off both edges of the screen, but starts in line with the page. */
+    padding: 0.25rem max(var(--gutter), (100vw - 82rem) / 2 + var(--gutter)) 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: max(var(--gutter), (100vw - 82rem) / 2 + var(--gutter));
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-rule) transparent;
+  }
+  .film__item {
+    flex: 0 0 clamp(11rem, 19vw, 15rem);
+    scroll-snap-align: start;
+  }
+  .film__link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+  }
+  .film__pic {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 5;
+    background: var(--color-rule);
+    overflow: hidden;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .film__link:hover .film__pic,
+  .film__link:focus-visible .film__pic {
+    transform: translateY(-4px);
+    box-shadow: 0 1rem 1.75rem -1rem rgb(18 22 28 / 0.6);
+  }
+  .film__pic img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .film__soon,
+  .film__none {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1rem;
+  }
+  .film__soon {
+    justify-content: center;
+    background:
+      radial-gradient(circle at 85% 15%, rgb(255 194 75 / 0.22), transparent 55%),
+      var(--color-ink);
+    color: var(--color-snow);
+  }
+  .film__soon-kicker {
+    color: var(--color-headlamp);
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .film__soon-big {
+    font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+    font-stretch: 116%;
+    line-height: 1.05;
+  }
+  .film__none {
+    justify-content: flex-end;
+    color: var(--color-stone);
+    background:
+      repeating-linear-gradient(135deg, transparent 0 14px, rgb(127 216 232 / 0.12) 14px 15px),
+      var(--color-paper);
+    border: 1px solid var(--color-rule);
+    font-size: 0.625rem;
+  }
+  .film__none .display {
+    color: var(--color-rime-on-light);
+    font-size: 1.15rem;
+    font-stretch: 114%;
+    line-height: 1.15;
+  }
+  .film__when {
+    display: block;
+    margin-top: 0.6rem;
+    color: var(--color-stone);
+    font-size: 0.625rem;
+  }
+  .film__name {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 1.05rem;
+    font-stretch: 110%;
+    line-height: 1.2;
+  }
+  .film__link:hover .film__name {
+    text-decoration: underline;
+    text-underline-offset: 0.16em;
+  }
+
+  /* ---- the map ---- */
+  .globe {
+    margin-top: clamp(2.5rem, 6vw, 4rem);
+    padding-block: clamp(1.75rem, 4vw, 2.75rem);
+    background: var(--color-ink);
+    color: var(--color-snow);
+    overflow: hidden;
+  }
+  .globe__in {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+    max-width: 82rem;
+    margin: 0 auto;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .globe__title {
+    margin: 0;
+    font-size: clamp(1.7rem, 3.6vw, 2.75rem);
+    font-stretch: 112%;
+    line-height: 1.05;
+    color: var(--color-snow);
+  }
+  .globe__facts {
+    margin: 0.6rem 0 0;
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+  }
+  .globe .btn--main {
+    background: var(--color-snow);
+    border-color: var(--color-snow);
+    color: var(--color-ink);
+  }
+  .globe .btn--main:hover,
+  .globe .btn--main:focus-visible {
+    background: var(--color-headlamp);
+    border-color: var(--color-headlamp);
+    color: var(--color-ink);
+  }
+  .reel {
+    display: block;
+    margin-top: clamp(1.25rem, 3vw, 2rem);
+  }
+  .reel__row {
+    display: flex;
+    gap: 0.6rem;
+    width: max-content;
+    padding: 0 0.3rem;
+  }
+  .reel__pic {
+    flex: none;
+    display: block;
+    width: clamp(6.5rem, 11vw, 9rem);
+    aspect-ratio: 4 / 5;
+    background: var(--color-rule-dark);
+    overflow: hidden;
+  }
+  .reel__row img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0.82;
+    transition: opacity 150ms ease, transform 150ms ease;
+  }
+  .reel__pic:hover img {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .reel__row {
+      animation: reel 110s linear infinite;
+    }
+    .reel:hover .reel__row {
+      animation-play-state: paused;
+    }
+  }
+  /* Without the motion it is an ordinary row to scroll, and the copy is put away. */
+  @media (prefers-reduced-motion: reduce) {
+    .reel {
+      overflow-x: auto;
+    }
+    .reel__pic--again {
+      display: none;
+    }
+  }
+  @keyframes reel {
+    to { transform: translateX(calc(-50% - 0.3rem)); }
+  }
+
+  /* ---- the themes ---- */
+  .themes {
+    max-width: 82rem;
     margin: clamp(2.5rem, 6vw, 4rem) auto 0;
     padding-inline: clamp(1rem, 4vw, 3rem);
   }
-  .more__head {
+  .themes__title {
     color: var(--color-stone);
-    margin: 0 0 0.75rem;
+    margin: 0 0 0.9rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
   }
-  .more ul {
+  .themes__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+    gap: 0.6rem;
     list-style: none;
-    margin: 0 0 1.25rem;
+    margin: 0;
     padding: 0;
-    border-top: 1px solid var(--color-rule);
   }
-  .more li {
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .more li a {
+  .theme {
     display: flex;
-    gap: 1.25rem;
-    align-items: baseline;
-    padding: 0.75rem 0;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
     text-decoration: none;
+    transition: border-color 150ms ease, transform 150ms ease;
   }
-  .more li a:hover .more__title {
-    text-decoration: underline;
+  .theme:hover,
+  .theme:focus-visible {
+    border-color: var(--color-ink);
+    transform: translateY(-2px);
   }
-  .more__year {
-    color: var(--color-stone);
-    flex: 0 0 3.5rem;
+  .theme__icon {
+    font-size: 1.25rem;
+    line-height: 1;
   }
-  .more__title {
+  .theme__label {
+    flex: 1;
     font-size: 1.0625rem;
+  }
+  .theme__n {
+    color: var(--color-stone);
+    font-size: 0.6875rem;
+  }
+  .themes__more {
+    margin: 1.25rem 0 0;
+    font-size: 0.6875rem;
+  }
+
+  @media (max-width: 52rem) {
+    .feat__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .next__go {
+      display: none;
+    }
   }
 </style>

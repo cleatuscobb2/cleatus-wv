@@ -157,6 +157,15 @@ One orchestrated moment: the route line draws on load, once, on trip and archive
 Everywhere else, 150ms on hover and focus only. `prefers-reduced-motion: reduce` renders
 the line complete with no animation. Nothing animates on scroll.
 
+**The trips page and the home page are the exception (November 2026).** Andy asked for
+both to be livelier, so these two move on their own: the trips page turns over one trip
+at a time above the strip of years, the home page counts down to the next trip, turns the
+featured trip's photographs and runs a slow reel of what is pinned to the map. The limits
+that still hold there: nothing is tied to scrolling, every number shown is a real one
+(a clock to a departure date, not a count-up), `--headlamp` still marks only the thing
+being looked at, a visitor who picks something stops the turning, and
+`prefers-reduced-motion` stills all of it. Reading pages are unchanged.
+
 ## 6. Checked against §6.4
 
 | Forbidden | Status |

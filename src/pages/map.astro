@@ -102,9 +102,6 @@ const sphere = path({ type: 'Sphere' } as never) ?? '';
 /** Countries with entries — the ones that link to a places page. */
 const writtenCodes = [...new Set(trips.flatMap((t) => t.data.countries))];
 const allCodes = [...new Set([...writtenCodes, ...Object.keys(been)])];
-const beenOnlyCodes = allCodes
-  .filter((c) => !writtenCodes.includes(c))
-  .sort((a, b) => (COUNTRY_NAMES[a] ?? a).localeCompare(COUNTRY_NAMES[b] ?? b));
 
 /*
  * Singapore, Andorra, Liechtenstein and the Maldives are below the 110m
@@ -121,7 +118,6 @@ const points = allCodes
 
 const stillMissing = allCodes.filter((c) => !drawn.has(c) && !POINT_MARKERS[c]);
 const visitedCount = drawn.size + points.length;
-const undated = allCodes.filter((c) => !tripsIn(c).length && !been[c]?.length);
 
 /** Anchor points the connector lines aim at, keyed by country code — including
  *  countries an upcoming trip will visit, which aren't shaded yet. */
@@ -410,44 +406,9 @@ const globeConfig = {
         }))}
         visits={visits}
       />
-      <p class="mono tlwrap__caption">
-        Spaced by real time — the gaps are the gaps. Bars are the trips with
-        entries, widened to stay clickable, so a nine-day trip looks longer than it
-        was. Dots are every other month away, from their travel log.
-        {allTrips.length > trips.length && ' An outlined bar is a trip still to come.'}
-        {undated.length > 0 && ` No dates recorded for ${listOf(undated.map((c) => COUNTRY_NAMES[c] ?? c))}, so they're on the map but not here.`}
-      </p>
     </div>
   </figure>
 
-  <section class="legend">
-    <h2 class="mono legend__head">Written up</h2>
-    <ul>
-      {writtenCodes
-        .map((c) => ({ c, name: COUNTRY_NAMES[c] ?? c, n: tripsIn(c).length }))
-        .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
-        .map((x) => (
-          <li>
-            <a href={`/places/${x.c.toLowerCase()}/`} class="mono">
-              {x.name} <span class="legend__n">{x.n}</span>
-            </a>
-          </li>
-        ))}
-    </ul>
-
-    {beenOnlyCodes.length > 0 && (
-      <>
-        <h2 class="mono legend__head legend__head--been">Been, no entries yet</h2>
-        <ul>
-          {beenOnlyCodes.map((c) => (
-            <li class="mono legend__been">
-              {COUNTRY_NAMES[c] ?? c} <span class="legend__yrs">{been[c]?.length ? yearSpans(been[c]) : 'undated'}</span>
-            </li>
-          ))}
-        </ul>
-      </>
-    )}
-  </section>
 </Base>
 
 <script>
@@ -1196,41 +1157,4 @@ const globeConfig = {
     color: var(--color-stone-on-dark);
     margin: 0 0 1rem;
   }
-  .tlwrap__caption {
-    color: var(--color-stone-on-dark);
-    font-size: 0.625rem;
-    margin: 1rem 0 0;
-    max-width: 60ch;
-  }
-
-  .legend {
-    max-width: 68rem;
-    margin: clamp(2rem, 4vw, 3rem) auto 0;
-    padding-inline: clamp(1rem, 4vw, 3rem);
-  }
-  .legend__head { color: var(--color-stone); margin: 0 0 0.9rem; }
-  .legend ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .legend a {
-    display: inline-block;
-    padding: 0.3rem 0.6rem;
-    border: 1px solid var(--color-rule);
-    text-decoration: none;
-    color: var(--color-stone);
-  }
-  .legend a:hover { border-color: var(--color-ink); color: var(--color-ink); }
-  .legend__n { color: var(--color-ember); }
-  .legend__head--been { margin-top: 1.6rem; }
-  .legend__been {
-    padding: 0.3rem 0.6rem;
-    border: 1px dashed var(--color-rule);
-    color: var(--color-stone);
-  }
-  .legend__yrs { color: var(--color-rime-on-light); }
 </style>

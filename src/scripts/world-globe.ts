@@ -205,7 +205,11 @@ async function start(stage: HTMLElement) {
   });
 
   // --- cities and places: a dot for each, named once you're close enough to read them ----------
-  stage.querySelector('[data-places-n]')!.textContent = String(data.places.length);
+  // White dots have entries written from them; yellow ones are places they've been and haven't written from.
+  const writtenFrom = data.places.filter((p) => p.n > 0).length;
+  const setN = (sel: string, n: number) => { const el = stage.querySelector(sel); if (el) el.textContent = String(n); };
+  setN('[data-places-written-n]', writtenFrom);
+  setN('[data-places-been-n]', data.places.length - writtenFrom);
   map.addSource('places', {
     type: 'geojson',
     data: {
@@ -536,9 +540,21 @@ async function start(stage: HTMLElement) {
     (map.getSource('ev') as GeoJSONSource).setData(evFeatures());
   });
 
-  const LAYERS: Record<string, string[]> = { places: ['pl-dot', 'pl-label'], names: ['cc-name'], states: ['st-fill', 'st-line'], instagram: ['ig-cluster', 'ig-count', 'ig-icon', 'ig-moment'] };
+  const LAYERS: Record<string, string[]> = { names: ['cc-name'], states: ['st-fill', 'st-line'], instagram: ['ig-cluster', 'ig-count', 'ig-icon', 'ig-moment'] };
+  // The two colours of place dot share their layers, so each switch narrows them rather than hiding them.
+  const placeBox = (v: string) => stage.querySelector<HTMLInputElement>(`[data-layer-toggle][value="places-${v}"]`);
+  const showPlaces = () => {
+    const written = placeBox('written')?.checked ?? true;
+    const been = placeBox('been')?.checked ?? true;
+    const only = written && been ? null : written ? ['>', ['get', 'n'], 0] : ['==', ['get', 'n'], 0];
+    for (const id of ['pl-dot', 'pl-label']) {
+      map.setLayoutProperty(id, 'visibility', written || been ? 'visible' : 'none');
+      map.setFilter(id, only as never);
+    }
+  };
   stage.querySelectorAll<HTMLInputElement>('[data-layer-toggle]').forEach((box) => {
     box.addEventListener('change', () => {
+      if (box.value.startsWith('places-')) { showPlaces(); return; }
       for (const id of LAYERS[box.value] ?? []) map.setLayoutProperty(id, 'visibility', box.checked ? 'visible' : 'none');
     });
   });

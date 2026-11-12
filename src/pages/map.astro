@@ -163,6 +163,11 @@ const kindCount = (k: Kind) => located.filter((e) => kindsOf(e).includes(k)).len
 const QUIET: Kind[] = ['food', 'culture', 'history', 'water', 'weather', 'people', 'city', 'transport', 'logistics', 'rest-day'];
 const kinds = KIND_ORDER.map((k) => ({ k, icon: KIND_ICONS[k], label: KIND_LABELS[k], n: kindCount(k), on: !QUIET.includes(k) }))
   .filter((x) => x.n > 0 || x.k === 'diving');
+/*
+ * The line over the globe is voice, and voice is theirs — so it lives here as
+ * one obvious line to change.
+ */
+const HEADLINE = "Everywhere we've been";
 const globeConfig = {
   icons: KIND_ICONS,
   labels: KIND_LABELS,
@@ -176,7 +181,7 @@ const globeConfig = {
   description={`Every country Andy and Beth have been to — ${allCodes.length} of them, ${writtenCodes.length} written about across ${trips.length} trips.`}
 >
   {/*
-    The globe stage. Without JavaScript (or WebGL) only the header shows here and
+    The globe stage. Without JavaScript (or WebGL) only the heading shows here and
     the static SVG map below does the work; once the globe is live the stage
     fills the screen and the SVG steps aside (see [data-live] in the styles).
   */}
@@ -197,6 +202,10 @@ const globeConfig = {
         var root = document.documentElement;
         stage.setAttribute('data-live', '');
         root.setAttribute('data-globe-soon', '');
+        // The panel opens folded on a phone, or however it was last left.
+        var side = null;
+        try { side = localStorage.getItem('map-side'); } catch (e) {}
+        if (side ? side === 'folded' : matchMedia('(max-width: 700px)').matches) stage.setAttribute('data-side', 'folded');
         setTimeout(function () {
           if (stage.querySelector('canvas')) return;
           stage.removeAttribute('data-live');
@@ -207,84 +216,119 @@ const globeConfig = {
     <script type="application/json" id="globe-config" set:html={JSON.stringify(globeConfig)} />
     <div class="stage__map" data-globe-map></div>
 
-    <header class="head">
-      <h1 class="display">Map</h1>
-      <p class="head__note">
-        <strong>{allCodes.length} countries</strong> so far, {writtenCodes.length} of them written up
-        across {trips.length} trips.
-        <span class="head__live"> Spin the globe, click a country, tap an icon to read what happened there —
-        or hover a trip on the timeline below.</span>
-        <span class="head__static"> Hover a country to see when they were there, or a trip on the
-        timeline to see everywhere it went.</span>
-      </p>
-      <p class="stage__buttons">
-        <button type="button" class="mono stage__btn" data-globe-tour>▶ Tour the trips</button>
-        <button type="button" class="mono stage__btn stage__btn--quiet" data-globe-reset>Reset view</button>
-      </p>
-    </header>
+    {/*
+      One panel for everything said and switched over the globe. Without the globe it
+      is just the page's heading; with it, it sits at the left, folds away to its top
+      bar, and keeps what the globe shows in two tabs rather than one long list.
+    */}
+    <div class="side">
+      <div class="side__bar">
+        <p class="mono side__kicker">Map<span class="side__count"> · {allCodes.length} countries</span></p>
+        <button type="button" class="side__fold" data-side-fold aria-expanded="true" aria-controls="side-body">
+          <span class="sr" data-side-fold-label>Hide the panel</span>
+          <span class="side__chev" aria-hidden="true">‹</span>
+        </button>
+      </div>
+      <div class="side__body" id="side-body">
+        <header class="head">
+          <h1 class="display">{HEADLINE}</h1>
+          <p class="head__note">
+            <strong>{allCodes.length} countries</strong> so far. {writtenCodes.length} have stories.
+            <span class="head__static"> Hover a country to see when they were there, or a trip on the
+            timeline to see everywhere it went.</span>
+          </p>
+          <p class="stage__buttons">
+            <button type="button" class="mono stage__btn" data-globe-tour>▶ Tour the trips</button>
+            <button type="button" class="mono stage__btn stage__btn--quiet" data-globe-reset>Reset view</button>
+          </p>
+        </header>
 
-    <div class="key-panel">
-      <p class="mono key-panel__head">Countries</p>
-      <ul class="key-panel__cc">
-        <li><span class="key__swatch key__swatch--written"></span>Written up</li>
-        <li><span class="key__swatch key__swatch--been"></span>Been, no entries yet</li>
-      </ul>
-      <p class="mono key-panel__head">On the map</p>
-      <ul class="key-panel__kinds key-panel__layers">
-        <li>
-          <label>
-            <input type="checkbox" value="places" data-layer-toggle checked />
-            <span class="key-panel__icon" aria-hidden="true"><span class="key__dot"></span><span class="key__dot key__dot--been"></span></span>
-            <span class="key-panel__label">Cities &amp; places</span>
-            <span class="mono key-panel__n" data-places-n></span>
-          </label>
-        </li>
-        <li>
-          <label>
-            <input type="checkbox" value="names" data-layer-toggle checked />
-            <span class="key-panel__icon key__aa" aria-hidden="true">Aa</span>
-            <span class="key-panel__label">Country names</span>
-            <span class="mono key-panel__n"></span>
-          </label>
-        </li>
-        <li>
-          <label>
-            <input type="checkbox" value="states" data-layer-toggle checked />
-            <span class="key-panel__icon" aria-hidden="true"><span class="key__swatch key__swatch--been"></span></span>
-            <span class="key-panel__label">US states</span>
-            <span class="mono key-panel__n" data-states-n></span>
-          </label>
-        </li>
-        <li data-ig-row hidden>
-          <label>
-            <input type="checkbox" value="instagram" data-layer-toggle checked />
-            <span class="key-panel__icon" aria-hidden="true">📷</span>
-            <span class="key-panel__label">Instagram photos</span>
-            <span class="mono key-panel__n" data-ig-n></span>
-          </label>
-        </li>
-      </ul>
-      <p class="mono key-panel__head">
-        What happened where
-        <button type="button" class="key-panel__all" data-kinds-all>all / none</button>
-      </p>
-      <ul class="key-panel__kinds">
-        {kinds.map((x) => (
-          <li>
-            <label>
-              <input type="checkbox" value={x.k} data-kind-toggle checked={x.on} />
-              <span class="key-panel__icon" aria-hidden="true">{x.icon}</span>
-              <span class="key-panel__label">{x.label}</span>
-              <span class="mono key-panel__n">{x.k === 'diving' && !x.n ? '' : x.n}</span>
-            </label>
-          </li>
-        ))}
-      </ul>
-      <p class="key-panel__note">Places are where each entry says it happened, pinned to the town, camp or park — not a GPS track. A white dot has entries written from it; a yellow dot is somewhere they've been but haven't written from yet.</p>
+        <div class="tabs" role="tablist" aria-label="What the globe shows">
+          <button type="button" role="tab" class="mono tabs__tab" id="tab-layers" aria-controls="pane-layers" aria-selected="true" data-tab>Layers</button>
+          <button type="button" role="tab" class="mono tabs__tab" id="tab-happened" aria-controls="pane-happened" aria-selected="false" tabindex="-1" data-tab>What happened</button>
+        </div>
+
+        <div class="pane" id="pane-layers" role="tabpanel" aria-labelledby="tab-layers">
+          <p class="mono pane__head">Places</p>
+          <ul class="rows">
+            <li>
+              <label class="row">
+                <input type="checkbox" value="places-written" data-layer-toggle checked />
+                <span class="row__icon" aria-hidden="true"><span class="key__dot"></span></span>
+                <span class="row__label">Written from</span>
+                <span class="mono row__n" data-places-written-n></span>
+              </label>
+            </li>
+            <li>
+              <label class="row">
+                <input type="checkbox" value="places-been" data-layer-toggle checked />
+                <span class="row__icon" aria-hidden="true"><span class="key__dot key__dot--been"></span></span>
+                <span class="row__label">Been, not written yet</span>
+                <span class="mono row__n" data-places-been-n></span>
+              </label>
+            </li>
+          </ul>
+          <p class="mono pane__head">Also on the globe</p>
+          <ul class="rows">
+            <li data-ig-row hidden>
+              <label class="row">
+                <input type="checkbox" value="instagram" data-layer-toggle checked />
+                <span class="row__icon" aria-hidden="true">📷</span>
+                <span class="row__label">Photos</span>
+                <span class="mono row__n" data-ig-n></span>
+              </label>
+            </li>
+            <li>
+              <label class="row">
+                <input type="checkbox" value="names" data-layer-toggle checked />
+                <span class="row__icon key__aa" aria-hidden="true">Aa</span>
+                <span class="row__label">Country names</span>
+                <span class="mono row__n"></span>
+              </label>
+            </li>
+            <li>
+              <label class="row">
+                <input type="checkbox" value="states" data-layer-toggle checked />
+                <span class="row__icon" aria-hidden="true"><span class="key__swatch key__swatch--been"></span></span>
+                <span class="row__label">US states</span>
+                <span class="mono row__n" data-states-n></span>
+              </label>
+            </li>
+          </ul>
+          <p class="mono pane__head">Country shading</p>
+          <ul class="shade">
+            <li><span class="key__swatch key__swatch--written"></span>Written up</li>
+            <li><span class="key__swatch key__swatch--been"></span>Been, no entries yet</li>
+          </ul>
+        </div>
+
+        <div class="pane" id="pane-happened" role="tabpanel" aria-labelledby="tab-happened" hidden>
+          <p class="mono pane__head">
+            Tap to show or hide
+            <button type="button" class="pane__all" data-kinds-all>all / none</button>
+          </p>
+          <ul class="chips">
+            {kinds.map((x) => (
+              <li>
+                <label class="chip" title={x.label}>
+                  <input type="checkbox" value={x.k} data-kind-toggle checked={x.on} data-label={x.label} data-n={x.n} />
+                  <span class="chip__icon" aria-hidden="true">{x.icon}</span>
+                  <span class="sr">{x.label}</span>
+                  <span class="mono chip__n">{x.k === 'diving' && !x.n ? '' : x.n}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <p class="mono pane__say" data-kind-say aria-live="polite">Point at an icon to see what it marks</p>
+          <p class="pane__note">Each icon sits where the entry says it happened, pinned to the town, camp or park — not a GPS track.</p>
+        </div>
+      </div>
     </div>
 
     <aside class="gpanel" data-globe-panel hidden aria-live="polite"></aside>
     <p class="mono gcaption" data-globe-caption hidden aria-live="polite"></p>
+    {/* Shown once, to someone who hasn't been here before; it goes as soon as they touch the globe. */}
+    <p class="mono ghint" data-globe-hint hidden>Drag to spin · click a country · tap an icon</p>
   </section>
 
   <figure class="mapwrap" data-map-wrap>
@@ -408,6 +452,98 @@ const globeConfig = {
 
 <script>
   import '../scripts/world-globe.ts';
+
+  /*
+   * The panel over the globe: folding it away, its two tabs, and the line that
+   * names an icon. None of this touches the map itself — the switches and chips
+   * are ordinary checkboxes that world-globe.ts listens to.
+   */
+  const stage = document.querySelector<HTMLElement>('[data-globe]');
+  if (stage) {
+    const remember = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* private window */ } };
+    const recall = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+
+    // ---- folding ----
+    const fold = stage.querySelector<HTMLButtonElement>('[data-side-fold]');
+    const foldLabel = stage.querySelector<HTMLElement>('[data-side-fold-label]');
+    const sync = () => {
+      const folded = stage.dataset.side === 'folded';
+      fold?.setAttribute('aria-expanded', String(!folded));
+      if (foldLabel) foldLabel.textContent = folded ? 'Show the panel' : 'Hide the panel';
+    };
+    fold?.addEventListener('click', () => {
+      const folded = stage.dataset.side !== 'folded';
+      if (folded) stage.dataset.side = 'folded'; else delete stage.dataset.side;
+      remember('map-side', folded ? 'folded' : 'open');
+      sync();
+    });
+    sync();
+
+    // ---- tabs ----
+    const tabs = [...stage.querySelectorAll<HTMLButtonElement>('[data-tab]')];
+    const pick = (tab: HTMLButtonElement, focus = false) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        const pane = document.getElementById(t.getAttribute('aria-controls')!);
+        if (pane) pane.hidden = !on;
+      }
+      if (focus) tab.focus();
+      remember('map-tab', tab.id);
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => pick(tab));
+      tab.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+        ev.preventDefault();
+        pick(tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
+      });
+    });
+    const last = tabs.find((t) => t.id === recall('map-tab'));
+    if (last) pick(last);
+
+    // ---- which icon is that? ----
+    const say = stage.querySelector<HTMLElement>('[data-kind-say]');
+    if (say) {
+      const idle = say.textContent ?? '';
+      const name = (box: HTMLInputElement) => {
+        const n = Number(box.dataset.n);
+        const count = n ? ` · ${n} ${n === 1 ? 'entry' : 'entries'}` : '';
+        say.textContent = `${box.dataset.label}${count}${box.checked ? '' : ' · hidden'}`;
+        say.classList.add('is-live');
+      };
+      const hush = () => { say.textContent = idle; say.classList.remove('is-live'); };
+      stage.querySelectorAll<HTMLInputElement>('[data-kind-toggle]').forEach((box) => {
+        const chip = box.closest('label')!;
+        chip.addEventListener('pointerenter', () => name(box));
+        chip.addEventListener('pointerleave', hush);
+        box.addEventListener('focus', () => name(box));
+        box.addEventListener('blur', hush);
+        // On a phone there is no hover, so a tap says what it just switched.
+        box.addEventListener('change', () => name(box));
+      });
+      stage.querySelector('[data-kinds-all]')?.addEventListener('click', hush);
+    }
+
+    // ---- how to use it, shown once ----
+    const hint = stage.querySelector<HTMLElement>('[data-globe-hint]');
+    if (hint && stage.hasAttribute('data-live') && !recall('map-hint')) {
+      hint.hidden = false;
+      let gone = false;
+      const go = () => {
+        if (gone) return;
+        gone = true;
+        remember('map-hint', '1');
+        hint.classList.add('is-going');
+        setTimeout(() => { hint.hidden = true; }, 600);
+      };
+      const map = stage.querySelector<HTMLElement>('[data-globe-map]');
+      for (const ev of ['pointerdown', 'wheel', 'keydown'] as const) map?.addEventListener(ev, go, { once: true, passive: true });
+      stage.querySelector('[data-globe-tour]')?.addEventListener('click', go, { once: true });
+      setTimeout(go, 14000);
+    }
+  }
 </script>
 
 <script is:inline>
@@ -545,13 +681,22 @@ const globeConfig = {
     background: var(--color-ink);
     color: var(--color-snow);
   }
-  .head {
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Without the globe the panel is a plain page heading: the line, the numbers, how to read the flat map. */
+  .side {
     padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 4vw, 3rem) 0;
   }
-  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; color: var(--color-snow); }
+  .head h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); margin: 0; color: var(--color-snow); text-wrap: balance; }
   .head__note { color: var(--color-stone-on-dark); margin: 0.6rem 0 0; max-width: 56ch; }
   .head__note strong { color: var(--color-snow); font-weight: 600; }
-  .head__live, .stage__buttons, .key-panel, .stage__map { display: none; }
+  .side__bar, .stage__buttons, .tabs, .pane, .stage__map, .ghint { display: none; }
 
   .stage[data-live] {
     height: calc(100svh - 3.75rem);
@@ -567,29 +712,70 @@ const globeConfig = {
     color: var(--color-stone-on-dark);
   }
   .stage[data-live] .head__static { display: none; }
-  .stage[data-live] .head__live { display: inline; }
 
   /* Overlay cards: frosted ink, so the globe shows through at the edges. */
-  .stage[data-live] .head,
-  .stage[data-live] .key-panel,
+  .stage[data-live] .side,
   .gpanel,
-  .gcaption {
+  .gcaption,
+  .ghint {
     background: rgb(18 22 28 / 0.84);
     backdrop-filter: blur(6px);
     border: 1px solid var(--color-rule-dark);
     box-shadow: 0 8px 30px rgb(0 0 0 / 0.35);
   }
-  .stage[data-live] .head {
+
+  /* ---- the panel over the globe ---- */
+  .stage[data-live] .side {
     position: absolute;
     z-index: 2;
     top: 1rem;
     left: 1rem;
-    max-width: min(24rem, calc(100% - 5rem));
-    padding: 1rem 1.2rem 1.1rem;
+    width: min(21rem, calc(100% - 5rem));
+    max-height: calc(100% - 2.6rem);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
   }
-  .stage[data-live] .head h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
-  .stage[data-live] .head__note { font-size: 0.9375rem; }
-  .stage[data-live] .stage__buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.9rem 0 0; }
+  .stage[data-live] .side__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0.4rem 0.35rem 1.1rem;
+    border-bottom: 1px solid var(--color-rule-dark);
+  }
+  .side__kicker {
+    margin: 0;
+    font-size: 0.625rem;
+    color: var(--color-rime);
+    letter-spacing: 0.1em;
+  }
+  /* The count belongs to the folded bar; unfolded, the panel says it in full just below. */
+  .side__count { display: none; color: var(--color-stone-on-dark); }
+  .side__fold {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    background: none;
+    color: var(--color-snow);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .side__fold:hover,
+  .side__fold:focus-visible { color: var(--color-rime); }
+  .side__chev { display: inline-block; transition: transform 150ms ease; }
+  .stage[data-live] .side__body {
+    overflow: auto;
+    padding: 1rem 1.1rem 1.1rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-rule-dark) transparent;
+  }
+  .stage[data-live] .head h1 { font-size: clamp(1.5rem, 2.4vw, 1.9rem); font-stretch: 112%; line-height: 1.08; }
+  .stage[data-live] .head__note { font-size: 0.9375rem; margin-top: 0.45rem; }
+  .stage[data-live] .stage__buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; }
   .stage__btn {
     font-size: 0.6875rem;
     padding: 0.45rem 0.8rem;
@@ -601,51 +787,159 @@ const globeConfig = {
   .stage__btn--quiet { background: transparent; color: var(--color-snow); box-shadow: inset 0 0 0 1px var(--color-rule-dark); }
   .stage__btn:hover { filter: brightness(1.08); }
 
-  .stage[data-live] .key-panel {
-    display: block;
-    position: absolute;
-    z-index: 2;
-    left: 1rem;
-    bottom: 1.6rem;
-    width: 15.5rem;
-    max-height: calc(100% - 17rem);
-    overflow: auto;
-    padding: 0.8rem 0.9rem;
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-rule-dark) transparent;
+  /* Folded: only the bar is left, and it says the one number worth keeping in view. */
+  .stage[data-live][data-side='folded'] .side { width: auto; }
+  .stage[data-live][data-side='folded'] .side__body { display: none; }
+  .stage[data-live][data-side='folded'] .side__bar { border-bottom: 0; }
+  .stage[data-live][data-side='folded'] .side__count { display: inline; }
+  .stage[data-live][data-side='folded'] .side__chev { transform: rotate(180deg); }
+
+  /* ---- the two tabs ---- */
+  .stage[data-live] .tabs {
+    display: flex;
+    margin: 1.1rem 0 0;
+    border-bottom: 1px solid var(--color-rule-dark);
   }
-  .key-panel__head {
+  .tabs__tab {
+    flex: 1;
+    padding: 0.55rem 0.25rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    background: none;
+    color: var(--color-stone-on-dark);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .tabs__tab:hover { color: var(--color-snow); }
+  /* The beam: the tab being looked at. */
+  .tabs__tab[aria-selected='true'] { color: var(--color-snow); border-bottom-color: var(--color-headlamp); }
+  .stage[data-live] .pane:not([hidden]) { display: block; }
+  .pane__head {
     display: flex; justify-content: space-between; align-items: baseline;
-    margin: 0 0 0.45rem; font-size: 0.5625rem; color: var(--color-stone-on-dark);
+    margin: 0.95rem 0 0.4rem; font-size: 0.5625rem; color: var(--color-stone-on-dark);
   }
-  .key-panel__head + ul + .key-panel__head { margin-top: 0.8rem; }
-  .key-panel__all {
+  .pane__all {
     font: inherit; font-size: 0.5625rem; background: none; border: 0; padding: 0;
     color: var(--color-rime); cursor: pointer; text-transform: none; letter-spacing: 0;
   }
-  .key-panel ul { list-style: none; margin: 0; padding: 0; }
-  .key-panel__cc li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; padding: 0.1rem 0; }
-  .key-panel__kinds label {
+  .pane ul { list-style: none; margin: 0; padding: 0; }
+
+  /* ---- layers: a switch a row ---- */
+  .row {
     display: grid;
     grid-template-columns: auto 1.4rem 1fr auto;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.18rem 0;
-    font-size: 0.8125rem;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+    font-size: 0.875rem;
     cursor: pointer;
   }
-  .key-panel__kinds input { accent-color: var(--color-headlamp); margin: 0; }
-  .key-panel__kinds input:not(:checked) ~ .key-panel__icon,
-  .key-panel__kinds input:not(:checked) ~ .key-panel__label { opacity: 0.4; }
-  .key-panel__icon { font-size: 1rem; text-align: center; }
+  .row input {
+    appearance: none;
+    position: relative;
+    width: 1.9rem;
+    height: 1.1rem;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--color-rule-dark);
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+  .row input::after {
+    content: '';
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    background: var(--color-stone-on-dark);
+    transition: transform 150ms ease, background 150ms ease;
+  }
+  .row input:checked { background: var(--color-rime-on-light); }
+  .row input:checked::after { transform: translateX(0.8rem); background: var(--color-snow); }
+  .row input:focus-visible { outline: 2px solid var(--color-rime); outline-offset: 2px; }
+  .row input:not(:checked) ~ .row__icon,
+  .row input:not(:checked) ~ .row__label { opacity: 0.45; }
+  .row__icon { font-size: 1rem; text-align: center; line-height: 1; }
+  .row__n { font-size: 0.625rem; color: var(--color-stone-on-dark); }
   .key__dot {
-    display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%;
+    display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%;
     background: #f4fbfc; box-shadow: 0 0 0 1px #0a0e13; vertical-align: middle;
   }
-  .key__dot--been { background: #ffc24b; margin-left: 0.15rem; }
+  .key__dot--been { background: #ffc24b; }
   .key__aa { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; color: #7fd8e8; }
-  .key-panel__n { font-size: 0.625rem; color: var(--color-stone-on-dark); }
-  .key-panel__note { margin: 0.7rem 0 0; font-size: 0.6875rem; color: var(--color-stone-on-dark); line-height: 1.4; }
+  .shade li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.8125rem; padding: 0.12rem 0; color: #c5ccd3; }
+
+  /* ---- what happened: a chip an icon ---- */
+  .chips {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(3.6rem, 1fr));
+    gap: 0.35rem;
+  }
+  .chip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    min-height: 2.1rem;
+    padding: 0.25rem 0.35rem;
+    border: 1px solid var(--color-rime-on-light);
+    background: rgb(127 216 232 / 0.1);
+    cursor: pointer;
+    transition: border-color 150ms ease, background 150ms ease, opacity 150ms ease;
+  }
+  .chip input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .chip__icon { font-size: 1.05rem; line-height: 1; }
+  .chip__n { font-size: 0.625rem; color: var(--color-snow); }
+  .chip:has(input:not(:checked)) {
+    border-color: var(--color-rule-dark);
+    background: none;
+  }
+  .chip:has(input:not(:checked)) .chip__icon { opacity: 0.6; filter: grayscale(0.85); }
+  .chip:has(input:not(:checked)) .chip__n { color: var(--color-stone-on-dark); }
+  .chip:hover { border-color: var(--color-rime); }
+  .chip:has(input:focus-visible) { outline: 2px solid var(--color-rime); outline-offset: 2px; }
+  .pane__say {
+    margin: 0.7rem 0 0;
+    min-height: 1.5em;
+    font-size: 0.625rem;
+    color: var(--color-stone-on-dark);
+  }
+  .pane__say.is-live { color: var(--color-headlamp); }
+  .pane__note { margin: 0.5rem 0 0; font-size: 0.6875rem; color: var(--color-stone-on-dark); line-height: 1.4; }
+
+  /* ---- how to use it, once ---- */
+  .stage[data-live] .ghint:not([hidden]) {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 1.6rem;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.6875rem;
+    color: var(--color-snow);
+    white-space: nowrap;
+    max-width: calc(100% - 2rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 500ms ease;
+  }
+  .ghint.is-going { opacity: 0; }
+  /* A trip's caption takes the same spot and matters more. */
+  .gcaption:not([hidden]) ~ .ghint { visibility: hidden; }
 
   .gpanel {
     position: absolute;
@@ -747,15 +1041,14 @@ const globeConfig = {
     :global(.cameo), :global(.cameo.is-out) { transform: none; transition: opacity 400ms linear; }
   }
 
-  /* On a phone the legend folds under the header and the panel takes the bottom. */
+  /* On a phone the panel opens folded, clear of the zoom buttons, and a country's card takes the bottom. */
   @media (max-width: 700px) {
-    .stage[data-live] .head { right: 3.4rem; max-width: none; padding: 0.8rem 0.9rem; }
-    .stage[data-live] .head__live { display: none; }
-    .stage[data-live] .key-panel { width: auto; right: 1rem; max-height: 9.5rem; bottom: 1rem; }
-    .key-panel__kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.6rem; }
-    .key-panel__note { display: none; }
+    .stage[data-live] .side { top: 0.75rem; left: 0.75rem; width: auto; max-width: calc(100% - 4.4rem); max-height: calc(100% - 1.5rem); }
+    .stage[data-live]:not([data-side='folded']) .side { right: 3.65rem; max-width: none; }
     .gpanel { top: auto; bottom: 1rem; right: 1rem; left: 1rem; width: auto; max-height: 55%; }
-    .gcaption { bottom: 11.5rem; }
+    .gcaption, .stage[data-live] .ghint:not([hidden]) { bottom: 2.6rem; }
+    /* Three short phrases don't fit one line on a phone; let them wrap. */
+    .stage[data-live] .ghint:not([hidden]) { left: 1rem; right: 1rem; transform: none; max-width: none; white-space: normal; text-align: center; line-height: 1.5; }
   }
 
   .mapwrap {

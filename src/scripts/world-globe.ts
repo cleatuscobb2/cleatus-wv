@@ -29,7 +29,19 @@ interface Photo {
   /** Marks a moment worth flagging in place of the camera. */
   icon?: string;
 }
-interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; photos: Photo[]; trips: TripOut[] }
+/** The next trip, before it starts: outlined in gold, with a label and a countdown. */
+interface NextTrip {
+  id: string; title: string; first: string; start: number; end: number;
+  at: [number, number] | null; box: number[] | null; shapes: GeoJSON.FeatureCollection;
+}
+interface Data { countries: GeoJSON.FeatureCollection; states: GeoJSON.FeatureCollection; events: Ev[]; places: Place[]; photos: Photo[]; trips: TripOut[]; next: NextTrip | null }
+
+/** Whole days until a trip's first day, counted to midnight where the reader is. */
+const daysTo = (start: number) => {
+  const d = new Date(start);
+  return Math.ceil((+new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.now()) / 86_400_000);
+};
+const inDays = (n: number) => (n > 1 ? `in ${n} days` : n === 1 ? 'tomorrow' : 'on the road');
 
 /*
  * Home view: Europe, Africa and Asia facing you, the globe filling ~94% of the
@@ -135,6 +147,39 @@ async function start(stage: HTMLElement) {
       'circle-stroke-color': '#0a0e13', 'circle-stroke-width': 1,
     },
   }, below);
+
+  // --- the next trip: a gold outline that breathes, and a label beside it ------------------
+  const next = data.next;
+  if (next) {
+    map.addSource('nx', { type: 'geojson', data: next.shapes });
+    map.addLayer({
+      id: 'nx-fill', type: 'fill', source: 'nx', filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'fill-color': '#ffc24b', 'fill-opacity': 0.08 },
+    }, below);
+    map.addLayer({
+      id: 'nx-line', type: 'line', source: 'nx', filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'line-color': '#ffc24b', 'line-width': 1.6, 'line-dasharray': [2, 1.5], 'line-opacity': 0.9 },
+    }, below);
+    map.addLayer({
+      id: 'nx-ring', type: 'circle', source: 'nx', filter: ['==', ['geometry-type'], 'Point'],
+      paint: { 'circle-radius': 7, 'circle-color': 'rgba(255, 194, 75, 0.12)', 'circle-stroke-color': '#ffc24b', 'circle-stroke-width': 1.6 },
+    }, below);
+    if (!reducedMotion()) {
+      const t0 = performance.now();
+      let last = 0;
+      const breathe = (t: number) => {
+        // A slow swell, about every four seconds; the map only redraws a few times a second for it.
+        if (t - last > 120 && !document.hidden) {
+          last = t;
+          const k = 0.5 + 0.5 * Math.sin(((t - t0) / 4000) * Math.PI * 2);
+          map.setPaintProperty('nx-line', 'line-opacity', 0.45 + 0.5 * k);
+          map.setPaintProperty('nx-fill', 'fill-opacity', 0.04 + 0.1 * k);
+        }
+        requestAnimationFrame(breathe);
+      };
+      requestAnimationFrame(breathe);
+    }
+  }
 
   // --- US states they've been to: home isn't among the countries, so it's by state ------
   map.addSource('st', { type: 'geojson', data: data.states, promoteId: 'code' });
@@ -619,6 +664,49 @@ async function start(stage: HTMLElement) {
     if (bar.matches('.tl__visit')) bar.addEventListener('click', go);
   });
 
+  // --- the next trip: its label on the globe, and flying there ----------------------------------
+  const nextBar = next ? dock?.querySelector<HTMLElement>(`.tl__bar[href="/${CSS.escape(next.id)}/"]`) ?? null : null;
+  const nextWhen = () => (next ? inDays(daysTo(next.start)) : '');
+  const flyNext = () => {
+    if (!next) return;
+    stopSpin();
+    panel.hidden = true;
+    popup.remove();
+    light([], null);
+    fly(next.box, { maxZoom: 4.6 });
+    caption.innerHTML = `<span class="gc__year">Up next</span> <a href="/${next.id}/">${esc(next.title)}</a> · ${esc(nextWhen())}`;
+    caption.hidden = false;
+    nowAt(nextBar);
+  };
+  if (next?.at) {
+    const tag = document.createElement('button');
+    tag.type = 'button';
+    tag.className = 'nx-tag mono';
+    const say = () => {
+      const n = daysTo(next.start);
+      tag.textContent = n > 0 ? `Up next · ${n === 1 ? 'tomorrow' : `${n} days`}` : 'On the road';
+      tag.setAttribute('aria-label', `Up next: ${next.title}, ${nextWhen()}`);
+    };
+    say();
+    setInterval(say, 60_000);
+    tag.addEventListener('click', (e) => { e.stopPropagation(); flyNext(); });
+    new ml.Marker({ element: tag, anchor: 'top-left', offset: [10, 14] }).setLngLat(next.at).addTo(map);
+  }
+  if (next) {
+    // Anything already on the map at that spot gets the click first — an icon, a place, or
+    // Hong Kong, which they've been to before and has its own card.
+    const onNext = (e: { point: { x: number; y: number } }) => {
+      if (map.queryRenderedFeatures([e.point.x, e.point.y], { layers: ['ev-icon', 'ev-cluster', 'ig-icon', 'ig-moment', 'ig-cluster', 'pl-dot', 'pl-label', 'cc-fill', 'cc-dot'] }).length) return;
+      flyNext();
+    };
+    for (const l of ['nx-fill', 'nx-ring']) {
+      map.on('click', l, onNext);
+      map.on('mouseenter', l, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', l, () => { map.getCanvas().style.cursor = ''; });
+    }
+  }
+  stage.querySelector('[data-next-go]')?.addEventListener('click', flyNext);
+
   // --- the tour: every trip in order -------------------------------------------------------------
   const tourBtn = stage.querySelector<HTMLButtonElement>('[data-globe-tour]')!;
   let touring = 0;
@@ -657,6 +745,15 @@ async function start(stage: HTMLElement) {
       caption.innerHTML = `<span class="gc__year">${t.year}</span> <a href="/${t.id}/">${esc(t.title)}</a>`;
       caption.hidden = false;
       await wait(reducedMotion() ? 2500 : 3600);
+    }
+    // Last stop: where they're going next.
+    if (next && touring === run) {
+      light([], null);
+      fly(next.box, { maxZoom: 4.6 });
+      nowAt(nextBar);
+      caption.innerHTML = `<span class="gc__year">Up next</span> <a href="/${next.id}/">${esc(next.title)}</a> · ${esc(nextWhen())}`;
+      caption.hidden = false;
+      await wait(reducedMotion() ? 3000 : 4500);
     }
     if (touring === run) {
       endTour();

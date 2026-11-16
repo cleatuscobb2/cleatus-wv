@@ -339,10 +339,55 @@ export async function GET() {
       return { type: 'Feature', geometry, properties: { code, name } };
     });
 
+  // --- the next trip: not started, so nothing above counts it yet ----------------------
+  // Its countries are drawn as an outline and a label points at the first of them.
+  const soon = (await getCollection('trips'))
+    .filter((t) => t.data.dateStart > now)
+    .sort((a, b) => +a.data.dateStart - +b.data.dateStart)[0];
+  let next: Record<string, unknown> | null = null;
+  if (soon) {
+    const shapes: Feat[] = [];
+    const nextBoxes: [number, number, number, number][] = [];
+    let at: [number, number] | null = null;
+    for (const code of soon.data.countries) {
+      const f = byNum.get(COUNTRY_NUMERIC[code] ?? '');
+      const name = COUNTRY_NAMES[code] ?? code;
+      if (f) {
+        at ??= heartOf(f.geometry);
+        nextBoxes.push(boxOf(f.geometry));
+        const geometry = mendAntimeridian({ type: f.geometry.type, coordinates: slim(f.geometry.coordinates) });
+        shapes.push({ type: 'Feature', geometry, properties: { code, name } });
+      } else if (POINT_MARKERS[code]) {
+        const [x, y] = POINT_MARKERS[code];
+        at ??= [x, y];
+        nextBoxes.push([x - 0.6, y - 0.6, x + 0.6, y + 0.6]);
+        shapes.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [x, y] }, properties: { code, name } });
+      }
+    }
+    // Hong Kong is in the 50m outlines, but small enough that a ring is what finds it.
+    for (const code of soon.data.countries) {
+      if (!POINT_MARKERS[code] || shapes.some((s) => s.properties.code === code && s.geometry.type === 'Point')) continue;
+      const [x, y] = POINT_MARKERS[code];
+      shapes.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [x, y] }, properties: { code, name: COUNTRY_NAMES[code] ?? code } });
+    }
+    next = {
+      id: soon.id,
+      title: soon.data.title,
+      first: COUNTRY_NAMES[soon.data.countries[0]] ?? soon.data.countries[0],
+      start: +soon.data.dateStart,
+      end: +soon.data.dateEnd,
+      at,
+      box: nextBoxes.length
+        ? [Math.min(...nextBoxes.map((b) => b[0])), Math.min(...nextBoxes.map((b) => b[1])), Math.max(...nextBoxes.map((b) => b[2])), Math.max(...nextBoxes.map((b) => b[3]))]
+        : null,
+      shapes: { type: 'FeatureCollection', features: shapes },
+    };
+  }
+
   return new Response(JSON.stringify({
     countries: { type: 'FeatureCollection', features: countries },
     states: { type: 'FeatureCollection', features: states },
-    events, places, photos, trips: tripOut,
+    events, places, photos, trips: tripOut, next,
   }), {
     headers: { 'Content-Type': 'application/json' },
   });

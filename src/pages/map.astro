@@ -177,6 +177,12 @@ const kinds = KIND_ORDER.map((k) => ({ k, icon: KIND_ICONS[k], label: KIND_LABEL
  * one obvious line to change.
  */
 const HEADLINE = "Everywhere we've been";
+/** The next trip, before it starts: counted down in the panel and outlined on the globe. */
+const nextTrip = allTrips
+  .filter((t) => t.data.dateStart > now)
+  .sort((a, b) => +a.data.dateStart - +b.data.dateStart)[0];
+const nextFirst = nextTrip ? COUNTRY_NAMES[nextTrip.data.countries[0]] ?? nextTrip.data.countries[0] : '';
+const nextDays = nextTrip ? Math.ceil((+nextTrip.data.dateStart - +now) / 86_400_000) : 0;
 const globeConfig = {
   icons: KIND_ICONS,
   labels: KIND_LABELS,
@@ -235,7 +241,7 @@ const globeConfig = {
     */}
     <div class="side">
       <div class="side__bar">
-        <p class="mono side__kicker">Map<span class="side__count"> · {allCodes.length} countries</span></p>
+        <p class="mono side__kicker">Map<span class="side__count"><span class="side__cc"> · {allCodes.length} countries</span>{nextTrip && <span data-next-short> · {nextFirst} in {nextDays} days</span>}</span></p>
         <button type="button" class="side__fold" data-side-fold aria-expanded="true" aria-controls="side-body">
           <span class="sr" data-side-fold-label>Hide the panel</span>
           <span class="side__chev" aria-hidden="true">‹</span>
@@ -254,6 +260,18 @@ const globeConfig = {
             <button type="button" class="mono stage__btn stage__btn--quiet" data-globe-reset>Reset view</button>
           </p>
         </header>
+
+        {nextTrip && (
+          <div class="next" data-next data-start={+nextTrip.data.dateStart} data-end={+nextTrip.data.dateEnd} data-first={nextFirst}>
+            <p class="mono next__kicker" data-next-kicker>Up next</p>
+            <p class="next__title"><a href={`/${nextTrip.id}/`}>{nextTrip.data.title}</a></p>
+            <p class="next__row">
+              {/* Days only until the script takes over and adds the hours, minutes and seconds. */}
+              <span class="mono next__clock" data-next-clock>{nextDays} days</span>
+              <button type="button" class="mono next__go" data-next-go>Fly there</button>
+            </p>
+          </div>
+        )}
 
         <div class="tabs" role="tablist" aria-label="What the globe shows">
           <button type="button" role="tab" class="mono tabs__tab" id="tab-layers" aria-controls="pane-layers" aria-selected="true" data-tab>Layers</button>
@@ -486,6 +504,42 @@ const globeConfig = {
         if (h) stage.style.setProperty('--dock-h', `${h + 16}px`);
         else stage.style.removeProperty('--dock-h');
       }).observe(dock);
+    }
+
+    // ---- the next trip's clock ----
+    const nextBox = stage.querySelector<HTMLElement>('[data-next]');
+    if (nextBox) {
+      const clock = nextBox.querySelector<HTMLElement>('[data-next-clock]')!;
+      const kicker = nextBox.querySelector<HTMLElement>('[data-next-kicker]')!;
+      const short = stage.querySelector<HTMLElement>('[data-next-short]');
+      const s = new Date(Number(nextBox.dataset.start));
+      const e = new Date(Number(nextBox.dataset.end));
+      // The dates are calendar days, so the clock runs to midnight where the reader is.
+      const leaves = +new Date(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
+      const back = +new Date(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate() + 1);
+      const first = nextBox.dataset.first ?? '';
+      const two = (n: number) => String(n).padStart(2, '0');
+      let tick = 0;
+      const draw = () => {
+        const left = leaves - Date.now();
+        if (left > 0) {
+          const sec = Math.floor(left / 1000);
+          const d = Math.floor(sec / 86400);
+          clock.textContent = `${d}d ${two(Math.floor(sec / 3600) % 24)}h ${two(Math.floor(sec / 60) % 60)}m ${two(sec % 60)}s`;
+          if (short) short.textContent = ` · ${first} ${d >= 1 ? `in ${Math.ceil(left / 86_400_000)} days` : 'tomorrow'}`;
+        } else if (Date.now() < back) {
+          // Built before they left; the next build counts the trip properly.
+          kicker.textContent = 'On the road now';
+          clock.textContent = `Day ${Math.floor(-left / 86_400_000) + 1}`;
+          if (short) short.textContent = ` · ${first}: on the road`;
+        } else {
+          nextBox.hidden = true;
+          if (short) short.hidden = true;
+          clearInterval(tick);
+        }
+      };
+      draw();
+      tick = window.setInterval(draw, 1000);
     }
 
     // ---- tabs ----
@@ -803,6 +857,76 @@ const globeConfig = {
   .stage[data-live][data-side='folded'] .side__bar { border-bottom: 0; }
   .stage[data-live][data-side='folded'] .side__count { display: inline; }
   .stage[data-live][data-side='folded'] .side__chev { transform: rotate(180deg); }
+
+  /* ---- the next trip, counted down ---- */
+  .next {
+    margin: 1rem 0 0;
+    padding: 0.75rem 0.85rem 0.8rem;
+    border: 1px dashed rgb(255 194 75 / 0.55);
+    background: radial-gradient(circle at 92% 0%, rgb(255 194 75 / 0.16), transparent 60%);
+  }
+  .next__kicker {
+    margin: 0;
+    font-size: 0.5625rem;
+    letter-spacing: 0.12em;
+    color: var(--color-headlamp);
+  }
+  .next__title {
+    margin: 0.25rem 0 0;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-stretch: 110%;
+    line-height: 1.2;
+  }
+  .next__title a { color: var(--color-snow); text-decoration: none; }
+  .next__title a:hover { text-decoration: underline; text-underline-offset: 0.16em; }
+  .next__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 0.75rem;
+    margin: 0.45rem 0 0;
+  }
+  .next__clock {
+    font-size: 0.875rem;
+    color: var(--color-snow);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .next__go {
+    font-size: 0.625rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--color-headlamp);
+    background: none;
+    color: var(--color-headlamp);
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .next__go:hover,
+  .next__go:focus-visible { background: var(--color-headlamp); color: var(--color-ink); }
+  /* Without the globe there is nowhere to fly. */
+  .stage:not([data-live]) .next__go { display: none; }
+  .stage:not([data-live]) .next { max-width: 24rem; margin-top: 1.25rem; }
+  /* Folded, the bar keeps the one line about it. */
+  [data-next-short] { display: none; }
+  .stage[data-live][data-side='folded'] [data-next-short] { display: inline; color: var(--color-headlamp); }
+
+  /* The label beside the next trip on the globe. */
+  :global(.nx-tag) {
+    padding: 0.3rem 0.55rem;
+    border: 1px solid var(--color-headlamp);
+    background: rgb(18 22 28 / 0.88);
+    color: var(--color-headlamp);
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.4);
+    transition: background 150ms ease, color 150ms ease;
+  }
+  :global(.nx-tag:hover), :global(.nx-tag:focus-visible) { background: var(--color-headlamp); color: var(--color-ink); }
 
   /* ---- the two tabs ---- */
   .stage[data-live] .tabs {
@@ -1134,6 +1258,8 @@ const globeConfig = {
     .gpanel { top: auto; bottom: calc(1rem + var(--dock-h, 0px)); right: 1rem; left: 1rem; width: auto; max-height: 55%; }
     .gcaption, .stage[data-live] .ghint:not([hidden]) { bottom: calc(1.4rem + var(--dock-h, 0px)); }
     .stage[data-live] .dock { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
+    /* One line in the folded bar: the trip coming up says more than the count. */
+    .stage[data-live][data-side='folded'] .side__cc:has(+ [data-next-short]:not([hidden])) { display: none; }
     .stage[data-live][data-dock='folded'] .dock { right: auto; }
     /* Three short phrases don't fit one line on a phone; let them wrap. */
     .stage[data-live] .ghint:not([hidden]) { left: 1rem; right: 1rem; transform: none; max-width: none; white-space: normal; text-align: center; line-height: 1.5; }

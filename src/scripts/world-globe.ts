@@ -572,7 +572,8 @@ async function start(stage: HTMLElement) {
     if (!box) return;
     const bounds: LngLatBoundsLike = [[box[0], box[1]], [box[2], box[3]]];
     map.fitBounds(bounds, {
-      padding: { top: 90, bottom: 90, left: innerWidth > 900 ? 360 : 40, right: 60 },
+      // Clear of the side panel on the left and the docked timeline along the foot.
+      padding: { top: 90, bottom: 90 + (parseFloat(stage.style.getPropertyValue('--dock-h')) || 0), left: innerWidth > 900 ? 360 : 40, right: 60 },
       maxZoom: opts.maxZoom ?? 6, duration: reducedMotion() ? 0 : 1600, essential: true,
     });
   };
@@ -583,9 +584,24 @@ async function start(stage: HTMLElement) {
     return [Math.min(...b.map((x) => x[0])), Math.min(...b.map((x) => x[1])), Math.max(...b.map((x) => x[2])), Math.max(...b.map((x) => x[3]))];
   };
 
-  // Timeline: a bar flies to its trip, a dot to the countries of that month.
-  const wrap = document.querySelector<HTMLElement>('[data-map-wrap]');
-  wrap?.querySelectorAll<HTMLElement>('.tl__bar, .tl__visit').forEach((bar) => {
+  // Timeline (docked on the globe): a bar flies to its trip, a dot to the countries of that month.
+  // The one the globe is on stays gold, and a marker stands over it.
+  const dock = stage.querySelector<HTMLElement>('[data-dock]');
+  const mark = dock?.querySelector<HTMLElement>('[data-playhead]') ?? null;
+  let nowBar: HTMLElement | null = null;
+  const nowAt = (bar: HTMLElement | null) => {
+    nowBar?.classList.remove('is-now');
+    nowBar = bar;
+    bar?.classList.add('is-now');
+    if (!mark) return;
+    const body = mark.parentElement!.getBoundingClientRect();
+    const b = bar?.getBoundingClientRect();
+    if (!b || !b.width || !body.width) { mark.hidden = true; return; }
+    mark.style.left = `${b.left + b.width / 2 - body.left}px`;
+    mark.hidden = false;
+  };
+  if (dock && 'ResizeObserver' in window) new ResizeObserver(() => nowAt(nowBar)).observe(dock);
+  dock?.querySelectorAll<HTMLElement>('.tl__bar, .tl__visit').forEach((bar) => {
     const go = () => {
       stopSpin();
       const codes = (bar.dataset.countries ?? '').split(',').filter(Boolean);
@@ -595,7 +611,7 @@ async function start(stage: HTMLElement) {
       fly(trip?.box ?? boxOfCodes(codes));
       caption.innerHTML = `<b>${esc(bar.dataset.title ?? '')}</b> ${esc(bar.dataset.when ?? '')}`;
       caption.hidden = false;
-      if (innerWidth < 900) stage.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      nowAt(bar);
     };
     bar.addEventListener('pointerenter', (e) => { if ((e as PointerEvent).pointerType === 'mouse') go(); });
     bar.addEventListener('focus', go);
@@ -607,15 +623,35 @@ async function start(stage: HTMLElement) {
   const tourBtn = stage.querySelector<HTMLButtonElement>('[data-globe-tour]')!;
   let touring = 0;
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  // The tour plays along the timeline, so it opens a folded one for the run and folds it again after.
+  const dockFold = stage.querySelector<HTMLButtonElement>('[data-dock-fold]');
+  let openedDock = false;
+  const dockFor = (on: boolean) => {
+    if (!dockFold) return;
+    const folded = stage.dataset.dock === 'folded';
+    const flip = on ? folded : openedDock && !folded;
+    openedDock = on && folded;
+    if (!flip) return;
+    dockFold.dataset.auto = '1';
+    dockFold.click();
+    delete dockFold.dataset.auto;
+  };
+  const endTour = () => {
+    touring = 0;
+    tourBtn.textContent = '▶ Tour the trips';
+    dockFor(false);
+  };
   tourBtn.addEventListener('click', async () => {
-    if (touring) { touring = 0; tourBtn.textContent = '▶ Tour the trips'; return; }
+    if (touring) { endTour(); return; }
     const run = ++touring;
     stopSpin();
     panel.hidden = true;
     popup.remove();
     tourBtn.textContent = '■ Stop';
+    dockFor(true);
     for (const t of data.trips) {
       if (touring !== run) return;
+      nowAt(dock?.querySelector<HTMLElement>(`.tl__bar[href="/${CSS.escape(t.id)}/"]`) ?? null);
       light(t.countries, t.route.length > 1 ? t.id : null);
       fly(t.box, { maxZoom: 5.5 });
       caption.innerHTML = `<span class="gc__year">${t.year}</span> <a href="/${t.id}/">${esc(t.title)}</a>`;
@@ -623,14 +659,16 @@ async function start(stage: HTMLElement) {
       await wait(reducedMotion() ? 2500 : 3600);
     }
     if (touring === run) {
-      touring = 0;
-      tourBtn.textContent = '▶ Tour the trips';
+      endTour();
+      nowAt(null);
       light([], null);
       map.easeTo({ center: HOME, zoom: homeZ, duration: 1500 });
     }
   });
 
   stage.querySelector('[data-globe-reset]')?.addEventListener('click', () => {
+    if (touring) endTour();
+    nowAt(null);
     light([], null);
     caption.hidden = true;
     panel.hidden = true;

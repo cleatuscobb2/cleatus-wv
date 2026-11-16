@@ -148,6 +148,19 @@ const visits = [...byMonth.entries()].map(([month, codes]) => {
   return { month, countries: sortedCodes, label: listOf(sortedCodes.map((c) => COUNTRY_NAMES[c] ?? c)) };
 });
 
+/** The timeline's trips: the same list docked on the globe and under the flat map. */
+const tlTrips = allTrips.map((t) => ({
+  id: t.id,
+  title: t.data.title,
+  shortTitle: t.data.shortTitle,
+  year: t.data.year,
+  dateStart: t.data.dateStart,
+  dateEnd: t.data.dateEnd,
+  entries: counts.get(t.id) ?? 0,
+  countries: t.data.countries,
+  upcoming: t.data.dateStart > now,
+}));
+
 /*
  * The globe's legend: one row per kind of event, with how many located entries
  * carry it. The everyday kinds start switched off so the globe opens on the
@@ -202,6 +215,9 @@ const globeConfig = {
         var side = null;
         try { side = localStorage.getItem('map-side'); } catch (e) {}
         if (side ? side === 'folded' : matchMedia('(max-width: 700px)').matches) stage.setAttribute('data-side', 'folded');
+        var dock = null;
+        try { dock = localStorage.getItem('map-dock'); } catch (e) {}
+        if (dock ? dock === 'folded' : matchMedia('(max-width: 700px)').matches) stage.setAttribute('data-dock', 'folded');
         setTimeout(function () {
           if (stage.querySelector('canvas')) return;
           stage.removeAttribute('data-live');
@@ -230,7 +246,7 @@ const globeConfig = {
           <h1 class="display">{HEADLINE}</h1>
           <p class="head__note">
             <strong>{allCodes.length} countries</strong> so far. {writtenCodes.length} have stories.
-            <span class="head__static"> Hover a country to see when they were there, or a trip on the
+            <span class="head__static"> Hover a country to see when we were there, or a trip on the
             timeline to see everywhere it went.</span>
           </p>
           <p class="stage__buttons">
@@ -321,6 +337,25 @@ const globeConfig = {
       </div>
     </div>
 
+    {/*
+      The trips in time, docked across the foot of the globe in the same glass as the
+      panel. Pointing at a trip flies the globe there; the tour moves the gold marker
+      along it. The flat map below has its own copy for when there is no globe.
+    */}
+    <div class="dock" data-dock>
+      <div class="dock__bar">
+        <p class="mono dock__kicker">When<span class="dock__count"> · {allTrips.length} trips</span></p>
+        <button type="button" class="dock__fold" data-dock-fold aria-expanded="true" aria-controls="dock-body">
+          <span class="sr" data-dock-fold-label>Hide the timeline</span>
+          <span class="dock__chev" aria-hidden="true">‹</span>
+        </button>
+      </div>
+      <div class="dock__body" id="dock-body">
+        <Timeline trips={tlTrips} visits={visits} />
+        <span class="dock__mark" data-playhead hidden aria-hidden="true"></span>
+      </div>
+    </div>
+
     <aside class="gpanel" data-globe-panel hidden aria-live="polite"></aside>
     <p class="mono gcaption" data-globe-caption hidden aria-live="polite"></p>
     {/* Shown once, to someone who hasn't been here before; it goes as soon as they touch the globe. */}
@@ -392,20 +427,7 @@ const globeConfig = {
     <!-- The map answers where; this answers when, on the same dark surface. -->
     <div class="tlwrap">
       <h2 class="mono tlwrap__head">And when</h2>
-      <Timeline
-        trips={allTrips.map((t) => ({
-          id: t.id,
-          title: t.data.title,
-          shortTitle: t.data.shortTitle,
-          year: t.data.year,
-          dateStart: t.data.dateStart,
-          dateEnd: t.data.dateEnd,
-          entries: counts.get(t.id) ?? 0,
-          countries: t.data.countries,
-          upcoming: t.data.dateStart > now,
-        }))}
-        visits={visits}
-      />
+      <Timeline trips={tlTrips} visits={visits} />
     </div>
   </figure>
 
@@ -439,6 +461,32 @@ const globeConfig = {
       sync();
     });
     sync();
+
+    // ---- the docked timeline: folding, and how much of the globe it covers ----
+    const dock = stage.querySelector<HTMLElement>('[data-dock]');
+    const dockFold = stage.querySelector<HTMLButtonElement>('[data-dock-fold]');
+    const dockLabel = stage.querySelector<HTMLElement>('[data-dock-fold-label]');
+    const syncDock = () => {
+      const folded = stage.dataset.dock === 'folded';
+      dockFold?.setAttribute('aria-expanded', String(!folded));
+      if (dockLabel) dockLabel.textContent = folded ? 'Show the timeline' : 'Hide the timeline';
+    };
+    dockFold?.addEventListener('click', () => {
+      const folded = stage.dataset.dock !== 'folded';
+      if (folded) stage.dataset.dock = 'folded'; else delete stage.dataset.dock;
+      // The tour opens it for its run without changing what was chosen.
+      if (!dockFold.dataset.auto) remember('map-dock', folded ? 'folded' : 'open');
+      syncDock();
+    });
+    syncDock();
+    // Everything else on the globe sits above the dock: the panel, the captions, the zoom-to padding.
+    if (dock && 'ResizeObserver' in window) {
+      new ResizeObserver(() => {
+        const h = dock.offsetHeight;
+        if (h) stage.style.setProperty('--dock-h', `${h + 16}px`);
+        else stage.style.removeProperty('--dock-h');
+      }).observe(dock);
+    }
 
     // ---- tabs ----
     const tabs = [...stage.querySelectorAll<HTMLButtonElement>('[data-tab]')];
@@ -676,6 +724,7 @@ const globeConfig = {
 
   /* Overlay cards: frosted ink, so the globe shows through at the edges. */
   .stage[data-live] .side,
+  .stage[data-live] .dock,
   .gpanel,
   .gcaption,
   .ghint {
@@ -692,7 +741,7 @@ const globeConfig = {
     top: 1rem;
     left: 1rem;
     width: min(21rem, calc(100% - 5rem));
-    max-height: calc(100% - 2.6rem);
+    max-height: calc(100% - 2.6rem - var(--dock-h, 0px));
     padding: 0;
     display: flex;
     flex-direction: column;
@@ -880,13 +929,89 @@ const globeConfig = {
   .pane__say.is-live { color: var(--color-headlamp); }
   .pane__note { margin: 0.5rem 0 0; font-size: 0.6875rem; color: var(--color-stone-on-dark); line-height: 1.4; }
 
+  /* ---- the timeline, docked on the globe ---- */
+  .dock { display: none; }
+  .stage[data-live] .dock {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+  }
+  .dock__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.2rem 0.4rem 0.2rem 1.1rem;
+  }
+  .dock__kicker {
+    margin: 0;
+    font-size: 0.625rem;
+    color: var(--color-rime);
+    letter-spacing: 0.1em;
+  }
+  .dock__count { color: var(--color-stone-on-dark); }
+  .dock__fold {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 1.75rem;
+    border: 0;
+    background: none;
+    color: var(--color-snow);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .dock__fold:hover,
+  .dock__fold:focus-visible { color: var(--color-rime); }
+  .dock__chev { display: inline-block; transform: rotate(-90deg); transition: transform 150ms ease; }
+  .stage[data-live][data-dock='folded'] .dock { right: auto; }
+  .stage[data-live][data-dock='folded'] .dock__body { display: none; }
+  .stage[data-live][data-dock='folded'] .dock__chev { transform: rotate(90deg); }
+  .dock__body {
+    position: relative;
+    padding: 0 1.1rem 0.75rem;
+  }
+  .dock :global(.tl) { max-width: none; }
+  .dock :global(.tl__lanehead) { margin: 0.5rem 0 0.3rem; }
+  /* A little tighter than the page version: it shares the screen with the globe. */
+  @media (min-width: 701px) {
+    .dock :global(.tl__track) { height: calc(var(--rows) * 1.65rem); margin-top: 0.4rem; }
+    .dock :global(.tl__bar) { top: calc(var(--row) * 1.65rem); height: 1.4rem; }
+  }
+  /* The map's credit and controls at the foot move up clear of the dock. */
+  .stage[data-live] :global(.maplibregl-ctrl-bottom-right),
+  .stage[data-live] :global(.maplibregl-ctrl-bottom-left) { bottom: var(--dock-h, 0px); }
+  /* The trip the globe is on, in the gold the globe lights it with. */
+  .dock :global(.tl__bar.is-now),
+  .dock :global(.tl__visit.is-now) { background: var(--color-headlamp); z-index: 2; }
+  .dock :global(.tl__bar--upcoming.is-now .tl__label) { color: var(--color-ink); }
+  .dock__mark {
+    position: absolute;
+    top: 0;
+    bottom: 0.4rem;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--color-headlamp);
+    box-shadow: 0 0 10px rgb(255 194 75 / 0.6);
+    pointer-events: none;
+    transition: left 700ms cubic-bezier(0.3, 0.7, 0.3, 1);
+  }
+  .dock__mark[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .dock__mark { transition: none; }
+  }
+
   /* ---- how to use it, once ---- */
   .stage[data-live] .ghint:not([hidden]) {
     display: block;
     position: absolute;
     z-index: 2;
     left: 50%;
-    bottom: 1.6rem;
+    bottom: calc(1.6rem + var(--dock-h, 0px));
     transform: translateX(-50%);
     margin: 0;
     padding: 0.55rem 0.9rem;
@@ -932,7 +1057,7 @@ const globeConfig = {
     position: absolute;
     z-index: 2;
     left: 50%;
-    bottom: 1.6rem;
+    bottom: calc(1.6rem + var(--dock-h, 0px));
     transform: translateX(-50%);
     margin: 0;
     padding: 0.55rem 0.9rem;
@@ -1006,8 +1131,10 @@ const globeConfig = {
   @media (max-width: 700px) {
     .stage[data-live] .side { top: 0.75rem; left: 0.75rem; width: auto; max-width: calc(100% - 4.4rem); max-height: calc(100% - 1.5rem); }
     .stage[data-live]:not([data-side='folded']) .side { right: 3.65rem; max-width: none; }
-    .gpanel { top: auto; bottom: 1rem; right: 1rem; left: 1rem; width: auto; max-height: 55%; }
-    .gcaption, .stage[data-live] .ghint:not([hidden]) { bottom: 2.6rem; }
+    .gpanel { top: auto; bottom: calc(1rem + var(--dock-h, 0px)); right: 1rem; left: 1rem; width: auto; max-height: 55%; }
+    .gcaption, .stage[data-live] .ghint:not([hidden]) { bottom: calc(1.4rem + var(--dock-h, 0px)); }
+    .stage[data-live] .dock { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
+    .stage[data-live][data-dock='folded'] .dock { right: auto; }
     /* Three short phrases don't fit one line on a phone; let them wrap. */
     .stage[data-live] .ghint:not([hidden]) { left: 1rem; right: 1rem; transform: none; max-width: none; white-space: normal; text-align: center; line-height: 1.5; }
   }
@@ -1019,10 +1146,11 @@ const globeConfig = {
     background: var(--color-ink);
   }
   /* The globe replaces the flat map; the timeline below stays. */
-  .mapwrap[data-globe-live] > nav,
-  .mapwrap[data-globe-live] > figcaption,
-  :global(html[data-globe-soon]) .mapwrap > nav,
-  :global(html[data-globe-soon]) .mapwrap > figcaption { display: none; }
+  /* With the globe up, the flat map and its timeline step aside: the dock has the timeline. */
+  .mapwrap[data-globe-live],
+  :global(html[data-globe-soon]) .mapwrap { display: none; }
+  /* The globe runs straight into the footer, without a pale strip between. */
+  :global(main:has(.stage[data-live]) + .foot) { margin-top: 0; }
   .worldmap {
     display: block;
     width: 100%;

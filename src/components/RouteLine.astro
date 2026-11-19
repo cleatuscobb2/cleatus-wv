@@ -35,9 +35,16 @@ const hasElevation = sorted.some((n) => n.elevationFt);
 const t0 = +sorted[0]?.date || 0;
 const span = Math.max(1, (+sorted[sorted.length - 1]?.date || 0) - t0);
 
-const W = 1000;
-const H = orientation === 'horizontal' ? 150 : 1000;
+/*
+ * The vertical viewBox is drawn in the rail's own proportions (about 1:13) and
+ * scaled uniformly to the rail's height. A square box here scaled to the 46px
+ * rail width instead, so the whole trip drew as a 46px knot mid-rail.
+ */
+const W = orientation === 'horizontal' ? 1000 : 56;
+const H = orientation === 'horizontal' ? 150 : 720;
 const PAD = 26;
+/** Across the line: the narrow vertical box keeps room for the elevation swing. */
+const PAD_X = orientation === 'horizontal' ? PAD : 11;
 
 const elevations = sorted.map((n) => n.elevationFt ?? 0).filter(Boolean);
 const eMin = elevations.length ? Math.min(...elevations) : 0;
@@ -47,8 +54,9 @@ const eSpan = Math.max(1, eMax - eMin);
 const points = sorted.map((n) => {
   const along = PAD + ((+n.date - t0) / span) * ((orientation === 'horizontal' ? W : H) - PAD * 2);
   // Without elevation the line sits on a baseline; the node spacing is the data.
+  const acrossPad = orientation === 'horizontal' ? PAD : PAD_X;
   const across = hasElevation && n.elevationFt
-    ? (orientation === 'horizontal' ? H : W) - PAD - ((n.elevationFt - eMin) / eSpan) * ((orientation === 'horizontal' ? H : W) - PAD * 2)
+    ? (orientation === 'horizontal' ? H : W) - acrossPad - ((n.elevationFt - eMin) / eSpan) * ((orientation === 'horizontal' ? H : W) - acrossPad * 2)
     : (orientation === 'horizontal' ? H : W) / 2;
   return orientation === 'horizontal' ? { x: along, y: across, n } : { x: across, y: along, n };
 });
@@ -91,7 +99,7 @@ const uid = `rl-${tripSlug}-${orientation}`;
     : `Timeline of ${sorted.length} entries`}
 >
   <svg
-    viewBox={`0 0 ${orientation === 'horizontal' ? W : W} ${H}`}
+    viewBox={`0 0 ${W} ${H}`}
     preserveAspectRatio={orientation === 'horizontal' ? 'none' : 'xMidYMid meet'}
     focusable="false"
   >
@@ -125,9 +133,17 @@ const uid = `rl-${tripSlug}-${orientation}`;
     height: clamp(90px, 14vw, 150px);
     overflow: visible;
   }
-  .route-line[data-orientation='vertical'] svg {
-    width: 46px;
+  .route-line[data-orientation='vertical'] {
     height: 100%;
+  }
+  /* Height from the rail, width from the viewBox's 56:720, so the scale is
+     uniform: the line runs the rail's full height and the nodes stay round. */
+  .route-line[data-orientation='vertical'] svg {
+    display: block;
+    height: 100%;
+    width: auto;
+    aspect-ratio: 56 / 720;
+    margin-inline: auto;
     overflow: visible;
   }
 

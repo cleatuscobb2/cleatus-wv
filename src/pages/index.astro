@@ -100,9 +100,11 @@ const ogMosaic = await getImage({ src: mosaicOg, width: 1200, height: 630, forma
 /*
  * The tagline is voice, and voice is theirs — so it lives here as one obvious
  * line to change rather than buried in the markup.
- * Alternatives kept to hand: "Somewhere difficult, since 2009" ·
- * "Fifteen years of doing it the hard way" · "60 countries. 295 entries.
- * One of us cries." · "The long way round, every time"
+ * Alternatives kept to hand:
+ *   "Somewhere difficult, since 2009"
+ *   "Fifteen years of doing it the hard way"
+ *   "60 countries. 295 entries. One of us cries."
+ *   "The long way round, every time"
  */
 const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
 ---
@@ -149,10 +151,12 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
       somewhere difficult ever since. {taken.length} trips, {totalEntries} entries,
       written mostly by Beth — usually the same night, usually exhausted.
     </p>
-    <p class="mono lede__links">
-      <a href="/trips/">All trips</a> · <a href="/map/">The map</a> · <a href="/archive/">Archive</a>
+    <p class="ui readout lede__links">
+      <a href="/trips/">All trips</a>
+      <a href="/map/">The map</a>
+      <a href="/archive/">Archive</a>
       {/* Shown by the script, which is what makes it work. */}
-      <span data-dice-wrap> · <button type="button" class="lede__dice" data-dice hidden>🎲 A day at random</button></span>
+      <span data-dice-wrap><button type="button" class="lede__dice" data-dice hidden>🎲 A day at random</button></span>
     </p>
   </section>
 
@@ -166,10 +170,11 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     >
       <span class="next__in">
         <span class="next__words">
-          <span class="mono next__kicker" data-next-kicker>{nextAway ? 'On the road now' : 'Up next'}</span>
+          <span class="ui next__kicker" data-next-kicker>{nextAway ? 'On the road now' : 'Up next'}</span>
           <span class="display next__title">{next.data.title}</span>
-          <span class="mono next__where">
-            {next.data.countries.map(nameOf).join(' · ')} · {fmtRange(next.data.dateStart, next.data.dateEnd)}
+          <span class="readout next__where">
+            <span class="ui">{next.data.countries.map(nameOf).join(', ')}</span>
+            <span class="mono">{fmtRange(next.data.dateStart, next.data.dateEnd)}</span>
           </span>
         </span>
         {/* Days only until the script takes over; it adds the hours, minutes and seconds. */}
@@ -180,7 +185,6 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
             <span class="next__cell"><b class="display">{Math.ceil((+next.data.dateStart - +now) / DAY)}</b> days</span>
           )}
         </span>
-        <span class="next__go mono" aria-hidden="true">→</span>
       </span>
     </a>
   )}
@@ -208,35 +212,38 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
           )}
         </a>
         <div class="feat__words">
-          <p class="mono feat__meta">
-            {featured.id === taken[0]?.id ? 'Most recent' : 'Start with this one'} · {fmtRange(featured.data.dateStart, featured.data.dateEnd)}
+          {/* "Most recent" would only repeat what the dates say; a trip picked to start
+              with, rather than the latest one, is worth saying so. */}
+          <p class="readout feat__meta">
+            {featured.id !== taken[0]?.id && <span class="ui">Start with this one</span>}
+            <span class="mono">{fmtRange(featured.data.dateStart, featured.data.dateEnd)}</span>
           </p>
           <h2 class="display feat__title" id="feat-title">
             <a href={`/${featured.id}/`}>{featured.data.title}</a>
           </h2>
           <p class="feat__sum">{featured.data.summary}</p>
-          <p class="mono feat__facts">
+          <p class="mono readout feat__facts">
             {[
               `${featuredEntries.length} entries`,
               `${featured.data.stats.days} days`,
               featured.data.stats.trekMiles ? `${featured.data.stats.trekMiles} mi on foot` : null,
               featured.data.stats.maxElevationFt ? `${fmtN(featured.data.stats.maxElevationFt)} ft` : null,
-            ].filter(Boolean).join(' · ')}
+            ].filter(Boolean).map((fact) => <span>{fact}</span>)}
           </p>
           <p class="feat__go">
             {start && (
-              <a href={`/${featured.id}/${entrySlug(start)}/`} class="btn btn--main mono">
+              <a href={`/${featured.id}/${entrySlug(start)}/`} class="btn btn--main ui">
                 <span>Start here</span><span class="btn__more">— {start.data.title}</span>
               </a>
             )}
-            <a href={`/${featured.id}/`} class="btn mono">The whole trip <span aria-hidden="true">→</span></a>
+            <a href={`/${featured.id}/`} class="btn ui">Open the whole trip</a>
           </p>
         </div>
       </div>
       {nodes.length > 1 && (
         <div class="feat__line" data-line>
           <RouteLine nodes={nodes} tripSlug={featured.id} />
-          <p class="mono feat__readout" data-readout aria-live="polite">
+          <p class="ui feat__readout" data-readout aria-live="polite">
             {featured.data.stats.maxElevationFt ? 'Every dot is a day, at the height it was walked' : 'Every dot is an entry, spaced by date'} — pick one
           </p>
         </div>
@@ -246,12 +253,12 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
 
   <section class="film" data-film aria-labelledby="film-title">
     <header class="film__head">
-      <h2 class="mono film__title" id="film-title">Every trip</h2>
+      <h2 class="ui film__title" id="film-title">Every trip</h2>
       <span class="film__ctl" data-film-ctl hidden>
         <button type="button" class="ctl" data-film-prev aria-label="Scroll back"><span aria-hidden="true">←</span></button>
         <button type="button" class="ctl" data-film-next aria-label="Scroll on"><span aria-hidden="true">→</span></button>
       </span>
-      <a href="/trips/" class="mono film__all">All {trips.length} on one page →</a>
+      <a href="/trips/" class="ui film__all">See all {trips.length} on one page</a>
     </header>
     <ol class="film__row" data-film-row>
       {film.map(({ t, photo, status, daysUntil }) => (
@@ -262,17 +269,18 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
                 <img src={photo} alt="" loading="lazy" decoding="async" />
               ) : status === 'done' ? (
                 <span class="film__none">
-                  <span class="display">{t.data.countries.map(nameOf).join(' · ')}</span>
-                  <span class="mono">No photographs</span>
+                  <span class="display">{t.data.countries.map(nameOf).join(', ')}</span>
+                  <span class="ui">No photographs</span>
                 </span>
               ) : (
                 <span class="film__soon">
-                  <span class="mono film__soon-kicker">{status === 'away' ? 'On the road' : 'Up next'}</span>
+                  {/* "Away now" says it on its own; "Up next" adds to a bare count of days. */}
+                  {status !== 'away' && <span class="ui film__soon-kicker">Up next</span>}
                   <span class="display film__soon-big">{status === 'away' ? 'Away now' : `In ${daysUntil} days`}</span>
                 </span>
               )}
             </span>
-            <span class="mono film__when">{t.data.dateStart.getUTCFullYear()} · {t.data.stats.days} days</span>
+            <span class="mono readout film__when"><span>{t.data.dateStart.getUTCFullYear()}</span><span>{t.data.stats.days} days</span></span>
             <span class="display film__name">{t.data.shortTitle}</span>
           </a>
         </li>
@@ -284,11 +292,13 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     <div class="globe__in">
       <div class="globe__words">
         <h2 class="display globe__title" id="globe-title">Everywhere we've been</h2>
-        <p class="mono globe__facts">
-          {travel.countries} countries · {travel.continents.length} continents{pinned.length > 0 && ` · ${pinned.length} photographs pinned to the map`}
+        <p class="mono readout globe__facts">
+          <span>{travel.countries} countries</span>
+          <span>{travel.continents.length} continents</span>
+          {pinned.length > 0 && <span>{pinned.length} photographs pinned to the map</span>}
         </p>
       </div>
-      <a href="/map/" class="btn btn--main mono globe__go">Spin the globe <span aria-hidden="true">→</span></a>
+      <a href="/map/" class="btn btn--main ui globe__go">Spin the globe</a>
     </div>
     {/* One link for the whole reel, for the pointer only: the button above is the way in for
         everyone else, and two dozen identical stops would be no kindness to a keyboard. */}
@@ -308,7 +318,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
 
   {themes.length > 0 && (
     <section class="themes" aria-labelledby="themes-title">
-      <h2 class="mono themes__title" id="themes-title">Or read by what happened</h2>
+      <h2 class="ui themes__title" id="themes-title">Or read by what happened</h2>
       <ul class="themes__list">
         {themes.map(({ tag, n }) => (
           <li>
@@ -329,8 +339,10 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
           </li>
         )}
       </ul>
-      <p class="mono themes__more">
-        <a href="/tags/">Every theme</a> · <a href="/numbers/">By the numbers</a> · <a href="/archive/">The whole archive</a>
+      <p class="ui readout themes__more">
+        <a href="/tags/">Every theme</a>
+        <a href="/numbers/">By the numbers</a>
+        <a href="/archive/">The whole archive</a>
       </p>
     </section>
   )}
@@ -557,6 +569,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .lede__links {
     margin-top: 1.25rem;
+    font-size: var(--text-step-0);
     /* Stone is a mid grey and loses too much against the artwork; the intro's
        own links go full ink now that there is no panel to sit them on. */
     color: var(--color-ink);
@@ -575,9 +588,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     border: 1px solid var(--color-ink);
     background: none;
     color: var(--color-ink);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: var(--text-step--1);
     text-decoration: none;
     white-space: nowrap;
     transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
@@ -599,8 +610,6 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .btn__more {
     min-width: 0;
-    text-transform: none;
-    letter-spacing: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -637,7 +646,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }
-  /* The dot before it goes too, when there is no script to roll the dice. */
+  /* The rule before it goes too, when there is no script to roll the dice. */
   [data-dice-wrap]:has([hidden]) {
     display: none;
   }
@@ -673,9 +682,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .next__kicker {
     color: var(--color-headlamp);
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    font-size: var(--text-step--1);
   }
   .next__title {
     font-size: clamp(1.3rem, 2.6vw, 1.9rem);
@@ -689,16 +696,17 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .next__where {
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
     line-height: 1.5;
+  }
+  /* Set on each fact: the date carries .mono, which brings its own size. */
+  .next__where > * {
+    font-size: var(--text-step--1);
   }
   .next__clock {
     display: flex;
     gap: clamp(0.9rem, 2vw, 1.6rem);
-    font-size: 0.625rem;
+    font-size: var(--text-step--2);
     color: var(--color-stone-on-dark);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
   .next__cell {
     display: flex;
@@ -714,14 +722,6 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     letter-spacing: 0;
     font-variant-numeric: tabular-nums;
     min-width: 2ch;
-  }
-  .next__go {
-    color: var(--color-rime);
-    font-size: 1.25rem;
-    transition: transform 150ms ease;
-  }
-  .next:hover .next__go {
-    transform: translateX(0.3rem);
   }
 
   /* ---- the trip to start with ---- */
@@ -780,7 +780,10 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   .feat__meta {
     color: var(--color-stone);
     margin: 0;
-    font-size: 0.6875rem;
+  }
+  /* Set on each fact: the date carries .mono, which brings its own size. */
+  .feat__meta > * {
+    font-size: var(--text-step--1);
   }
   .feat__title {
     font-size: clamp(1.9rem, 3.6vw, 3.1rem);
@@ -804,7 +807,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .feat__facts {
     margin: 0.9rem 0 0;
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
   .feat__go {
     display: flex;
@@ -823,7 +826,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     margin: 0.75rem 0 0;
     min-height: 1.5em;
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
   .feat__readout.is-live {
     color: var(--color-headlamp);
@@ -845,8 +848,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   .film__title {
     color: var(--color-stone);
     margin: 0;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: var(--text-step-0);
   }
   .film__ctl {
     display: inline-flex;
@@ -860,7 +862,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     margin-left: auto;
   }
   .film__all {
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
   .film__row {
     display: flex;
@@ -923,9 +925,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .film__soon-kicker {
     color: var(--color-headlamp);
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    font-size: var(--text-step--1);
   }
   .film__soon-big {
     font-size: clamp(1.4rem, 2.4vw, 1.9rem);
@@ -939,7 +939,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
       repeating-linear-gradient(135deg, transparent 0 14px, rgb(127 216 232 / 0.12) 14px 15px),
       var(--color-paper);
     border: 1px solid var(--color-rule);
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
   }
   .film__none .display {
     color: var(--color-rime-on-light);
@@ -947,11 +947,11 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
     font-stretch: 114%;
     line-height: 1.15;
   }
+  /* No display here: it is a .readout, and that brings its own. */
   .film__when {
-    display: block;
     margin-top: 0.6rem;
     color: var(--color-stone);
-    font-size: 0.625rem;
+    font-size: var(--text-step--2);
   }
   .film__name {
     display: block;
@@ -993,7 +993,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   .globe__facts {
     margin: 0.6rem 0 0;
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
   .globe .btn--main {
     background: var(--color-snow);
@@ -1066,8 +1066,7 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   .themes__title {
     color: var(--color-stone);
     margin: 0 0 0.9rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: var(--text-step-0);
   }
   .themes__list {
     display: grid;
@@ -1103,19 +1102,16 @@ const TAGLINE = 'The Adventures of Cleatus & the West Virginian';
   }
   .theme__n {
     color: var(--color-stone);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
   .themes__more {
     margin: 1.25rem 0 0;
-    font-size: 0.6875rem;
+    font-size: var(--text-step-0);
   }
 
   @media (max-width: 52rem) {
     .feat__grid {
       grid-template-columns: minmax(0, 1fr);
-    }
-    .next__go {
-      display: none;
     }
   }
 </style>

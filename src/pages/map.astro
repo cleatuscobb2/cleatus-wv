@@ -67,7 +67,7 @@ function titleOf(code: string, fallback = code) {
   const parts = ts.length
     ? [`${ts.length} ${ts.length === 1 ? 'trip' : 'trips'} written up: ${ts.map((t) => t.data.year).sort().join(', ')}`, beenNote(code)]
     : [beenNote(code) || 'been, date not recorded', 'no entries yet'];
-  return `${name} — ${parts.filter(Boolean).join(' · ')}`;
+  return `${name} — ${parts.filter(Boolean).join('; ')}`;
 }
 
 const W = 1000;
@@ -241,7 +241,7 @@ const globeConfig = {
     */}
     <div class="side">
       <div class="side__bar">
-        <p class="mono side__kicker">Map<span class="side__count"><span class="side__cc"> · {allCodes.length} countries</span>{nextTrip && <span data-next-short> · {nextFirst} in {nextDays} days</span>}</span></p>
+        <p class="readout side__kicker"><span class="ui">Map</span><span class="mono side__count side__cc">{allCodes.length} countries</span>{nextTrip && <span class="mono" data-next-short>{nextFirst} in {nextDays} days</span>}</p>
         <button type="button" class="side__fold" data-side-fold aria-expanded="true" aria-controls="side-body">
           <span class="sr" data-side-fold-label>Hide the panel</span>
           <span class="side__chev" aria-hidden="true">‹</span>
@@ -256,30 +256,30 @@ const globeConfig = {
             timeline to see everywhere it went.</span>
           </p>
           <p class="stage__buttons">
-            <button type="button" class="mono stage__btn" data-globe-tour>▶ Tour the trips</button>
-            <button type="button" class="mono stage__btn stage__btn--quiet" data-globe-reset>Reset view</button>
+            <button type="button" class="ui stage__btn" data-globe-tour>▶ Tour the trips</button>
+            <button type="button" class="ui stage__btn stage__btn--quiet" data-globe-reset>Reset view</button>
           </p>
         </header>
 
         {nextTrip && (
           <div class="next" data-next data-start={+nextTrip.data.dateStart} data-end={+nextTrip.data.dateEnd} data-first={nextFirst}>
-            <p class="mono next__kicker" data-next-kicker>Up next</p>
+            <p class="ui next__kicker" data-next-kicker>Up next</p>
             <p class="next__title"><a href={`/${nextTrip.id}/`}>{nextTrip.data.title}</a></p>
             <p class="next__row">
               {/* Days only until the script takes over and adds the hours, minutes and seconds. */}
               <span class="mono next__clock" data-next-clock>{nextDays} days</span>
-              <button type="button" class="mono next__go" data-next-go>Fly there</button>
+              <button type="button" class="ui next__go" data-next-go>Fly there</button>
             </p>
           </div>
         )}
 
         <div class="tabs" role="tablist" aria-label="What the globe shows">
-          <button type="button" role="tab" class="mono tabs__tab" id="tab-layers" aria-controls="pane-layers" aria-selected="true" data-tab>Layers</button>
-          <button type="button" role="tab" class="mono tabs__tab" id="tab-happened" aria-controls="pane-happened" aria-selected="false" tabindex="-1" data-tab>What happened</button>
+          <button type="button" role="tab" class="ui tabs__tab" id="tab-layers" aria-controls="pane-layers" aria-selected="true" data-tab>Layers</button>
+          <button type="button" role="tab" class="ui tabs__tab" id="tab-happened" aria-controls="pane-happened" aria-selected="false" tabindex="-1" data-tab>What happened</button>
         </div>
 
         <div class="pane" id="pane-layers" role="tabpanel" aria-labelledby="tab-layers">
-          <p class="mono pane__head">Places</p>
+          <p class="ui pane__head">Places</p>
           <ul class="rows">
             <li>
               <label class="row">
@@ -298,7 +298,7 @@ const globeConfig = {
               </label>
             </li>
           </ul>
-          <p class="mono pane__head">Also on the globe</p>
+          <p class="ui pane__head">Also on the globe</p>
           <ul class="rows">
             <li data-ig-row hidden>
               <label class="row">
@@ -325,7 +325,7 @@ const globeConfig = {
               </label>
             </li>
           </ul>
-          <p class="mono pane__head">Country shading</p>
+          <p class="ui pane__head">Country shading</p>
           <ul class="shade">
             <li><span class="key__swatch key__swatch--written"></span>Written up</li>
             <li><span class="key__swatch key__swatch--been"></span>Been, no entries yet</li>
@@ -333,7 +333,7 @@ const globeConfig = {
         </div>
 
         <div class="pane" id="pane-happened" role="tabpanel" aria-labelledby="tab-happened" hidden>
-          <p class="mono pane__head">
+          <p class="ui pane__head">
             Tap to show or hide
             <button type="button" class="pane__all" data-kinds-all>all / none</button>
           </p>
@@ -349,7 +349,7 @@ const globeConfig = {
               </li>
             ))}
           </ul>
-          <p class="mono pane__say" data-kind-say aria-live="polite">Point at an icon to see what it marks</p>
+          <p class="ui readout pane__say" data-kind-say aria-live="polite">Point at an icon to see what it marks</p>
           <p class="pane__note">Each icon sits where the entry says it happened, pinned to the town, camp or park — not a GPS track.</p>
         </div>
       </div>
@@ -362,7 +362,7 @@ const globeConfig = {
     */}
     <div class="dock" data-dock>
       <div class="dock__bar">
-        <p class="mono dock__kicker">When<span class="dock__count"> · {allTrips.length} trips</span></p>
+        <p class="readout dock__kicker"><span class="ui">When</span><span class="mono dock__count">{allTrips.length} trips</span></p>
         <button type="button" class="dock__fold" data-dock-fold aria-expanded="true" aria-controls="dock-body">
           <span class="sr" data-dock-fold-label>Hide the timeline</span>
           <span class="dock__chev" aria-hidden="true">‹</span>
@@ -375,15 +375,15 @@ const globeConfig = {
     </div>
 
     <aside class="gpanel" data-globe-panel hidden aria-live="polite"></aside>
-    <p class="mono gcaption" data-globe-caption hidden aria-live="polite"></p>
+    <p class="ui readout gcaption" data-globe-caption hidden aria-live="polite"></p>
     {/* Shown once, to someone who hasn't been here before; it goes as soon as they touch the globe. */}
-    <p class="mono ghint" data-globe-hint hidden>Drag to spin · click a country · tap an icon</p>
+    <p class="ui ghint" data-globe-hint hidden>Drag to spin, click a country or tap an icon</p>
   </section>
 
   <figure class="mapwrap" data-map-wrap>
     {/* Sized to the wrapper in pixels by the script; empty and invisible without it. */}
     <svg class="mapwrap__overlay" data-map-overlay aria-hidden="true"></svg>
-    <span class="mapwrap__callout mono" data-map-callout hidden></span>
+    <span class="readout mapwrap__callout" data-map-callout hidden></span>
 
     {/* Labelled <nav>, not role="img": the countries are links, and declaring the
         whole map a single graphic conflicts with that (axe: nested-interactive). */}
@@ -432,7 +432,7 @@ const globeConfig = {
     </svg>
     </nav>
 
-    <figcaption class="mono">
+    <figcaption>
       <span class="key">
         <span class="key__item"><span class="key__swatch key__swatch--written"></span>Written up — click through</span>
         <span class="key__item"><span class="key__swatch key__swatch--been"></span>Been, no entries yet</span>
@@ -444,7 +444,7 @@ const globeConfig = {
 
     <!-- The map answers where; this answers when, on the same dark surface. -->
     <div class="tlwrap">
-      <h2 class="mono tlwrap__head">And when</h2>
+      <h2 class="ui tlwrap__head">And when</h2>
       <Timeline trips={tlTrips} visits={visits} />
     </div>
   </figure>
@@ -526,12 +526,12 @@ const globeConfig = {
           const sec = Math.floor(left / 1000);
           const d = Math.floor(sec / 86400);
           clock.textContent = `${d}d ${two(Math.floor(sec / 3600) % 24)}h ${two(Math.floor(sec / 60) % 60)}m ${two(sec % 60)}s`;
-          if (short) short.textContent = ` · ${first} ${d >= 1 ? `in ${Math.ceil(left / 86_400_000)} days` : 'tomorrow'}`;
+          if (short) short.textContent = `${first} ${d >= 1 ? `in ${Math.ceil(left / 86_400_000)} days` : 'tomorrow'}`;
         } else if (Date.now() < back) {
           // Built before they left; the next build counts the trip properly.
           kicker.textContent = 'On the road now';
           clock.textContent = `Day ${Math.floor(-left / 86_400_000) + 1}`;
-          if (short) short.textContent = ` · ${first}: on the road`;
+          if (short) short.textContent = `${first}: on the road`;
         } else {
           nextBox.hidden = true;
           if (short) short.hidden = true;
@@ -570,10 +570,11 @@ const globeConfig = {
     const say = stage.querySelector<HTMLElement>('[data-kind-say]');
     if (say) {
       const idle = say.textContent ?? '';
+      // A readout: the kind, how many entries carry it, and whether it's switched off — one span each.
       const name = (box: HTMLInputElement) => {
         const n = Number(box.dataset.n);
-        const count = n ? ` · ${n} ${n === 1 ? 'entry' : 'entries'}` : '';
-        say.textContent = `${box.dataset.label}${count}${box.checked ? '' : ' · hidden'}`;
+        const facts = [box.dataset.label ?? '', n ? `${n} ${n === 1 ? 'entry' : 'entries'}` : '', box.checked ? '' : 'Hidden'];
+        say.replaceChildren(...facts.filter(Boolean).map((text) => Object.assign(document.createElement('span'), { textContent: text })));
         say.classList.add('is-live');
       };
       const hush = () => { say.textContent = idle; say.classList.remove('is-live'); };
@@ -703,7 +704,16 @@ const globeConfig = {
       }
 
       // The trip name moves out of the bar and onto the line.
-      callout.textContent = bar.getAttribute('data-title') + ' · ' + bar.getAttribute('data-when');
+      // Two facts, so two spans: the readout draws the rule between them.
+      var name = document.createElement('span');
+      name.className = 'ui';
+      name.textContent = bar.getAttribute('data-title');
+      var when = document.createElement('span');
+      when.className = 'mono';
+      when.textContent = bar.getAttribute('data-when');
+      while (callout.firstChild) callout.removeChild(callout.firstChild);
+      callout.appendChild(name);
+      callout.appendChild(when);
       callout.hidden = false;
       var cw = callout.offsetWidth;
       var ch = callout.offsetHeight;
@@ -771,7 +781,7 @@ const globeConfig = {
   .stage[data-live] .stage__map:empty::after {
     content: 'Loading the globe…';
     position: absolute; inset: 0; display: grid; place-items: center;
-    font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+    font-family: var(--font-display); font-weight: 600; font-size: var(--text-step--1);
     color: var(--color-stone-on-dark);
   }
   .stage[data-live] .head__static { display: none; }
@@ -810,10 +820,10 @@ const globeConfig = {
   }
   .side__kicker {
     margin: 0;
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     color: var(--color-rime);
-    letter-spacing: 0.1em;
   }
+  .side__kicker .mono { font-size: inherit; }
   /* The count belongs to the folded bar; unfolded, the panel says it in full just below. */
   .side__count { display: none; color: var(--color-stone-on-dark); }
   .side__fold {
@@ -841,7 +851,7 @@ const globeConfig = {
   .stage[data-live] .head__note { font-size: 0.9375rem; margin-top: 0.45rem; }
   .stage[data-live] .stage__buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; }
   .stage__btn {
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
     padding: 0.45rem 0.8rem;
     border: 0;
     background: var(--color-headlamp);
@@ -867,8 +877,7 @@ const globeConfig = {
   }
   .next__kicker {
     margin: 0;
-    font-size: 0.5625rem;
-    letter-spacing: 0.12em;
+    font-size: var(--text-step--1);
     color: var(--color-headlamp);
   }
   .next__title {
@@ -892,10 +901,9 @@ const globeConfig = {
     font-size: 0.875rem;
     color: var(--color-snow);
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
   }
   .next__go {
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     padding: 0.35rem 0.6rem;
     border: 1px solid var(--color-headlamp);
     background: none;
@@ -912,21 +920,21 @@ const globeConfig = {
   [data-next-short] { display: none; }
   .stage[data-live][data-side='folded'] [data-next-short] { display: inline; color: var(--color-headlamp); }
 
-  /* The label beside the next trip on the globe. */
+  /* The label beside the next trip on the globe: a readout of "Up next" and the days to go. */
   :global(.nx-tag) {
     padding: 0.3rem 0.55rem;
     border: 1px solid var(--color-headlamp);
     background: rgb(18 22 28 / 0.88);
     color: var(--color-headlamp);
-    font-size: 0.625rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: var(--text-step--1);
+    flex-wrap: nowrap;
     white-space: nowrap;
     cursor: pointer;
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.4);
     transition: background 150ms ease, color 150ms ease;
   }
   :global(.nx-tag:hover), :global(.nx-tag:focus-visible) { background: var(--color-headlamp); color: var(--color-ink); }
+  :global(.nx-tag .mono) { font-size: inherit; }
 
   /* ---- the two tabs ---- */
   .stage[data-live] .tabs {
@@ -942,8 +950,7 @@ const globeConfig = {
     margin-bottom: -1px;
     background: none;
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
-    letter-spacing: 0.08em;
+    font-size: var(--text-step--1);
     cursor: pointer;
     transition: color 150ms ease, border-color 150ms ease;
   }
@@ -953,11 +960,11 @@ const globeConfig = {
   .stage[data-live] .pane:not([hidden]) { display: block; }
   .pane__head {
     display: flex; justify-content: space-between; align-items: baseline;
-    margin: 0.95rem 0 0.4rem; font-size: 0.5625rem; color: var(--color-stone-on-dark);
+    margin: 0.95rem 0 0.4rem; font-size: var(--text-step--1); color: var(--color-stone-on-dark);
   }
   .pane__all {
-    font: inherit; font-size: 0.5625rem; background: none; border: 0; padding: 0;
-    color: var(--color-rime); cursor: pointer; text-transform: none; letter-spacing: 0;
+    font: inherit; background: none; border: 0; padding: 0;
+    color: var(--color-rime); cursor: pointer;
   }
   .pane ul { list-style: none; margin: 0; padding: 0; }
 
@@ -1047,7 +1054,7 @@ const globeConfig = {
   .pane__say {
     margin: 0.7rem 0 0;
     min-height: 1.5em;
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     color: var(--color-stone-on-dark);
   }
   .pane__say.is-live { color: var(--color-headlamp); }
@@ -1072,11 +1079,10 @@ const globeConfig = {
   }
   .dock__kicker {
     margin: 0;
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     color: var(--color-rime);
-    letter-spacing: 0.1em;
   }
-  .dock__count { color: var(--color-stone-on-dark); }
+  .dock__count { color: var(--color-stone-on-dark); font-size: inherit; }
   .dock__fold {
     display: inline-grid;
     place-items: center;
@@ -1139,7 +1145,7 @@ const globeConfig = {
     transform: translateX(-50%);
     margin: 0;
     padding: 0.55rem 0.9rem;
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
     color: var(--color-snow);
     white-space: nowrap;
     max-width: calc(100% - 2rem);
@@ -1166,7 +1172,7 @@ const globeConfig = {
     position: absolute; top: 0.4rem; right: 0.6rem;
     background: none; border: 0; color: var(--color-snow); font-size: 1.4rem; cursor: pointer;
   }
-  .gpanel :global(.gp__kicker) { margin: 0; font-family: var(--font-mono, monospace); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-rime); }
+  .gpanel :global(.gp__kicker) { margin: 0; font-size: var(--text-step--1); color: var(--color-rime); }
   .gpanel :global(.gp__name) { margin: 0.2rem 0 0; font-family: var(--font-display); font-size: 1.6rem; }
   .gpanel :global(.gp__years) { margin: 0.2rem 0 0; color: var(--color-stone-on-dark); font-size: 0.875rem; }
   .gpanel :global(.gp__kinds) { list-style: none; margin: 0.8rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; font-size: 0.8125rem; }
@@ -1177,7 +1183,13 @@ const globeConfig = {
   .gpanel :global(a) { color: var(--color-rime); }
   .gpanel :global(.gp__more) { display: inline-block; margin-top: 0.7rem; font-size: 0.875rem; }
 
+  /*
+   * A readout (one span a fact, the rules drawn between them), but kept a block
+   * on one line rather than the readout's wrapping flex row, so a long trip name
+   * still trims with an ellipsis instead of pushing the caption up a line.
+   */
   .gcaption {
+    display: block;
     position: absolute;
     z-index: 2;
     left: 50%;
@@ -1185,15 +1197,19 @@ const globeConfig = {
     transform: translateX(-50%);
     margin: 0;
     padding: 0.55rem 0.9rem;
-    font-size: 0.75rem;
+    font-size: var(--text-step--1);
     max-width: calc(100% - 2rem);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .gcaption[hidden] { display: none; }
+  /* Kept to one line so a long trip name trims: the facts sit inline with room for the rule between. */
+  .gcaption > :global(* + *) { margin-left: 1.4em; }
+  .gcaption > :global(:first-child)::before { display: none; }
   .gcaption :global(b), .gcaption :global(a) { color: var(--color-headlamp); }
-  .gcaption :global(.gc__year) { color: var(--color-stone-on-dark); margin-right: 0.4rem; }
+  .gcaption :global(.gc__year), .gcaption :global(.gc__label) { color: var(--color-stone-on-dark); }
+  .gcaption :global(.mono) { font-size: inherit; }
 
   :global(.globe-pop .maplibregl-popup-content) {
     background: var(--color-ink);
@@ -1381,16 +1397,19 @@ const globeConfig = {
     background: var(--color-headlamp);
     color: var(--color-ink);
     padding: 0.25rem 0.5rem;
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     white-space: nowrap;
     box-shadow: 0 2px 10px rgb(0 0 0 / 0.45);
+    /* A readout of the trip and its dates, held to one line. */
+    flex-wrap: nowrap;
   }
   .mapwrap__callout[hidden] { display: none; }
+  .mapwrap__callout :global(.mono) { font-size: inherit; }
 
   .mapwrap figcaption {
     margin: 1rem 0 0;
     color: var(--color-stone-on-dark);
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
   }
   .key { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-bottom: 0.5rem; }
   .key__item { display: inline-flex; align-items: center; gap: 0.4rem; }
@@ -1409,6 +1428,7 @@ const globeConfig = {
   :global(html[data-globe-soon]) .mapwrap .tlwrap { margin-top: 0; padding-top: 0; border-top: 0; }
   .tlwrap__head {
     color: var(--color-stone-on-dark);
+    font-size: var(--text-step-0);
     margin: 0 0 1rem;
   }
 </style>

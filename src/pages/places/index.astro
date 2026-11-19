@@ -46,8 +46,9 @@ const repeat = places.filter((p) => p.trips.length > 1);
       <li class={p.trips.length > 1 ? 'place place--repeat' : 'place'}>
         <a href={`/places/${p.code.toLowerCase()}/`}>
           <span class="place__name">{p.name}</span>
-          <span class="mono place__meta">
-            {p.trips.length} {p.trips.length === 1 ? 'trip' : 'trips'} · {p.entries} entries
+          <span class="mono readout place__meta">
+            <span>{p.trips.length} {p.trips.length === 1 ? 'trip' : 'trips'}</span>
+            <span>{p.entries} entries</span>
           </span>
           <span class="mono place__years">
             {[...new Set(p.trips.map((t) => t.data.year))].join(', ')}
@@ -91,7 +92,7 @@ const repeat = places.filter((p) => p.trips.length > 1);
     margin-left: 0.4rem;
     color: var(--color-ember);
   }
-  .place__meta, .place__years { color: var(--color-stone); font-size: 0.625rem; }
+  .place__meta, .place__years { color: var(--color-stone); font-size: var(--text-step--1); }
 
   @media (max-width: 560px) {
     .place a { grid-template-columns: 1fr; gap: 0.15rem; }

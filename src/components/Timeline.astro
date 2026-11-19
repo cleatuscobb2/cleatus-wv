@@ -158,7 +158,7 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
         data-title={b.shortTitle}
         data-when={`${b.upcoming ? 'Coming up, ' : ''}${fmt(b.dateStart)} – ${fmt(b.dateEnd)}`}
       >
-        <span class="tl__label mono">{b.shortTitle}</span>
+        <span class="tl__label ui">{b.shortTitle}</span>
         <span class="sr-only">
           {b.title}, {b.upcoming ? 'coming up, ' : ''}{fmt(b.dateStart)} to {fmt(b.dateEnd)}, {b.entries} entries
         </span>
@@ -170,7 +170,7 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
     <>
       {/* Dots carry no text of their own: the list under the map names every
           country and year, so the lane is a picture of the rhythm, not the record. */}
-      <p class="mono tl__lanehead" aria-hidden="true">Other travel, no entries</p>
+      <p class="ui tl__lanehead" aria-hidden="true">Other travel, no entries</p>
       {early.length > 0 && (
         <div class="tl__stub" aria-hidden="true">
           {early.map((v) => (
@@ -295,7 +295,7 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
     opacity: 0.35;
   }
   .tl__label {
-    font-size: 0.625rem;
+    font-size: var(--text-step--2);
     color: var(--color-ink);
     white-space: nowrap;
     /* A flex item defaults to min-width:auto, which lets a nowrap label force
@@ -306,7 +306,7 @@ const earliestYear = early.length ? Number(early[0].month.slice(0, 4)) : firstYe
     grid-column: 1 / -1;
     grid-row: 3;
     margin: 0.9rem 0 0.45rem;
-    font-size: 0.5625rem;
+    font-size: var(--text-step--2);
     color: var(--color-stone-on-dark);
   }
   .tl__visits {

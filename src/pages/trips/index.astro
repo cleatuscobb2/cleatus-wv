@@ -77,11 +77,11 @@ const cards = trips.map((t) => {
 const past = cards.filter((c) => c.status !== 'upcoming');
 const countries = new Set(past.flatMap((c) => c.t.data.countries)).size;
 const totals = [
-  { n: past.length, label: 'trips taken' },
-  { n: countries, label: 'countries' },
-  { n: past.reduce((s, c) => s + c.t.data.stats.days, 0), label: 'days away' },
-  { n: past.reduce((s, c) => s + (c.t.data.stats.trekMiles ?? 0), 0), label: 'miles on foot' },
-  { n: Math.max(0, ...past.map((c) => c.t.data.stats.maxElevationFt ?? 0)), label: 'ft, highest' },
+  { n: past.length, label: 'Trips taken' },
+  { n: countries, label: 'Countries' },
+  { n: past.reduce((s, c) => s + c.t.data.stats.days, 0), label: 'Days away' },
+  { n: past.reduce((s, c) => s + (c.t.data.stats.trekMiles ?? 0), 0), label: 'Miles on foot' },
+  { n: Math.max(0, ...past.map((c) => c.t.data.stats.maxElevationFt ?? 0)), label: 'Feet, at the highest' },
 ].filter((x) => x.n > 0);
 
 const continentCounts = new Map<string, number>();
@@ -118,6 +118,9 @@ const opensOn = Math.max(
 
 const fmtN = (n: number) => n.toLocaleString('en-US');
 const nameOf = (code: string) => COUNTRY_NAMES[code] ?? code;
+// Where the countries are the big words in a panel, they read as a sentence: "Nepal, India, and Tibet".
+const inWords = (codes: string[]) =>
+  new Intl.ListFormat('en-US', { type: 'conjunction' }).format(codes.map(nameOf));
 const soonText = (c: (typeof cards)[number]) =>
   c.status === 'away' ? 'Away now' : c.daysUntil === 1 ? 'Tomorrow' : `In ${c.daysUntil} days`;
 ---
@@ -138,7 +141,7 @@ const soonText = (c: (typeof cards)[number]) =>
         <dl class="totals">
           {totals.map((x) => (
             <div class="totals__item">
-              <dt class="mono">{x.label}</dt>
+              <dt class="ui">{x.label}</dt>
               <dd class="display">{fmtN(x.n)}</dd>
             </div>
           ))}
@@ -184,30 +187,29 @@ const soonText = (c: (typeof cards)[number]) =>
                 aria-roledescription="slide"
                 aria-label={`${i + 1} of ${slides.length}`}
               >
-                <p class="mono slide__kicker">
-                  {c.status === 'upcoming' ? 'Up next · ' : c.status === 'away' ? 'On the road · ' : ''}
-                  {fmtRange(t.data.dateStart, t.data.dateEnd)} · {s.days} days
+                <p class="mono slide__kicker readout">
+                  {c.status === 'upcoming' ? <span class="ui">Up next</span> : c.status === 'away' ? <span class="ui">On the road</span> : null}
+                  <span>{fmtRange(t.data.dateStart, t.data.dateEnd)}</span>
+                  <span>{s.days} days</span>
                 </p>
                 <h2 class="display slide__title">{t.data.title}</h2>
-                <p class="mono slide__where">{t.data.countries.map(nameOf).join(' · ')}</p>
+                <p class="ui slide__where readout">{t.data.countries.map((code) => <span>{nameOf(code)}</span>)}</p>
                 {real && <p class="slide__sum">{t.data.summary}</p>}
-                <p class="mono slide__facts">
-                  {[
-                    c.entries ? `${c.entries} ${c.entries === 1 ? 'entry' : 'entries'}` : 'Nothing written yet',
-                    s.trekMiles ? `${s.trekMiles} mi on foot` : null,
-                    s.maxElevationFt ? `${fmtN(s.maxElevationFt)} ft` : null,
-                  ].filter(Boolean).join(' · ')}
+                <p class="mono slide__facts readout">
+                  {c.entries ? <span>{c.entries} {c.entries === 1 ? 'entry' : 'entries'}</span> : <span class="ui">Nothing written yet</span>}
+                  {s.trekMiles ? <span>{s.trekMiles} mi on foot</span> : null}
+                  {s.maxElevationFt ? <span>{fmtN(s.maxElevationFt)} ft</span> : null}
                 </p>
                 {(c.topTags.length > 0 || c.cried > 0) && (
-                  <p class="slide__marks mono">
+                  <p class="slide__marks ui">
                     {c.topTags.map((g) => <span><span aria-hidden="true">{TAG_ICONS[g]}</span> {TAG_LABELS[g]}</span>)}
                     {c.cried > 0 && <span><span aria-hidden="true">{BETH_CRIED_ICON}</span> Beth cried ×{c.cried}</span>}
                   </p>
                 )}
                 <p class="slide__go">
-                  <a class="btn btn--main mono" href={`/${t.id}/`}>Open the trip <span aria-hidden="true">→</span></a>
+                  <a class="btn btn--main ui" href={`/${t.id}/`}>Open the trip</a>
                   {c.startAt && (
-                    <a class="btn mono" href={`/${t.id}/${entrySlug(c.startAt)}/`}>
+                    <a class="btn ui" href={`/${t.id}/${entrySlug(c.startAt)}/`}>
                       <span>Start here</span><span class="btn__more">— {c.startAt.data.title}</span>
                     </a>
                   )}
@@ -216,15 +218,15 @@ const soonText = (c: (typeof cards)[number]) =>
                   <template data-blank>
                     {c.status === 'done' ? (
                       <div class="blank blank--none">
-                        <span class="display blank__big">{t.data.countries.map(nameOf).join(' · ')}</span>
-                        <span class="mono">No photographs from this one</span>
+                        <span class="display blank__big">{inWords(t.data.countries)}</span>
+                        <span class="ui">No photographs from this one</span>
                       </div>
                     ) : (
                       <div class="blank blank--soon">
-                        <span class="mono blank__kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
+                        <span class="ui blank__kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
                         <span class="display blank__big" data-countdown={+t.data.dateStart} data-until={+t.data.dateEnd}>{soonText(c)}</span>
                         <span class="mono blank__clock" data-clock={+t.data.dateStart} />
-                        <span class="mono blank__where">{t.data.countries.map(nameOf).join(' · ')}</span>
+                        <span class="ui blank__where readout">{t.data.countries.map((code) => <span>{nameOf(code)}</span>)}</span>
                       </div>
                     )}
                   </template>
@@ -233,12 +235,12 @@ const soonText = (c: (typeof cards)[number]) =>
             );
           })}
           <article class="slide slide--dice" data-dice-slide hidden aria-live="polite">
-            <p class="mono slide__kicker"><span aria-hidden="true">🎲</span> A day at random</p>
+            <p class="ui slide__kicker"><span aria-hidden="true">🎲</span> A day at random</p>
             <h2 class="display slide__title" data-dice-title></h2>
-            <p class="mono slide__where" data-dice-where></p>
+            <p class="ui slide__where readout" data-dice-where></p>
             <p class="slide__go">
-              <a class="btn btn--main mono" href="/archive/" data-dice-go>Read this day <span aria-hidden="true">→</span></a>
-              <button type="button" class="btn mono" data-dice>Roll again</button>
+              <a class="btn btn--main ui" href="/archive/" data-dice-go>Read this day</a>
+              <button type="button" class="btn ui" data-dice>Roll again</button>
             </p>
           </article>
 
@@ -247,7 +249,7 @@ const soonText = (c: (typeof cards)[number]) =>
             <span class="mono stage__count" data-count>{opensOn + 1} / {slides.length}</span>
             <button type="button" class="ctl" data-next aria-label="Later trip"><span aria-hidden="true">→</span></button>
             <button type="button" class="ctl ctl--play" data-play aria-label="Pause"><span aria-hidden="true" data-play-icon>❚❚</span></button>
-            <button type="button" class="dice mono" data-dice>
+            <button type="button" class="dice ui" data-dice>
               <span class="dice__face" aria-hidden="true">🎲</span> Take me somewhere
             </button>
           </div>
@@ -270,8 +272,8 @@ const soonText = (c: (typeof cards)[number]) =>
               data-for={c.t.id}
               data-go={i}
             >
-              <span class:list={['ribbon__label mono', { 'ribbon__label--left': left > 80, 'ribbon__label--right': left < 12 }]}>
-                {c.t.data.shortTitle} <span class="ribbon__when">{c.t.data.dateStart.getUTCFullYear()}</span>
+              <span class:list={['ribbon__label ui', { 'ribbon__label--left': left > 80, 'ribbon__label--right': left < 12 }]}>
+                {c.t.data.shortTitle} <span class="ribbon__when mono">{c.t.data.dateStart.getUTCFullYear()}</span>
               </span>
             </a>
           ))}
@@ -283,16 +285,16 @@ const soonText = (c: (typeof cards)[number]) =>
   <div class="trips">
     <div class="tools" data-tools hidden>
       <div class="chips" role="group" aria-label="Show trips in">
-        <button type="button" class="chip mono" data-where="" aria-pressed="true">Everywhere <span class="chip__n">{cards.length}</span></button>
+        <button type="button" class="chip ui" data-where="" aria-pressed="true">Everywhere <span class="chip__n mono">{cards.length}</span></button>
         {continentChips.map(([k, n]) => (
-          <button type="button" class="chip mono" data-where={k} aria-pressed="false">{k} <span class="chip__n">{n}</span></button>
+          <button type="button" class="chip ui" data-where={k} aria-pressed="false">{k} <span class="chip__n mono">{n}</span></button>
         ))}
       </div>
       <div class="chips" role="group" aria-label="Only trips with">
-        <button type="button" class="chip mono" data-only="trek" aria-pressed="false">🥾 A trek</button>
-        <button type="button" class="chip mono" data-only="cried" aria-pressed="false">{BETH_CRIED_ICON} Beth cried</button>
+        <button type="button" class="chip ui" data-only="trek" aria-pressed="false">🥾 A trek</button>
+        <button type="button" class="chip ui" data-only="cried" aria-pressed="false">{BETH_CRIED_ICON} Beth cried</button>
       </div>
-      <label class="sort mono">
+      <label class="sort ui">
         Sort
         <select data-sort>
           <option value="newest">Newest</option>
@@ -346,30 +348,31 @@ const soonText = (c: (typeof cards)[number]) =>
                   </>
                 ) : c.status === 'upcoming' || c.status === 'away' ? (
                   <span class="trip__soon">
-                    <span class="mono trip__soon-kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
+                    <span class="ui trip__soon-kicker">{c.status === 'away' ? 'On the road' : 'Up next'}</span>
                     <span class="display trip__soon-big" data-countdown={+t.data.dateStart} data-until={+t.data.dateEnd}>{soonText(c)}</span>
-                    <span class="mono trip__soon-where">{t.data.countries.map(nameOf).join(' · ')}</span>
+                    <span class="ui trip__soon-where readout">{t.data.countries.map((code) => <span>{nameOf(code)}</span>)}</span>
                   </span>
                 ) : (
                   <span class="trip__none">
-                    <span class="display trip__none-where">{t.data.countries.map(nameOf).join(' · ')}</span>
-                    <span class="mono">No photographs</span>
+                    <span class="display trip__none-where">{inWords(t.data.countries)}</span>
+                    <span class="ui">No photographs</span>
                   </span>
                 )}
                 <span class="trip__year mono" aria-hidden="true">{t.data.dateStart.getUTCFullYear()}</span>
               </span>
               <span class="trip__body">
-                <span class="mono trip__dates">{fmtRange(t.data.dateStart, t.data.dateEnd)} · {s.days} days</span>
+                <span class="mono trip__dates readout">
+                  <span>{fmtRange(t.data.dateStart, t.data.dateEnd)}</span>
+                  <span>{s.days} days</span>
+                </span>
                 <span class="display trip__title">{t.data.title}</span>
                 <span class="trip__codes" aria-label={`Countries: ${t.data.countries.map(nameOf).join(', ')}`}>
-                  {t.data.countries.map((code) => <abbr class="mono" title={nameOf(code)} aria-hidden="true">{code}</abbr>)}
+                  {t.data.countries.map((code) => <abbr class="ui" title={nameOf(code)} aria-hidden="true">{code}</abbr>)}
                 </span>
-                <span class="mono trip__stats">
-                  {[
-                    `${c.entries} ${c.entries === 1 ? 'entry' : 'entries'}`,
-                    s.trekMiles ? `${s.trekMiles} mi trek` : null,
-                    s.maxElevationFt ? `${fmtN(s.maxElevationFt)} ft` : null,
-                  ].filter(Boolean).join(' · ')}
+                <span class="mono trip__stats readout">
+                  <span>{c.entries} {c.entries === 1 ? 'entry' : 'entries'}</span>
+                  {s.trekMiles ? <span>{s.trekMiles} mi trek</span> : null}
+                  {s.maxElevationFt ? <span>{fmtN(s.maxElevationFt)} ft</span> : null}
                 </span>
                 {/* Filled in by the script: how this trip measures against the others on the chosen sort. */}
                 <span class="trip__meter mono" data-meter hidden>
@@ -393,7 +396,7 @@ const soonText = (c: (typeof cards)[number]) =>
       })}
     </ol>
     <p class="none" data-none hidden>
-      No trips match that. <button type="button" class="mono" data-clear>Show them all</button>
+      No trips match that. <button type="button" class="ui" data-clear>Show them all</button>
     </p>
   </div>
 </Base>
@@ -641,7 +644,8 @@ const soonText = (c: (typeof cards)[number]) =>
           stage.classList.remove('is-rolling');
         }
         diceTitle.textContent = title;
-        diceWhere.textContent = `${tripTitle} · ${date}`;
+        // Two facts in a readout: the trip's name, and the day as a date.
+        diceWhere.replaceChildren(make('span', '', tripTitle), make('span', 'mono', date));
         diceGo.href = `/${tripId}/${slug}/`;
         // The strip of years shows which trip the day came from.
         dots.forEach((d) => d.classList.toggle('is-on', d.dataset.for === tripId));
@@ -649,7 +653,7 @@ const soonText = (c: (typeof cards)[number]) =>
         if (!photo) {
           blank = make('div', 'blank blank--none');
           blank.appendChild(make('span', 'display blank__big', tripTitle));
-          blank.appendChild(make('span', 'mono', 'No photograph on this day'));
+          blank.appendChild(make('span', 'ui', 'No photograph on this day'));
         }
         paint({ photo, wash: photo, blank });
       } catch {
@@ -866,9 +870,7 @@ const soonText = (c: (typeof cards)[number]) =>
   }
   .totals dt {
     color: var(--color-stone-on-dark);
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-size: var(--text-step--1);
   }
   .totals dd {
     margin: 0;
@@ -1007,9 +1009,7 @@ const soonText = (c: (typeof cards)[number]) =>
   }
   .blank__kicker {
     color: var(--color-headlamp);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    font-size: var(--text-step--1);
   }
   .blank__big {
     font-size: clamp(2.5rem, 7cqw, 5.5rem);
@@ -1052,9 +1052,7 @@ const soonText = (c: (typeof cards)[number]) =>
   .slide__kicker {
     margin: 0;
     color: var(--color-rime);
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-size: var(--text-step--1);
   }
   .slide__title {
     margin: 0.6rem 0 0;
@@ -1110,9 +1108,7 @@ const soonText = (c: (typeof cards)[number]) =>
     border: 1px solid var(--color-rime);
     background: none;
     color: var(--color-rime);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: var(--text-step--1);
     text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
@@ -1136,8 +1132,6 @@ const soonText = (c: (typeof cards)[number]) =>
   }
   .btn__more {
     min-width: 0;
-    text-transform: none;
-    letter-spacing: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1190,9 +1184,7 @@ const soonText = (c: (typeof cards)[number]) =>
     border: 1px solid var(--color-rule-dark);
     background: none;
     color: var(--color-snow);
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: var(--text-step--1);
     cursor: pointer;
     transition: border-color 150ms ease, color 150ms ease;
   }
@@ -1303,6 +1295,8 @@ const soonText = (c: (typeof cards)[number]) =>
   }
   .ribbon__when {
     color: var(--color-stone);
+    /* The year is a measurement in the mono face, but the size of the name beside it. */
+    font-size: inherit;
   }
   .ribbon__dot:hover .ribbon__label,
   .ribbon__dot:focus-visible .ribbon__label,
@@ -1363,6 +1357,7 @@ const soonText = (c: (typeof cards)[number]) =>
   .chip__n {
     color: var(--color-stone);
     margin-left: 0.2rem;
+    font-size: inherit;
   }
   .chip[aria-pressed='true'] .chip__n {
     color: var(--color-headlamp);
@@ -1371,15 +1366,11 @@ const soonText = (c: (typeof cards)[number]) =>
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
     color: var(--color-stone);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
   }
   .sort select {
     font: inherit;
-    text-transform: none;
-    letter-spacing: 0;
     color: var(--color-ink);
     background: var(--color-paper);
     border: 1px solid var(--color-rule);
@@ -1469,7 +1460,6 @@ const soonText = (c: (typeof cards)[number]) =>
     background: var(--color-ink);
     color: var(--color-snow);
     font-size: 0.6875rem;
-    letter-spacing: 0.06em;
   }
   .trip__ticks {
     position: absolute;
@@ -1510,9 +1500,7 @@ const soonText = (c: (typeof cards)[number]) =>
   }
   .trip__soon-kicker {
     color: var(--color-headlamp);
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    font-size: var(--text-step--1);
   }
   .trip__soon-big {
     font-size: clamp(2rem, 4vw, 3rem);
@@ -1550,8 +1538,8 @@ const soonText = (c: (typeof cards)[number]) =>
     display: block;
     padding-top: 0.7rem;
   }
+  /* A readout (laid out by the global class), so no display of its own here. */
   .trip__dates {
-    display: block;
     color: var(--color-stone);
     font-size: 0.6875rem;
   }
@@ -1581,7 +1569,6 @@ const soonText = (c: (typeof cards)[number]) =>
     border-radius: 2px;
   }
   .trip__stats {
-    display: block;
     color: var(--color-stone);
     font-size: 0.625rem;
   }

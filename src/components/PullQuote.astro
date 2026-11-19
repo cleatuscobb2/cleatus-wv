@@ -8,7 +8,7 @@ const { attribution } = Astro.props as { attribution?: string };
 
 <blockquote class="pull">
   <p class="pull__text"><slot /></p>
-  {attribution && <cite class="pull__cite mono">{attribution}</cite>}
+  {attribution && <cite class="pull__cite ui">{attribution}</cite>}
 </blockquote>
 
 <style>
@@ -30,6 +30,7 @@ const { attribution } = Astro.props as { attribution?: string };
   .pull__cite {
     display: block;
     margin-top: 0.7rem;
+    font-size: var(--text-step--1);
     color: var(--color-stone);
     font-style: normal;
   }

@@ -113,7 +113,7 @@ export function buildPlaces(
     const entries = [...g.entries]
       .sort((a, b) => a.date.localeCompare(b.date))
       .map(({ title, href, date, trip }) => ({ title, href, date, trip }));
-    const note = g.hand.map((h) => h.note).filter(Boolean).join(' · ') || undefined;
+    const note = g.hand.map((h) => h.note).filter(Boolean).join('; ') || undefined;
     return {
       name,
       country: g.entries[0]?.country || g.hand[0]?.country || countryOf(lng, lat),

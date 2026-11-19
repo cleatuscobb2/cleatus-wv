@@ -74,9 +74,12 @@ const gridYs = [minY, minY + spanY / 2, maxY];
 
 {pts.length > 2 && (
   <figure class="profile">
-    <figcaption class="mono profile__cap">
-      <span>Where this day sits on the trek</span>
-      <span class="profile__axis">{ft(maxY)} ft high · {Math.round(maxX)} mi total</span>
+    <figcaption class="profile__cap">
+      <span class="ui">Where this day sits on the trek</span>
+      <span class="readout profile__axis">
+        <span class="mono">{ft(maxY)} ft high</span>
+        <span class="mono">{Math.round(maxX)} mi total</span>
+      </span>
     </figcaption>
 
     <nav
@@ -96,7 +99,7 @@ const gridYs = [minY, minY + spanY / 2, maxY];
 
         {pts.filter((p) => !p.isLow).map((p) => (
           <a href={`/${tripSlug}/${p.slug}/`}>
-            <title>{p.day ? `Day ${p.day} — ` : ''}{p.label} · {ft(p.y)} ft · mile {Math.round(p.x)}</title>
+            <title>{p.day ? `Day ${p.day} — ` : ''}{p.label}, {ft(p.y)} ft at mile {Math.round(p.x)}</title>
             <circle
               class={p.slug === current ? 'pr-node pr-node--here' : 'pr-node'}
               cx={sx(p.x)} cy={sy(p.y)} r={p.slug === current ? 7 : 4}
@@ -106,13 +109,13 @@ const gridYs = [minY, minY + spanY / 2, maxY];
       </svg>
 
       {/* Labels sit outside the stretched SVG so they are never distorted. */}
-      <span class="mono pr-tag pr-tag--start" style={`left:${(sx(pts[0].x) / W) * 100}%`}>
+      <span class="ui pr-tag pr-tag--start" style={`left:${(sx(pts[0].x) / W) * 100}%`}>
         {legs[0]?.data.leg?.from ?? ''}
       </span>
       <span class="mono pr-tag pr-tag--summit" style={`left:${(sx(summit.x) / W) * 100}%`}>
         {ft(summit.y)} ft
       </span>
-      <span class="mono pr-tag pr-tag--end" style={`left:${(sx(pts[pts.length - 1].x) / W) * 100}%`}>
+      <span class="ui pr-tag pr-tag--end" style={`left:${(sx(pts[pts.length - 1].x) / W) * 100}%`}>
         {legs[legs.length - 1]?.data.leg?.to ?? ''}
       </span>
     </nav>
@@ -133,10 +136,12 @@ const gridYs = [minY, minY + spanY / 2, maxY];
     justify-content: space-between;
     gap: 0.35rem 1rem;
     color: var(--color-stone-on-dark);
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     margin-bottom: 0.5rem;
   }
   .profile__axis { color: var(--color-rime); }
+  /* The readout's parts take the caption's size, not .mono's own. */
+  .profile__axis > .mono { font-size: inherit; }
 
   .profile__plot {
     position: relative;
@@ -170,9 +175,9 @@ const gridYs = [minY, minY + spanY / 2, maxY];
     position: absolute;
     bottom: -0.15rem;
     transform: translateX(-50%);
-    /* 0.625rem to match every other caption on the site; these are place names,
-       not year ticks, and 9px was the smallest text anywhere. */
-    font-size: 0.625rem;
+    /* The smallest step of the scale: these are place names (the summit tag is a
+       height) squeezed under a chart, and 9px was the smallest text anywhere. */
+    font-size: var(--text-step--2);
     color: var(--color-stone-on-dark);
     white-space: nowrap;
     pointer-events: none;

@@ -53,6 +53,20 @@
    * average glyph, so 68ch measured only 63 real characters. 75ch lands at ~70.
    */
   --measure: 75ch;
+
+  /*
+   * One type scale, a major third (x1.25) from the 16px rem — DESIGN.md §7. Body
+   * prose is 19px on its own; everything else steps along this.
+   */
+  --text-step--2: 0.64rem;
+  --text-step--1: 0.8rem;
+  --text-step-0: 1rem;
+  --text-step-1: 1.25rem;
+  --text-step-2: 1.563rem;
+  --text-step-3: 1.953rem;
+  --text-step-4: 2.441rem;
+  --text-step-5: 3.052rem;
+  --text-step-6: 3.815rem;
 }
 
 /*
@@ -141,14 +155,59 @@
 }
 
 @layer components {
-  /* The logbook readout: every number on this site is set like this. */
+  /*
+   * The logbook readout: dates, distances, heights, counts — measurements, set the
+   * way they were written down. §7: mono means a measurement, and it is never
+   * shouted in tracked capitals. A word that isn't a measurement wants .ui instead.
+   */
   .mono {
     font-family: var(--font-mono);
     font-size: 0.8125rem;
     font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: 0;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Interface words — nav, buttons, small headings — in the display face at text width. */
+  .ui {
+    font-family: var(--font-display);
+    font-stretch: 100%;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+  }
+
+  /*
+   * A readout: several facts on one line, kept apart by space and a faint rule
+   * rather than strung together with middle dots. Each fact is its own element.
+   */
+  .readout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 1.4em;
+    row-gap: 0.15em;
+    /*
+     * Each fact draws its rule in the gap to its left. When a line wraps, the
+     * first fact on the new line has its rule outside the box, and the clip
+     * removes it, so no line ever starts with a separator. The clip margin
+     * leaves room for focus outlines on links inside.
+     */
+    overflow: clip;
+    overflow-clip-margin: 6px;
+  }
+  .readout > * {
+    position: relative;
+  }
+  .readout > *::before {
+    content: '';
+    position: absolute;
+    left: -0.7em;
+    top: 50%;
+    width: 1px;
+    height: 0.8em;
+    transform: translateY(-50%);
+    background: currentColor;
+    opacity: 0.35;
   }
 
   .display {

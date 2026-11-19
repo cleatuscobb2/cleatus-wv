@@ -32,8 +32,9 @@ const tripTitle = (id: string) => trips.find((t) => t.id === id)?.data.shortTitl
       {cried.map((e) => (
         <li>
           <a href={`/${tripIdOf(e)}/${entrySlug(e)}/`}>
-            <span class="mono list__meta">
-              {tripTitle(tripIdOf(e))} · {fmtDate(e.data.date)}
+            <span class="readout list__meta">
+              <span class="ui">{tripTitle(tripIdOf(e))}</span>
+              <span class="mono">{fmtDate(e.data.date)}</span>
             </span>
             <span class="list__title">{e.data.title}</span>
           </a>
@@ -85,10 +86,10 @@ const tripTitle = (id: string) => trips.find((t) => t.id === id)?.data.shortTitl
     padding: 0.8rem 0;
     text-decoration: none;
   }
+  /* No display here: .readout lays it out as a row (a local display would win over it). */
   .list__meta {
-    display: block;
     color: var(--color-stone);
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
   }
   .list__title {
     display: block;

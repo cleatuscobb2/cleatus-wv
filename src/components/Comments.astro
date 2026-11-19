@@ -37,7 +37,10 @@ const turnstileKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
         <li class="comment" id={`c-${c.id.split('/').pop()}`}>
           <p class="comment__who">
             <span class="comment__name">{c.data.name}</span>
-            <span class="mono comment__when">{fmt(c.data.date)}{c.data.archival && ' · from the old site'}</span>
+            <span class="readout comment__when">
+              <span class="mono">{fmt(c.data.date)}</span>
+              {c.data.archival && <span class="ui">From the old site</span>}
+            </span>
           </p>
           <div class="comment__body">{paragraphs(c.data.body).map((p) => <p>{p}</p>)}</div>
         </li>
@@ -70,7 +73,7 @@ const turnstileKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
       Comments are read by Beth or Andy before they appear. Only your name and what you
       write are kept — no email address, nothing else.
     </p>
-    <button type="submit" class="mono">Send comment</button>
+    <button type="submit" class="ui">Send comment</button>
     <p class="comments__status" id="comment-status" role="status"></p>
   </form>
 </section>
@@ -128,7 +131,8 @@ const turnstileKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
   .comments__list { list-style: none; margin: 0 0 2rem; padding: 0; display: grid; gap: 1.25rem; }
   .comment__who { margin: 0 0 0.3rem; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: baseline; }
   .comment__name { font-weight: 600; }
-  .comment__when { font-size: 0.6875rem; color: var(--color-stone); }
+  .comment__when { font-size: var(--text-step--1); color: var(--color-stone); }
+  .comment__when > .mono { font-size: inherit; }
   .comment__body p { margin: 0 0 0.6em; white-space: pre-line; overflow-wrap: anywhere; }
 
   .comments__outcome { display: none; padding: 0.7rem 0.9rem; margin: 0 0 1rem; background: var(--color-paper); border-left: 3px solid var(--color-rime-on-light); }
@@ -146,7 +150,7 @@ const turnstileKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
   .comments__hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
   .comments__fine { margin: 0; font-size: 0.8125rem; color: var(--color-stone); }
   .comments__form button {
-    justify-self: start; padding: 0.6rem 1.1rem; font-size: 0.8125rem; border: 0; cursor: pointer;
+    justify-self: start; padding: 0.6rem 1.1rem; font-size: var(--text-step--1); border: 0; cursor: pointer;
     background: var(--color-ink); color: var(--color-snow);
   }
   .comments__form button:hover:not(:disabled) { background: var(--color-rime-on-light); }

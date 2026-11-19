@@ -101,20 +101,20 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       data-pagefind-meta={`trip:${trip?.data.shortTitle ?? ''},date:${fmtDate(d.date)}`}
       data-pagefind-filter={`trip:${trip?.data.shortTitle ?? ''},year:${d.date.getUTCFullYear()}`}
     >
-      <nav class="crumb mono" aria-label="Breadcrumb" data-pagefind-ignore>
+      <nav class="crumb ui" aria-label="Breadcrumb" data-pagefind-ignore>
         <a href={`/${trip?.id}/`}>{trip?.data.shortTitle ?? trip?.data.title}</a>
         <span aria-hidden="true"> › </span>
-        <span>{position} of {siblings.length}</span>
+        <span class="mono">{position} of {siblings.length}</span>
       </nav>
 
       <h1 class="display entry__title">{d.title}</h1>
 
       <p class={`byline byline--${d.authors[0] ?? 'beth'}`}>
-        <span class="mono byline__who">{d.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}</span>
+        <span class="ui byline__who">{d.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}</span>
         <span class="mono byline__when">{fmtDate(d.date)}</span>
-        {d.location && <span class="mono byline__where">📍 {d.location.name}</span>}
+        {d.location && <span class="ui byline__where">📍 {d.location.name}</span>}
         {d.bethCried && (
-          <a href="/beth-cried-here/" class="mono byline__cried">😢 Beth cried here</a>
+          <a href="/beth-cried-here/" class="ui byline__cried">😢 Beth cried here</a>
         )}
       </p>
 
@@ -123,7 +123,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
           {METERS.filter((m) => d.meters[m]).map((m) => (
             <li title={`${METER_LABELS[m]}: ${METER_LEVELS[d.meters[m]!]}`}>
               <span aria-hidden="true">{METER_ICONS[m]}</span>
-              <span class="mono feel__label">{METER_LABELS[m]}</span>
+              <span class="ui feel__label">{METER_LABELS[m]}</span>
               <span class="sr-only">{METER_LEVELS[d.meters[m]!]}</span>
               <span class="feel__pips" aria-hidden="true">{[1, 2, 3].map((n) => <i class:list={{ on: n <= d.meters[m]! }} />)}</span>
             </li>
@@ -143,7 +143,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       {d.tags.length > 0 && (
         <ul class="tags">
           {d.tags.map((t) => (
-            <li><a href={`/tags/${t}/`} class="mono"><span aria-hidden="true">{TAG_ICONS[t]}</span> {TAG_LABELS[t]}</a></li>
+            <li><a href={`/tags/${t}/`} class="ui"><span aria-hidden="true">{TAG_ICONS[t]}</span> {TAG_LABELS[t]}</a></li>
           ))}
         </ul>
       )}
@@ -153,13 +153,13 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
       <nav class="pager" aria-label="Entries" data-pagefind-ignore>
         {prev ? (
           <a href={`/${tripIdOf(prev)}/${entrySlug(prev)}/`} class="pager__link">
-            <span class="mono">‹ Previous</span>
+            <span class="ui pager__dir">‹ Previous</span>
             <span class="pager__title">{prev.data.title}</span>
           </a>
         ) : <span />}
         {next ? (
           <a href={`/${tripIdOf(next)}/${entrySlug(next)}/`} class="pager__link pager__link--next">
-            <span class="mono">Next ›</span>
+            <span class="ui pager__dir">Next ›</span>
             <span class="pager__title">{next.data.title}</span>
           </a>
         ) : <span />}
@@ -204,6 +204,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
 
   .crumb {
     color: var(--color-stone);
+    font-size: var(--text-step--1);
   }
   .crumb a {
     color: var(--color-stone);
@@ -237,6 +238,9 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
   .byline--andy {
     border-left-color: var(--color-ember);
   }
+  .byline__who, .byline__where, .byline__cried {
+    font-size: var(--text-step--1);
+  }
   .byline__who {
     color: var(--color-ink);
     font-weight: 600;
@@ -252,7 +256,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
   .byline__where { color: var(--color-rime-on-light); }
   .feel { list-style: none; margin: 0.4rem 0 1.4rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; }
   .feel li { display: inline-flex; align-items: center; gap: 0.35rem; }
-  .feel__label { font-size: 0.625rem; color: var(--color-stone); }
+  .feel__label { font-size: var(--text-step--1); color: var(--color-stone); }
   .feel__pips { display: inline-flex; gap: 3px; }
   .feel__pips i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-rule); }
   .feel__pips i.on { background: var(--color-rime-on-light); }
@@ -269,6 +273,7 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
   .tags a {
     display: inline-block;
     padding: 0.3rem 0.6rem;
+    font-size: var(--text-step--1);
     border: 1px solid var(--color-rule);
     text-decoration: none;
     color: var(--color-stone);
@@ -293,8 +298,9 @@ const ogImage = `/og/entry-${trip?.id}--${me}.png`;
   .pager__link--next {
     text-align: right;
   }
-  .pager__link .mono {
+  .pager__dir {
     color: var(--color-stone);
+    font-size: var(--text-step--1);
     display: block;
   }
   .pager__title {

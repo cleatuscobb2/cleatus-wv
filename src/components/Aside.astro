@@ -10,7 +10,7 @@ const { term } = Astro.props;
 ---
 
 <aside class="note">
-  <p class="note__term mono">{term}</p>
+  <p class="note__term ui">{term}</p>
   <div class="note__body"><slot /></div>
 </aside>
 
@@ -25,6 +25,7 @@ const { term } = Astro.props;
   }
   .note__term {
     margin: 0 0 0.4rem;
+    font-size: var(--text-step--1);
     color: var(--color-stone);
   }
   .note__body {

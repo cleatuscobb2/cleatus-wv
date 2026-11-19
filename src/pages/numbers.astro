@@ -58,14 +58,14 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
       {headline.map((h) => (
         <div>
           <dd class="mono headline__v">{h.value}</dd>
-          <dt class="mono headline__l">{h.label}</dt>
+          <dt class="ui headline__l">{h.label}</dt>
         </div>
       ))}
     </dl>
   </section>
 
   <section class="band" aria-label="The count">
-    <h2 class="mono band__head">The count</h2>
+    <h2 class="ui band__head">The count</h2>
     <ul class="facts">
       <li><span class="mono facts__v">{t.countries}</span><span class="facts__l">countries — about {t.shareOfWorld}% of the world's {WORLD}; {t.writtenUp} of them <a href="/map/">written up here</a></span></li>
       <li><span class="mono facts__v">{t.continents.length} / {CONTINENTS}</span><span class="facts__l">continents{!t.continents.some((c) => c.name === 'Antarctica') && ' — Antarctica is still waiting'}</span></li>
@@ -93,7 +93,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
   </section>
 
   <section class="band" aria-label="Country count, year by year">
-    <h2 class="mono band__head">The count, year by year</h2>
+    <h2 class="ui band__head">The count, year by year</h2>
     <ol class="cum">
       {t.years.map((y) => (
         <li class:list={['cum__row', { 'cum__row--gap': y.gap || !y.visited }]}>
@@ -113,14 +113,14 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
         </li>
       ))}
     </ol>
-    <p class="mono band__note">
+    <p class="band__note">
       The pale bar is the running total; the dark end is what that year added.
       {t.undated.length > 0 && ` ${and(t.undated.map((p) => p.name))} aren't dated, so the chart ends at ${t.countries - t.undated.length}, not ${t.countries}.`}
     </p>
   </section>
 
   <section class="band" aria-label="Stamps in the passport">
-    <h2 class="mono band__head">Stamps in the passport</h2>
+    <h2 class="ui band__head">Stamps in the passport</h2>
     <div class="stamps">
       {t.flags.map((f) => (
         <div class="stamp">
@@ -134,7 +134,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
 
   {topVisited.length > 0 && (
     <section class="band" aria-label="Where they keep going back">
-      <h2 class="mono band__head">Where they keep going back</h2>
+      <h2 class="ui band__head">Where they keep going back</h2>
       <ol class="years most">
         {topVisited.map((x) => (
           <li>
@@ -145,7 +145,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
           </li>
         ))}
       </ol>
-      <p class="mono band__note">
+      <p class="band__note">
         Visits are months: France in June and again in August is two.
         {t.mostVisited.length > topVisited.length && ` ${t.mostVisited.length - topVisited.length} more countries have had a second visit.`}
       </p>
@@ -153,7 +153,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
   )}
 
   <section class="band" aria-label="On the road">
-    <h2 class="mono band__head">On the road — the written-up trips</h2>
+    <h2 class="ui band__head">On the road — the written-up trips</h2>
     <ul class="facts">
       <li><span class="mono facts__v">{n(m.daysOnTheRoad)}</span><span class="facts__l">days travelling, across {m.trips} trips</span></li>
       <li><span class="mono facts__v">{n(m.trekMiles)}</span><span class="facts__l">miles trekked <em>that were logged</em></span></li>
@@ -169,7 +169,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
   </section>
 
   <section class="band" aria-label="The writing">
-    <h2 class="mono band__head">The writing</h2>
+    <h2 class="ui band__head">The writing</h2>
     <ul class="facts">
       <li><span class="mono facts__v">{n(Math.round(m.words / Math.max(1, m.entries)))}</span><span class="facts__l">words in an average entry</span></li>
       {m.longestEntry && (
@@ -189,7 +189,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
   </section>
 
   <section class="band" aria-label="Entries by year">
-    <h2 class="mono band__head">Entries by year</h2>
+    <h2 class="ui band__head">Entries by year</h2>
     <ol class="years">
       {m.byYear.map((y) => (
         <li>
@@ -199,27 +199,27 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
         </li>
       ))}
     </ol>
-    <p class="mono band__note">
+    <p class="band__note">
       Entry counts follow publish dates, so a trip that straddles New Year lands
       in both.
     </p>
   </section>
 
   <section class="band" aria-label="Where">
-    <h2 class="mono band__head">Where — {t.countries} countries, {t.continents.length} continents</h2>
+    <h2 class="ui band__head">Where — {t.countries} countries, {t.continents.length} continents</h2>
     <div class="conts">
       {t.continents.map((c) => (
         <div class="cont">
-          <h3 class="mono cont__head">{c.name} <span class="cont__n">{c.places.length}</span></h3>
+          <h3 class="ui cont__head">{c.name} <span class="mono cont__n">{c.places.length}</span></h3>
           <ul>{c.places.map((p) => <li>{p.written ? <a href={placeHref(p.code)}>{p.name}</a> : p.name}</li>)}</ul>
         </div>
       ))}
     </div>
-    <p class="mono band__note">Linked countries have entries; the rest are still waiting to be written up.</p>
+    <p class="band__note">Linked countries have entries; the rest are still waiting to be written up.</p>
   </section>
 
   <section class="band" aria-label="Still to be counted">
-    <h2 class="mono band__head">Still to be counted</h2>
+    <h2 class="ui band__head">Still to be counted</h2>
     <ul class="facts facts--muted">
       <li><span class="mono facts__v">{m.bethCried}</span><span class="facts__l">times Beth cried, by her own account — <a href="/beth-cried-here/">the register</a></span></li>
       <li><span class="mono facts__v">{m.tagged} / {m.entries}</span><span class="facts__l">entries tagged by theme</span></li>
@@ -229,7 +229,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
 
   {m.caveats.length > 0 && (
     <section class="band caveats" aria-label="What these numbers do and don't say">
-      <h2 class="mono band__head">What these numbers don't say</h2>
+      <h2 class="ui band__head">What these numbers don't say</h2>
       <ul>{m.caveats.map((c) => <li>{c}</li>)}</ul>
     </section>
   )}
@@ -264,7 +264,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
   }
   .headline__l {
     margin-top: 0.45rem;
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
     color: var(--color-stone-on-dark);
   }
 
@@ -272,9 +272,11 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
     max-width: 60rem; margin: clamp(2.25rem, 5vw, 3.25rem) auto 0;
     padding-inline: clamp(1rem, 4vw, 3rem);
   }
-  .band__head { color: var(--color-stone); margin: 0 0 1rem; }
+  /* Section names are real headings in sentence case, not mono labels — the
+     figures under them are the measurements. */
+  .band__head { color: var(--color-stone); font-size: var(--text-step-1); margin: 0 0 1rem; }
   .band__sub { color: var(--color-stone); margin: 2rem 0 0.75rem; font-weight: 400; }
-  .band__note { color: var(--color-stone); font-size: 0.625rem; margin-top: 0.9rem; }
+  .band__note { color: var(--color-stone); font-size: var(--text-step--1); margin-top: 0.9rem; }
 
   .facts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-rule); }
   .facts li {
@@ -312,7 +314,7 @@ const short = (from: number, to: number) => (from === to ? String(from) : `${fro
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     gap: 1.5rem;
   }
-  .cont__head { color: var(--color-ink); margin: 0 0 0.5rem; }
+  .cont__head { color: var(--color-ink); font-size: var(--text-step-0); margin: 0 0 0.5rem; }
   .cont__n { color: var(--color-ember); }
   .cont ul { list-style: none; margin: 0; padding: 0; }
   .cont li { color: var(--color-stone); padding: 0.15rem 0; font-size: 0.9375rem; }

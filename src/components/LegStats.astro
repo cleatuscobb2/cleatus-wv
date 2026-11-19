@@ -30,7 +30,7 @@ const routeLabel = isRest ? 'Rest day' : `From ${leg.from} to ${leg.to}`;
 ---
 
 <aside class="leg" aria-label="Leg statistics">
-  <p class="leg__route mono">
+  <p class="leg__route ui">
     <span class="sr-only">{routeLabel}</span>
     <span aria-hidden="true">{isRest ? 'Rest day' : `${leg.from} → ${leg.to}`}</span>
   </p>
@@ -38,7 +38,7 @@ const routeLabel = isRest ? 'Rest day' : `From ${leg.from} to ${leg.to}`;
     <dl class="leg__grid">
       {cells.map((c) => (
         <div class="leg__cell">
-          <dt class="mono">{c.label}</dt>
+          <dt class="ui">{c.label}</dt>
           <dd class="mono leg__value">{c.value}</dd>
         </div>
       ))}
@@ -59,7 +59,6 @@ const routeLabel = isRest ? 'Rest day' : `From ${leg.from} to ${leg.to}`;
     margin: 0 0 0.85rem;
     color: var(--color-rime);
     font-size: 0.875rem;
-    letter-spacing: 0.08em;
   }
   .leg__grid {
     display: flex;
@@ -69,13 +68,12 @@ const routeLabel = isRest ? 'Rest day' : `From ${leg.from} to ${leg.to}`;
   }
   .leg__cell dt {
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
     margin-bottom: 0.2rem;
   }
   .leg__value {
     margin: 0;
     font-size: 1.0625rem;
-    letter-spacing: 0.02em;
     color: var(--color-snow);
   }
   .sr-only {

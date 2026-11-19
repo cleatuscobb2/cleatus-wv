@@ -196,3 +196,54 @@ down the column.
 I also rejected the literal reading of the elevation-profile signature element, for the
 reason given in §2 above: it would have been a flat, meaningless graphic on twelve of
 thirteen trips.
+
+
+## 7. Logbook by headlamp — the November 2026 pass
+
+Andy asked for the whole site to be pushed further without changing who it is. The palette,
+the three faces and the night/snow split all stay. What goes is the template chrome that had
+crept in: tracked capitals on every small label, facts strung together with middle dots,
+an arrow on the end of every link, and eyebrows that repeat what the content below already says.
+
+### Tokens
+
+| Name | Value | Job |
+|---|---|---|
+| Night ink | `#12161c` | Navigation and instrument surfaces |
+| Snow | `#edf1f3` | Reading ground |
+| Paper | `#f8fafb` | Raised surfaces on snow |
+| Headlamp | `#ffc24b` | The one thing being looked at, on dark only (`--ember` `#8f6000` on light) |
+| Rime | `#7fd8e8` | What you can click, on dark (`--rime-on-light` `#186e7f` on light) |
+| Stone | `#545c66` | Secondary text on light (`--stone-on-dark` `#7b8592` on dark) |
+
+Type scale: a major third from the 16px rem, as `--text-step--2` … `--text-step-6`
+(0.64 / 0.8 / 1 / 1.25 / 1.563 / 1.953 / 2.441 / 3.052 / 3.815 rem). Body prose keeps 19px.
+New sizes come from the scale; existing `clamp()` titles may stay where they already land
+on it at their ends.
+
+### The rules
+
+1. **Mono means a measurement.** `.mono` is for dates, distances, heights, counts, day
+   numbers, coordinates. It is never uppercased or tracked (the global rule no longer does
+   either; don't add `text-transform: uppercase` or `letter-spacing` back locally). A word
+   that isn't a measurement — a button, a section name, a status like "Up next" — uses
+   `.ui` (Archivo at text width, 600) in sentence case.
+2. **Labels earn their place.** Delete an eyebrow when the content under it already says
+   what it is ("Written up" over a list of written-up countries can stay; "Most recent"
+   over the most recent trip's dates can go). A section heading is a real heading
+   (`.ui` or `.display`), in sentence case.
+3. **Readouts, not dot strings.** Several facts on one line go in a `.readout` wrapper with
+   each fact as its own element (`<span>`); the separator is drawn by CSS. Never join facts
+   with `' · '` in markup or in a JS string. A fact that reads as a sentence can simply be
+   a sentence ("25 entries over 45 days").
+4. **Say what happens.** Links and buttons are named for their result ("Open the trip",
+   "Read this day"), with no trailing `→`. Arrows stay only where they mean direction:
+   from → to on a leg, ‹ › earlier/later, ← → on a carousel.
+5. **One beam.** Gold marks the single current thing in a view, nothing decorative.
+6. **One bold element.** The route line. Everything around it stays quiet.
+
+### Checked against the defaults
+
+A near-black page with one bright accent is a stock look; here it is the headlamp idea §1
+set out before any of this, so it stays. The tracked-caps mono labels, middle-dot strings
+and trailing arrows were defaults rather than choices, and those are what this pass removes.

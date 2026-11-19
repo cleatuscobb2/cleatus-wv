@@ -25,7 +25,7 @@ const posOf = (t: (typeof trips)[number]) => ((+t.data.dateStart - first) / span
   <header class="head">
     <h1 class="display">Archive</h1>
     <p class="head__note">
-      {trips.length} trips · {totalEntries} entries · {trips[0].data.year}–{trips[trips.length - 1].data.year}.
+      {trips.length} trips and {totalEntries} entries, {trips[0].data.year}–{trips[trips.length - 1].data.year}.
       Spaced by real time, so the gaps are the gaps.
     </p>
   </header>
@@ -38,8 +38,9 @@ const posOf = (t: (typeof trips)[number]) => ((+t.data.dateStart - first) / span
           <span class="node__dot" aria-hidden="true"></span>
           <span class="node__body">
             <span class="display node__title">{t.data.title}</span>
-            <span class="mono node__meta">
-              {fmtRange(t.data.dateStart, t.data.dateEnd)} · {counts.get(t.id) ?? 0} entries
+            <span class="mono readout node__meta">
+              <span>{fmtRange(t.data.dateStart, t.data.dateEnd)}</span>
+              <span>{counts.get(t.id) ?? 0} entries</span>
             </span>
           </span>
         </a>
@@ -118,10 +119,11 @@ const posOf = (t: (typeof trips)[number]) => ((+t.data.dateStart - first) / span
     text-decoration: underline;
     text-underline-offset: 0.16em;
   }
+  /* No display here: .readout makes it a flex row, which a local display:block
+     would override (scoped styles beat the components layer). */
   .node__meta {
-    display: block;
     margin-top: 0.2rem;
     color: var(--color-stone);
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
   }
 </style>

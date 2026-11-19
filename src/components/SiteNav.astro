@@ -34,7 +34,7 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     <ul>
       {items.map((i) => (
         <li>
-          <a href={i.href} class="mono" aria-current={isCurrent(i.href) ? 'page' : undefined}>
+          <a href={i.href} class="ui" aria-current={isCurrent(i.href) ? 'page' : undefined}>
             {i.label}
           </a>
         </li>
@@ -44,7 +44,7 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
         one: it is an action, not a place. `/` focuses it from anywhere (§7.5).
       -->
       <li class="nav__search">
-        <a href="/search/" class="mono" aria-current={isCurrent('/search/') ? 'page' : undefined}>
+        <a href="/search/" class="ui" aria-current={isCurrent('/search/') ? 'page' : undefined}>
           Search <kbd aria-hidden="true">/</kbd>
         </a>
       </li>
@@ -98,6 +98,7 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     padding: 0;
   }
   .nav a {
+    font-size: var(--text-step-0);
     color: var(--color-snow);
     text-decoration: none;
     padding-bottom: 2px;

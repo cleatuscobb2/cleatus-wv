@@ -109,11 +109,13 @@ import Base from '../layouts/Base.astro';
   .search__ui :global(.pagefind-ui__result-title .pagefind-ui__result-link) {
     font-family: var(--font-display);
   }
+  /* Filter names and result tags are words, not measurements, so they get the
+     site's interface face (as .ui) in sentence case rather than tracked mono caps. */
   .search__ui :global(.pagefind-ui__filter-name),
   .search__ui :global(.pagefind-ui__result-tag) {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-family: var(--font-display);
+    font-stretch: 100%;
+    font-weight: 600;
+    font-size: var(--text-step--1);
   }
 </style>

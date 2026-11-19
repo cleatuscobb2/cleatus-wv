@@ -34,10 +34,10 @@ const spanned = new Set(entries.map((e) => tripIdOf(e))).size;
   noIndex={entries.length === 0}
 >
   <header class="head">
-    <p class="mono head__kicker"><a href="/tags/">Tags</a></p>
+    <p class="ui head__kicker"><a href="/tags/">Tags</a></p>
     <h1 class="display">{label}</h1>
     {entries.length > 0 && (
-      <p class="mono head__meta">{entries.length} entries · {spanned} trips</p>
+      <p class="mono head__meta">{entries.length} entries across {spanned} trips</p>
     )}
   </header>
 
@@ -46,7 +46,7 @@ const spanned = new Set(entries.map((e) => tripIdOf(e))).size;
       {entries.map((e) => (
         <li>
           <a href={`/${tripIdOf(e)}/${entrySlug(e)}/`}>
-            <span class="mono list__meta">{tripTitle(tripIdOf(e))} · {fmtDate(e.data.date)}</span>
+            <span class="readout list__meta"><span class="ui">{tripTitle(tripIdOf(e))}</span><span class="mono">{fmtDate(e.data.date)}</span></span>
             <span class="list__title">{e.data.title}</span>
             <span class="list__excerpt">{excerpt(e.body, 130)}</span>
           </a>
@@ -67,7 +67,7 @@ const spanned = new Set(entries.map((e) => tripIdOf(e))).size;
     margin: 0 auto;
     padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 4vw, 3rem) 0;
   }
-  .head__kicker { color: var(--color-stone); margin: 0 0 0.5rem; }
+  .head__kicker { color: var(--color-stone); font-size: var(--text-step--1); margin: 0 0 0.5rem; }
   .head__kicker a { color: inherit; text-decoration: none; }
   .head h1 { font-size: clamp(2.2rem, 5vw, 3.25rem); margin: 0; }
   .head__meta { color: var(--color-stone); margin: 0.6rem 0 0; }
@@ -80,7 +80,8 @@ const spanned = new Set(entries.map((e) => tripIdOf(e))).size;
   }
   .list li { border-bottom: 1px solid var(--color-rule); }
   .list a { display: block; padding: 0.8rem 0; text-decoration: none; }
-  .list__meta { display: block; color: var(--color-stone); font-size: 0.625rem; }
+  /* No display here: .readout lays it out as a row (a local display would win over it). */
+  .list__meta { color: var(--color-stone); font-size: var(--text-step--1); }
   .list__title { display: block; margin-top: 0.15rem; font-size: 1.0625rem; }
   .list a:hover .list__title { text-decoration: underline; }
   .list__excerpt {

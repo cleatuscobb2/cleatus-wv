@@ -42,6 +42,9 @@ const daysTo = (start: number) => {
   return Math.ceil((+new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.now()) / 86_400_000);
 };
 const inDays = (n: number) => (n > 1 ? `in ${n} days` : n === 1 ? 'tomorrow' : 'on the road');
+/** Several facts for a .readout line: one escaped span each, the empty ones dropped. The rules between are CSS. */
+const facts = (list: (string | null | undefined)[]) =>
+  list.filter((x): x is string => Boolean(x)).map((x) => `<span>${esc(x)}</span>`).join('');
 
 /*
  * Home view: Europe, Africa and Asia facing you, the globe filling ~94% of the
@@ -413,12 +416,12 @@ async function start(stage: HTMLElement) {
     const k = cfg.order.filter((x) => kinds[x]);
     panel.innerHTML = `
       <button class="gp__close" type="button" aria-label="Close">×</button>
-      <p class="gp__kicker">${c.state === 'written' ? 'Written up' : 'Been, no entries yet'}</p>
+      <p class="ui gp__kicker">${c.state === 'written' ? 'Written up' : 'Been, no entries yet'}</p>
       <h2 class="gp__name">${esc(c.name)}</h2>
       ${c.years ? `<p class="gp__years">${esc(c.years)}</p>` : ''}
       ${k.length ? `<ul class="gp__kinds">${k.map((x) => `<li><span aria-hidden="true">${cfg.icons[x]}</span> ${esc(cfg.labels[x])} <b>${kinds[x]}</b></li>`).join('')}</ul>` : ''}
       ${trips.length ? `<ul class="gp__trips">${trips.map((t: TripOut) => `<li><a href="/${t.id}/">${esc(t.title)}</a> <span>${t.year}</span></li>`).join('')}</ul>
-        <a class="gp__more" href="/places/${code.toLowerCase()}/">Every entry from ${esc(c.name)} →</a>` : ''}`;
+        <a class="gp__more" href="/places/${code.toLowerCase()}/">Read every entry from ${esc(c.name)}</a>` : ''}`;
     panel.hidden = false;
     panel.querySelector('.gp__close')!.addEventListener('click', () => { panel.hidden = true; });
   };
@@ -468,7 +471,7 @@ async function start(stage: HTMLElement) {
     popup
       .setLngLat([ev.lng, ev.lat])
       .setHTML(`<p class="gpop__icons">${icons}</p><p class="gpop__title">${ev.href ? `<a href="${ev.href}">${esc(ev.title)}</a>` : esc(ev.title)}</p>
-        <p class="gpop__meta">${esc([ev.place, ev.when, ev.trip].filter(Boolean).join(' · '))}</p>`)
+        <p class="gpop__meta readout">${facts([ev.place, ev.when, ev.trip])}</p>`)
       .addTo(map);
     // Instagram posts sit under the events: offer any on this same spot.
     const here = photosAt(e.point);
@@ -490,12 +493,12 @@ async function start(stage: HTMLElement) {
     const list = p.entries.slice(0, SHOW).map((x) =>
       `<li><a href="${x.href}">${esc(x.title)}</a><span>${esc(x.trip)}</span></li>`).join('');
     const more = p.entries.length > SHOW
-      ? `<p class="gpop__more"><a href="/places/${p.country.toLowerCase()}/">${p.entries.length - SHOW} more from ${esc(p.countryName)} →</a></p>` : '';
+      ? `<p class="gpop__more"><a href="/places/${p.country.toLowerCase()}/">${p.entries.length - SHOW} more ${p.entries.length - SHOW === 1 ? 'entry' : 'entries'} from ${esc(p.countryName)}</a></p>` : '';
     const count = p.n ? `${p.n} ${p.n === 1 ? 'entry' : 'entries'}` : 'nothing written from here yet';
     popup
       .setLngLat([p.lng, p.lat])
       .setHTML(`<p class="gpop__title">${esc(p.name)}</p>
-        <p class="gpop__meta">${esc([p.countryName, p.years, count].filter(Boolean).join(' · '))}</p>
+        <p class="gpop__meta readout">${facts([p.countryName, p.years, count])}</p>
         ${p.note ? `<p class="gpop__meta">${esc(p.note)}</p>` : ''}
         ${list ? `<ul class="gpop__list">${list}</ul>` : ''}${more}`)
       .addTo(map);
@@ -517,14 +520,16 @@ async function start(stage: HTMLElement) {
     root.className = 'igp';
     const draw = () => {
       const { post, m } = slides[n];
-      const meta = [post.when, post.place, post.author].filter(Boolean).join(' · ');
+      const about = [post.when, post.place, post.author];
+      // The lightbox sets its line as plain text, so there it reads as a list rather than a readout.
+      const meta = about.filter(Boolean).join(', ');
       root.innerHTML = `<div class="igp__media">${m.video
         ? `<video src="${esc(m.src)}" poster="${esc(m.poster ?? '')}" controls playsinline preload="metadata"></video>`
         : `<a href="${esc(m.src)}" aria-label="Enlarge photo"><img src="${esc(m.src)}" alt="" /></a>`}</div>
         ${slides.length > 1 ? `<div class="igp__nav"><button type="button" data-d="-1" aria-label="Previous">‹</button><span class="mono">${n + 1} / ${slides.length}</span><button type="button" data-d="1" aria-label="Next">›</button></div>` : ''}
         ${post.caption ? `<p class="igp__caption">${esc(post.caption)}</p>` : ''}
-        <p class="gpop__meta">${esc(meta)}</p>
-        ${post.link ? `<p class="gpop__more"><a href="${esc(post.link.href)}">${esc(post.link.title)} →</a></p>` : ''}`;
+        <p class="gpop__meta readout">${facts(about)}</p>
+        ${post.link ? `<p class="gpop__more"><a href="${esc(post.link.href)}">${esc(post.link.title)}</a></p>` : ''}`;
       // Enlarge in place, with the rest of this post's photos a swipe away.
       root.querySelector<HTMLAnchorElement>('.igp__media a')?.addEventListener('click', (e) => {
         if (!plainClick(e)) return;
@@ -654,7 +659,7 @@ async function start(stage: HTMLElement) {
       const trip = id ? data.trips.find((t) => t.id === id) : undefined;
       light(codes, trip && trip.route.length > 1 ? trip.id : null);
       fly(trip?.box ?? boxOfCodes(codes));
-      caption.innerHTML = `<b>${esc(bar.dataset.title ?? '')}</b> ${esc(bar.dataset.when ?? '')}`;
+      caption.innerHTML = `<b>${esc(bar.dataset.title ?? '')}</b><span class="mono">${esc(bar.dataset.when ?? '')}</span>`;
       caption.hidden = false;
       nowAt(bar);
     };
@@ -674,17 +679,20 @@ async function start(stage: HTMLElement) {
     popup.remove();
     light([], null);
     fly(next.box, { maxZoom: 4.6 });
-    caption.innerHTML = `<span class="gc__year">Up next</span> <a href="/${next.id}/">${esc(next.title)}</a> · ${esc(nextWhen())}`;
+    caption.innerHTML = `<span class="gc__label">Up next</span><a href="/${next.id}/">${esc(next.title)}</a><span class="mono">${esc(nextWhen())}</span>`;
     caption.hidden = false;
     nowAt(nextBar);
   };
   if (next?.at) {
     const tag = document.createElement('button');
     tag.type = 'button';
-    tag.className = 'nx-tag mono';
+    tag.className = 'nx-tag readout';
+    // A readout: the word in the interface face, the days to go in the logbook's.
+    const part = (cls: string, text: string) => Object.assign(document.createElement('span'), { className: cls, textContent: text });
     const say = () => {
       const n = daysTo(next.start);
-      tag.textContent = n > 0 ? `Up next · ${n === 1 ? 'tomorrow' : `${n} days`}` : 'On the road';
+      if (n > 0) tag.replaceChildren(part('ui', 'Up next'), part('mono', n === 1 ? 'tomorrow' : `${n} days`));
+      else tag.replaceChildren(part('ui', 'On the road'));
       tag.setAttribute('aria-label', `Up next: ${next.title}, ${nextWhen()}`);
     };
     say();
@@ -742,7 +750,7 @@ async function start(stage: HTMLElement) {
       nowAt(dock?.querySelector<HTMLElement>(`.tl__bar[href="/${CSS.escape(t.id)}/"]`) ?? null);
       light(t.countries, t.route.length > 1 ? t.id : null);
       fly(t.box, { maxZoom: 5.5 });
-      caption.innerHTML = `<span class="gc__year">${t.year}</span> <a href="/${t.id}/">${esc(t.title)}</a>`;
+      caption.innerHTML = `<span class="mono gc__year">${t.year}</span><a href="/${t.id}/">${esc(t.title)}</a>`;
       caption.hidden = false;
       await wait(reducedMotion() ? 2500 : 3600);
     }
@@ -751,7 +759,7 @@ async function start(stage: HTMLElement) {
       light([], null);
       fly(next.box, { maxZoom: 4.6 });
       nowAt(nextBar);
-      caption.innerHTML = `<span class="gc__year">Up next</span> <a href="/${next.id}/">${esc(next.title)}</a> · ${esc(nextWhen())}`;
+      caption.innerHTML = `<span class="gc__label">Up next</span><a href="/${next.id}/">${esc(next.title)}</a><span class="mono">${esc(nextWhen())}</span>`;
       caption.hidden = false;
       await wait(reducedMotion() ? 3000 : 4500);
     }

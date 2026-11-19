@@ -19,7 +19,7 @@ const when = (d: string) => {
 };
 ---
 <section class:list={['ig', { 'ig--large': large }]} aria-labelledby="ig-head">
-  <h2 class="mono ig__head" id="ig-head">From Instagram <span class="ig__n">{posts.length}</span></h2>
+  <h2 class="ui ig__head" id="ig-head">From Instagram <span class="mono ig__n">{posts.length}</span></h2>
   <div class="ig__grid">
     {posts.map((p) => (
       <article class="ig__post">
@@ -30,9 +30,13 @@ const when = (d: string) => {
             <a href={m.src} aria-label="Enlarge photo"><img src={m.thumb} alt="" loading="lazy" decoding="async" width={m.w} height={m.h} /></a>
           ))}
         </div>
-        {p.data.media.length > 1 && <p class="mono ig__more">{p.data.media.length} photos · swipe</p>}
+        {p.data.media.length > 1 && <p class="ui ig__more">{p.data.media.length} photos, swipe for the rest</p>}
         {p.data.caption && <p class="ig__caption">{p.data.caption}</p>}
-        <p class="mono ig__meta">{[when(p.data.date), p.data.place, p.data.author].filter(Boolean).join(' · ')}</p>
+        <p class="readout ig__meta">
+          <span class="mono">{when(p.data.date)}</span>
+          {p.data.place && <span class="ui">{p.data.place}</span>}
+          {p.data.author && <span class="ui">{p.data.author}</span>}
+        </p>
       </article>
     ))}
   </div>
@@ -45,7 +49,8 @@ const when = (d: string) => {
   document.querySelectorAll<HTMLElement>('.ig__post').forEach((post) => {
     const links = [...post.querySelectorAll<HTMLAnchorElement>('.ig__strip a')];
     const caption = post.querySelector('.ig__caption')?.textContent ?? '';
-    const meta = post.querySelector('.ig__meta')?.textContent ?? '';
+    // The meta line is a readout of separate facts; the lightbox wants one line of text.
+    const meta = [...post.querySelectorAll('.ig__meta > *')].map((s) => s.textContent?.trim()).filter(Boolean).join(', ');
     links.forEach((a, i) => a.addEventListener('click', (e) => {
       if (!plainClick(e)) return;
       e.preventDefault();
@@ -58,15 +63,16 @@ const when = (d: string) => {
   .ig { max-width: 76rem; margin: clamp(2.5rem, 6vw, 4rem) auto 0; padding: 0 clamp(1rem, 4vw, 3rem); }
   .ig--large { padding: 0; margin-block: 2rem 0; }
   .ig--large .ig__grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)); }
-  .ig__head { font-size: 0.8125rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-stone); margin: 0 0 1rem; }
-  .ig__n { opacity: 0.75; margin-left: 0.3rem; }
+  .ig__head { font-size: var(--text-step-0); color: var(--color-stone); margin: 0 0 1rem; }
+  .ig__n { font-size: var(--text-step--1); opacity: 0.75; margin-left: 0.3rem; }
   .ig__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: clamp(1rem, 2.5vw, 1.75rem); align-items: start; }
   .ig__post { min-width: 0; }
   .ig__strip { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; aspect-ratio: 1; background: var(--color-rule); }
   .ig__strip > * { flex: 0 0 100%; width: 100%; height: 100%; scroll-snap-align: start; display: block; }
   .ig__strip img, .ig__strip video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ig__strip a { cursor: zoom-in; }
-  .ig__more { margin: 0.35rem 0 0; font-size: 0.6875rem; color: var(--color-stone); }
+  .ig__more { margin: 0.35rem 0 0; font-size: var(--text-step--1); color: var(--color-stone); }
   .ig__caption { margin: 0.55rem 0 0; font-size: 0.9375rem; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
-  .ig__meta { margin: 0.45rem 0 0; font-size: 0.6875rem; color: var(--color-stone); }
+  .ig__meta { margin: 0.45rem 0 0; font-size: var(--text-step--1); color: var(--color-stone); }
+  .ig__meta > .mono { font-size: inherit; }
 </style>

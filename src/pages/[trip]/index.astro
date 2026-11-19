@@ -129,7 +129,7 @@ const jsonLd = {
     {live && latest && (
       <p class="head__now">
         <span class="head__pulse" aria-hidden="true"></span>
-        <span class="mono">Where they are now</span>
+        <span class="ui head__now-label">Where they are now</span>
         <a href={latest.href}>{latest.place}</a> <span class="mono head__now-when">{latest.when}</span>
       </p>
     )}
@@ -137,7 +137,7 @@ const jsonLd = {
     {startHere && (
       <p class="head__start">
         <a href={href(startHere)}>
-          <span class="mono">Start here</span> — {startHere.data.title}
+          <span class="ui head__start-label">Start here</span> — {startHere.data.title}
         </a>
       </p>
     )}
@@ -147,7 +147,7 @@ const jsonLd = {
     <dl class="panel__stats">
       {stats.map((s) => (
         <div>
-          <dt class="mono">{s.label}</dt>
+          <dt class="ui">{s.label}</dt>
           <dd class="mono">{s.value}</dd>
         </div>
       ))}
@@ -155,15 +155,21 @@ const jsonLd = {
 
     {shownTeasers.length > 0 && (
       <div class="teasers">
-        <h2 class="mono panel__sub">Read these first</h2>
+        <h2 class="ui panel__sub">Read these first</h2>
         <ul>
           {shownTeasers.map((t) => (
             <li>
               <a href={href(t.e)} class="teaser">
                 <span class="teaser__icon" aria-hidden="true">{t.icon}</span>
-                <span class="mono teaser__label">{t.label}{t.note && ` · ${t.note}`}</span>
+                <span class="readout teaser__label">
+                  <span class="ui">{t.label}</span>
+                  {t.note && <span class="mono">{t.note}</span>}
+                </span>
                 <span class="teaser__title">{t.e.data.title}</span>
-                <span class="mono teaser__when">{label(t.e)}{t.e.data.location && ` · ${t.e.data.location.name}`}</span>
+                <span class="readout teaser__when">
+                  <span class="mono">{label(t.e)}</span>
+                  {t.e.data.location && <span class="ui">{t.e.data.location.name}</span>}
+                </span>
               </a>
             </li>
           ))}
@@ -172,18 +178,18 @@ const jsonLd = {
     )}
 
     {nodes.length > 1 && <RouteLine nodes={nodes} tripSlug={trip.id} />}
-    <p class="mono panel__caption">
+    <p class="ui panel__caption">
       {d.stats.maxElevationFt
-        ? 'Elevation profile · each node is an entry, spaced by date'
-        : 'Timeline · each node is an entry, spaced by date'}
+        ? 'Elevation profile: each node is an entry, spaced by date.'
+        : 'Timeline: each node is an entry, spaced by date.'}
     </p>
 
     {rated && (
       <div class="mood">
-        <h2 class="mono panel__sub">How it felt, entry by entry</h2>
+        <h2 class="ui panel__sub">How it felt, entry by entry</h2>
         <div class="mood__grid" style={`--n:${entries.length}`}>
-          <span class="mono mood__row-label" aria-hidden="true">{KIND_ICONS.cried} Beth cried</span>
-          {METERS.map((m) => <span class="mono mood__row-label" style={`grid-row:${METERS.indexOf(m) + 2}`} aria-hidden="true">{METER_ICONS[m]} {METER_LABELS[m]}</span>)}
+          <span class="ui mood__row-label" aria-hidden="true">{KIND_ICONS.cried} Beth cried</span>
+          {METERS.map((m) => <span class="ui mood__row-label" style={`grid-row:${METERS.indexOf(m) + 2}`} aria-hidden="true">{METER_ICONS[m]} {METER_LABELS[m]}</span>)}
           {entries.map((e, i) => (
             <a href={href(e)} class="mood__col" style={`grid-column:${i + 2}`} title={columnLabel(e)}>
               <span class="sr-only">{columnLabel(e)}</span>
@@ -194,7 +200,9 @@ const jsonLd = {
             </a>
           ))}
         </div>
-        <p class="mono panel__caption">Darker is calmer: each square is one entry, 0 to 3 · {METER_LEVELS.join(' · ')}</p>
+        <p class="ui panel__caption">
+          Darker is calmer. Each square is one entry, shaded {METER_LEVELS.slice(0, -1).join(', ')} or {METER_LEVELS[METER_LEVELS.length - 1]}.
+        </p>
       </div>
     )}
   </section>
@@ -204,13 +212,13 @@ const jsonLd = {
 
     <div class="journey__flow">
       <div class="journey__top">
-        <h2 class="mono entries__head">Day by day</h2>
+        <h2 class="ui entries__head">Day by day</h2>
         {kindCounts.length > 1 && (
           <div class="chips" role="group" aria-label="Show only entries about…" data-chips hidden>
-            <button type="button" class="chip" aria-pressed="true" data-chip="">All {entries.length}</button>
+            <button type="button" class="chip ui" aria-pressed="true" data-chip="">All <span class="mono chip__n">{entries.length}</span></button>
             {kindCounts.map((x) => (
-              <button type="button" class="chip" aria-pressed="false" data-chip={x.k}>
-                <span aria-hidden="true">{KIND_ICONS[x.k]}</span> {KIND_LABELS[x.k]} <span class="chip__n">{x.n}</span>
+              <button type="button" class="chip ui" aria-pressed="false" data-chip={x.k}>
+                <span aria-hidden="true">{KIND_ICONS[x.k]}</span> {KIND_LABELS[x.k]} <span class="mono chip__n">{x.n}</span>
               </button>
             ))}
           </div>
@@ -238,18 +246,18 @@ const jsonLd = {
                   ? <img class="card__thumb" src={photo} alt="" loading="lazy" decoding="async" />
                   : <span class="card__thumb card__thumb--none" aria-hidden="true" />}
                 <span class="card__body">
-                  <span class="mono card__meta">
-                    {bits.join(' · ')}
-                    {e.data.location && <span class="card__place"> · 📍 {e.data.location.name}</span>}
+                  <span class="readout card__meta">
+                    {bits.map((b) => <span class="mono">{b}</span>)}
+                    {e.data.location && <span class="ui card__place">📍 {e.data.location.name}</span>}
                   </span>
                   <span class="card__title">{e.data.title}</span>
-                  <span class="mono card__by">
+                  <span class="ui card__by">
                     {e.data.authors.map((a) => AUTHOR_NAMES[a]).join(' & ')}
                   </span>
                   {(kinds.length > 0 || rated.length > 0) && (
                     <span class="card__tags">
                       {kinds.map((k) => (
-                        <span class:list={['tagchip', { 'tagchip--cried': k === 'cried' }]}><span aria-hidden="true">{KIND_ICONS[k]}</span> {KIND_LABELS[k]}</span>
+                        <span class:list={['tagchip ui', { 'tagchip--cried': k === 'cried' }]}><span aria-hidden="true">{KIND_ICONS[k]}</span> {KIND_LABELS[k]}</span>
                       ))}
                       {rated.map((m) => (
                         <span class="meter" title={`${METER_LABELS[m]}: ${METER_LEVELS[e.data.meters[m]!]}`}>
@@ -273,8 +281,8 @@ const jsonLd = {
       <div class="journey__map" data-journey-map>
         <div class="journey__canvas" data-journey-canvas></div>
         <div class="journey__controls">
-          <button type="button" class="mono jbtn" data-journey-play>▶ Play the trip</button>
-          <button type="button" class="mono jbtn jbtn--quiet" data-journey-overview>Whole trip</button>
+          <button type="button" class="ui jbtn" data-journey-play>▶ Play the trip</button>
+          <button type="button" class="ui jbtn jbtn--quiet" data-journey-overview>Show the whole trip</button>
         </div>
         <p class="jm-cap" data-journey-caption hidden aria-live="polite"></p>
       </div>
@@ -285,10 +293,10 @@ const jsonLd = {
 
   {people.length > 0 && (
     <section class="cast">
-      <h2 class="mono">Cast</h2>
+      <h2 class="ui">Cast</h2>
       <ul>
         {people.map((p) => (
-          <li><strong>{p.data.name}</strong> <span class="mono">{p.data.role}</span></li>
+          <li><strong>{p.data.name}</strong> <span class="ui cast__note">{p.data.role}</span></li>
         ))}
       </ul>
     </section>
@@ -296,12 +304,12 @@ const jsonLd = {
 
   {retro.length > 0 && (
     <section class="cast">
-      <h2 class="mono">Afterward</h2>
+      <h2 class="ui">Afterward</h2>
       <ul>
         {retro.map((r) => (
           <li>
             <a href={`/retrospectives/${r.id}/`}>{r.data.title}</a>
-            <span class="mono"> — {AUTHOR_NAMES[r.data.author]}</span>
+            <span class="ui cast__note"> — {AUTHOR_NAMES[r.data.author]}</span>
           </li>
         ))}
       </ul>
@@ -364,8 +372,8 @@ const jsonLd = {
     margin: -0.6rem 0 1.2rem;
     font-size: 1.05rem;
   }
-  .head__now .mono { color: var(--color-ember); font-size: 0.6875rem; }
-  .head__now-when { color: var(--color-stone) !important; }
+  .head__now-label { color: var(--color-ember); font-size: var(--text-step--1); }
+  .head__now-when { color: var(--color-stone); font-size: var(--text-step--1); }
   .head__pulse {
     width: 0.6rem; height: 0.6rem; border-radius: 50%;
     background: var(--color-ember);
@@ -381,7 +389,8 @@ const jsonLd = {
   .head__start {
     margin-top: 1.2rem;
   }
-  .head__start .mono {
+  /* The same size as the title it introduces, so the two read as one line. */
+  .head__start-label {
     color: var(--color-stone);
   }
 
@@ -402,13 +411,12 @@ const jsonLd = {
   }
   .panel__stats dt {
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
     margin-bottom: 0.15rem;
   }
   .panel__stats dd {
     margin: 0;
     font-size: 1.0625rem;
-    letter-spacing: 0.02em;
   }
   .panel :global(.route-line) {
     max-width: 68rem;
@@ -418,11 +426,11 @@ const jsonLd = {
     max-width: 68rem;
     margin: 1rem auto 0;
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
   .panel__sub {
     color: var(--color-stone-on-dark);
-    font-size: 0.6875rem;
+    font-size: var(--text-step-0);
     margin: 0 0 0.8rem;
   }
 
@@ -445,9 +453,11 @@ const jsonLd = {
   }
   .teaser:hover, .teaser:focus-visible { border-color: var(--color-headlamp); background: rgb(255 194 75 / 0.06); }
   .teaser__icon { grid-area: icon; font-size: 1.6rem; line-height: 1; }
-  .teaser__label { grid-area: label; color: var(--color-headlamp); font-size: 0.625rem; }
+  .teaser__label { grid-area: label; color: var(--color-headlamp); font-size: var(--text-step--1); }
   .teaser__title { grid-area: title; font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; line-height: 1.25; margin: 0.2rem 0; }
-  .teaser__when { grid-area: when; color: var(--color-stone-on-dark); font-size: 0.625rem; }
+  .teaser__when { grid-area: when; color: var(--color-stone-on-dark); font-size: var(--text-step--1); }
+  /* The readout's parts take the line's size, not .mono's own. */
+  .teaser__label > .mono, .teaser__when > .mono { font-size: inherit; }
 
   /* The mood strip: rows are meters, columns are entries, darker is calmer. */
   .mood { max-width: 68rem; margin: 2.2rem auto 0; }
@@ -457,7 +467,7 @@ const jsonLd = {
     grid-template-rows: repeat(5, 1.05rem);
     gap: 3px 2px;
   }
-  .mood__row-label { grid-column: 1; font-size: 0.5625rem; color: var(--color-stone-on-dark); align-self: center; white-space: nowrap; }
+  .mood__row-label { grid-column: 1; font-size: var(--text-step--2); color: var(--color-stone-on-dark); align-self: center; white-space: nowrap; }
   .mood__col {
     grid-row: 1 / span 5;
     display: grid;
@@ -499,7 +509,7 @@ const jsonLd = {
     display: flex; gap: 0.5rem;
   }
   .jbtn {
-    font-size: 0.6875rem; padding: 0.45rem 0.8rem; border: 0; cursor: pointer;
+    font-size: var(--text-step--1); padding: 0.45rem 0.8rem; border: 0; cursor: pointer;
     background: var(--color-headlamp); color: var(--color-ink);
   }
   .jbtn--quiet { background: rgb(18 22 28 / 0.85); color: var(--color-snow); box-shadow: inset 0 0 0 1px var(--color-rule-dark); }
@@ -511,7 +521,7 @@ const jsonLd = {
     color: var(--color-snow);
   }
   .jm-cap[hidden] { display: none; }
-  .jm-cap :global(.jm-cap__meta) { display: block; font-family: var(--font-mono, monospace); font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-stone-on-dark); }
+  .jm-cap :global(.jm-cap__meta) { display: flex; font-family: var(--font-mono, monospace); font-size: var(--text-step--1); color: var(--color-stone-on-dark); }
   .jm-cap :global(a) { color: var(--color-snow); font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; text-decoration: none; }
   .jm-cap :global(a:hover) { color: var(--color-headlamp); }
 
@@ -521,12 +531,13 @@ const jsonLd = {
   }
   .entries__head {
     color: var(--color-stone);
+    font-size: var(--text-step-0);
     margin: 0;
   }
   .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
   .chips[hidden] { display: none; }
   .chip {
-    font: inherit; font-size: 0.8125rem;
+    font-size: var(--text-step--1);
     padding: 0.25rem 0.6rem;
     border: 1px solid var(--color-rule);
     background: transparent;
@@ -534,7 +545,7 @@ const jsonLd = {
     cursor: pointer;
   }
   .chip[aria-pressed='true'] { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-snow); }
-  .chip__n { color: var(--color-ember); font-size: 0.75rem; }
+  .chip__n { color: var(--color-ember); font-size: inherit; }
   .chip[aria-pressed='true'] .chip__n { color: var(--color-headlamp); }
 
   .entries__list {
@@ -578,10 +589,10 @@ const jsonLd = {
     display: block;
   }
   .card__meta {
-    display: block;
     color: var(--color-stone);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
+  .card__meta > .mono { font-size: inherit; }
   .card__place { color: var(--color-rime-on-light); }
   .card__title {
     display: block;
@@ -595,7 +606,7 @@ const jsonLd = {
   .card__by {
     display: block;
     color: var(--color-stone);
-    font-size: 0.625rem;
+    font-size: var(--text-step--1);
   }
   .card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.45rem; margin-top: 0.5rem; }
   .tagchip {
@@ -622,6 +633,7 @@ const jsonLd = {
   }
   .cast h2 {
     color: var(--color-stone);
+    font-size: var(--text-step-0);
     margin: 0 0 0.75rem;
   }
   .cast ul {
@@ -632,9 +644,9 @@ const jsonLd = {
   .cast li {
     padding: 0.35rem 0;
   }
-  .cast .mono {
+  .cast__note {
     color: var(--color-stone);
-    font-size: 0.6875rem;
+    font-size: var(--text-step--1);
   }
 
   .sr-only {

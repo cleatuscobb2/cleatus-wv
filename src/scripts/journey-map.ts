@@ -47,13 +47,13 @@ function stopsOf(pts: Pt[], coords: [number, number][]): { stops: Stop[]; stopOf
 
 /**
  * The words along the line into a stop: the trek day and its miles where the
- * entry logged a leg ("Day 9 · 6 mi"), otherwise the dates either side of a
+ * entry logged a leg ("Day 9, 6 mi"), otherwise the dates either side of a
  * long hop ("23 → 25 Aug"). Short unlogged hops stay unlabelled.
  */
 function legLabel(prev: Stop, next: Stop, pts: Pt[]): string {
   const p = pts[next.from];
   if (p.pathLabel) return p.pathLabel;
-  if (p.day != null) return p.distanceMi != null ? `Day ${p.day} · ${p.distanceMi} mi` : `Day ${p.day}`;
+  if (p.day != null) return p.distanceMi != null ? `Day ${p.day}, ${p.distanceMi} mi` : `Day ${p.day}`;
   if (km(prev.at, next.at) < 150) return '';
   const a = pts[prev.to].when;
   const b = p.when;
@@ -254,7 +254,10 @@ async function start(root: HTMLElement, box: HTMLElement) {
     const cam = { center: coords[i], zoom, pitch: close ? 58 : 20, bearing: close ? -20 : 0 };
     if (fly && !reducedMotion()) map.flyTo({ ...cam, duration: 1700, essential: true });
     else map.jumpTo(cam);
-    caption.innerHTML = `<span class="jm-cap__meta">${esc([p.day != null ? `Day ${p.day}` : '', p.when, p.place, p.elevationFt ? `${p.elevationFt.toLocaleString('en-US')} ft` : ''].filter(Boolean).join(' · '))}</span>
+    // One fact a span: the readout draws the separators (DESIGN.md §7).
+    const meta = [p.day != null ? `Day ${p.day}` : '', p.when, p.place, p.elevationFt ? `${p.elevationFt.toLocaleString('en-US')} ft` : '']
+      .filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('');
+    caption.innerHTML = `<span class="jm-cap__meta readout">${meta}</span>
       <a href="${p.href}">${p.kinds.slice(0, 3).map((k) => cfg.icons[k] ?? '').join('')} ${esc(p.title)}</a>`;
     caption.hidden = false;
     for (const c of cards) c.toggleAttribute('data-active', Number(c.dataset.point) === i);
